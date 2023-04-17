@@ -18,6 +18,13 @@ export type Rate = {
 
 export type RateBNStr = RetypeBigNumberToString<Rate>;
 
+export type Quote = {
+  id: BigNumber;
+  rate: Rate;
+};
+
+export type QuoteBNStr = RetypeBigNumberToString<Quote>;
+
 export type TradeAction = {
   strategyId: BigNumber;
   amount: BigNumber;
@@ -27,6 +34,11 @@ export type TradeActionBNStr = RetypeBigNumberToString<TradeAction>;
 
 export type Filter = (rate: Rate) => boolean;
 
+export enum MatchType {
+  Fast = 'Fast',
+  Best = 'Best',
+}
+
 export type MatchAction = {
   id: BigNumber;
   input: BigNumber;
@@ -34,6 +46,12 @@ export type MatchAction = {
 };
 
 export type MatchActionBNStr = RetypeBigNumberToString<MatchAction>;
+
+export type MatchOptions = {
+  [key in MatchType]?: MatchAction[];
+};
+
+export type MatchOptionsBNStr = RetypeBigNumberToString<MatchOptions>;
 
 export type TokenPair = [string, string];
 
