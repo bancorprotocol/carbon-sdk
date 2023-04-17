@@ -44,7 +44,7 @@ export const findAndRemoveLeading = <T>(
   arr: T[],
   predicate: (value: T) => boolean
 ): T | undefined => {
-  let element = undefined;
+  let element: any = undefined;
   do {
     element = arr.shift();
   } while (element && !predicate(element));

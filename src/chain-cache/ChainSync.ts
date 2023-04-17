@@ -135,7 +135,7 @@ export class ChainSync {
     endBlock: number,
     chunkSize: number
   ): number[][] {
-    const blockChunks = [];
+    const blockChunks: number[][] = [];
     for (let i = startBlock; i <= endBlock; i += chunkSize) {
       const chunkStart = i;
       const chunkEnd = Math.min(i + chunkSize - 1, endBlock);

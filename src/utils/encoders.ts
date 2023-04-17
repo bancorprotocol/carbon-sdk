@@ -1,5 +1,5 @@
 import { BigNumber, Decimal, BnToDec, DecToBn, ONE } from './numerics';
-import { DecodedOrder, EncodedOrder } from '../common/types';
+import { DecodeOrderForInfo, DecodedOrder, EncodedOrder } from '../common/types';
 
 function bitLength(value: BigNumber) {
   return value.gt(0)
@@ -52,8 +52,27 @@ export const encodeOrder = (order: DecodedOrder): EncodedOrder => {
   return {
     y: y,
     z: H.eq(M) ? y : y.mul(H.sub(L)).div(M.sub(L)),
-    A: encodeFloat(H.sub(L)),
+    A: H.eq(L) ? BigNumber.from(1) : encodeFloat(H.sub(L)), // TODO: must be removed
     B: encodeFloat(L),
+  };
+};
+
+export const getOrderInfo = (order: EncodedOrder): DecodeOrderForInfo => {
+  const y = BnToDec(order.y);
+  const z = BnToDec(order.z);
+  const A = BnToDec(decodeFloat(order.A));
+  const B = BnToDec(decodeFloat(order.B));
+  const pmarg = y.eq(z) ? decodeRate(B.add(A)) : decodeRate(A.mul(y).div(z).add(B));
+  const pb = decodeRate(B)
+  const pa = decodeRate(B.add(A))
+  return {
+    y: y,
+    z: z,
+    A: A,
+    B: B,
+    pmarg: pmarg,
+    pb: pb,
+    pa: pa,
   };
 };
 

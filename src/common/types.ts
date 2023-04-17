@@ -1,5 +1,5 @@
 export { PayableOverrides, PopulatedTransaction } from 'ethers';
-import { BigNumber } from '../utils/numerics';
+import { BigNumber, Decimal } from '../utils/numerics';
 
 export type RetypeProps<T, From, To> = {
   [K in keyof T]: T[K] extends From
@@ -92,6 +92,16 @@ export type DecodedStrategy = {
   token1: string;
   order0: DecodedOrder;
   order1: DecodedOrder;
+};
+
+export type DecodeOrderForInfo = {
+  y: Decimal;
+  z: Decimal;
+  A: Decimal;
+  B: Decimal;
+  pmarg: Decimal;
+  pa: Decimal;
+  pb: Decimal;
 };
 
 export type TradeData = {

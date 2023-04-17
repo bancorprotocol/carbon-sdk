@@ -39,8 +39,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "clean": "rm -rf dist && rm -rf src/abis/types",
-    "compile-abis": "typechain --target ethers-v5 --out-dir 'src/abis/types' 'src/abis/**/*.json'",
-    "prebuild": "yarn clean && yarn compile-abis",
+    "compile-abis": "typechain --target ethers-v5 --out-dir src/abis/types 'src/abis/**/*.json'",
+    "prebuild": "yarn compile-abis",
     "build": "rollup -c",
     "dev": "rollup -c -w",
     "test": "mocha"

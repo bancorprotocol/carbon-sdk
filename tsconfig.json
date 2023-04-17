@@ -15,7 +15,8 @@
     "outDir": "dist",
     "declarationMap": true,
     "allowSyntheticDefaultImports": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "noImplicitAny": false
   },
   "include": ["src"]
 }
