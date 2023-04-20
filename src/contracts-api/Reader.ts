@@ -155,8 +155,18 @@ export default class Reader implements Fetcher {
         id: res.id,
         token0: res.token0,
         token1: res.token1,
-        order0: res.order0,
-        order1: res.order1,
+        order0: {
+          y: res.order0.y,
+          z: res.order0.z,
+          A: res.order0.A,
+          B: res.order0.B,
+        },
+        order1: {
+          y: res.order1.y,
+          z: res.order1.z,
+          A: res.order1.A,
+          B: res.order1.B,
+        },
       };
     });
     return strategies;
@@ -187,8 +197,18 @@ export default class Reader implements Fetcher {
         id: res.id,
         token0: res.token0,
         token1: res.token1,
-        order0: res.order0,
-        order1: res.order1,
+        order0: {
+          y: res.order0.y,
+          z: res.order0.z,
+          A: res.order0.A,
+          B: res.order0.B,
+        },
+        order1: {
+          y: res.order1.y,
+          z: res.order1.z,
+          A: res.order1.A,
+          B: res.order1.B,
+        },
       };
     });
     return strategies;
@@ -218,8 +238,18 @@ export default class Reader implements Fetcher {
         id: res.id,
         token0: res.token0,
         token1: res.token1,
-        order0: res.order0,
-        order1: res.order1,
+        order0: {
+          y: res.order0.y,
+          z: res.order0.z,
+          A: res.order0.A,
+          B: res.order0.B,
+        },
+        order1: {
+          y: res.order1.y,
+          z: res.order1.z,
+          A: res.order1.A,
+          B: res.order1.B,
+        },
       };
     });
     return strategies;

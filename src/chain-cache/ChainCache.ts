@@ -25,7 +25,7 @@ import {
 import { Logger } from '../common/logger';
 const logger = new Logger('ChainCache.ts');
 
-const schemeVersion = 3; // bump this when the serialization format changes
+const schemeVersion = 4; // bump this when the serialization format changes
 
 type PairToStrategiesMap = { [key: string]: EncodedStrategy[] };
 type StrategyById = { [key: string]: EncodedStrategy };
