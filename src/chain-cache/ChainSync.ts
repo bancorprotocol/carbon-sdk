@@ -158,27 +158,20 @@ export class ChainSync {
     const interval = 1000; // 1 second
     const processEvents = async () => {
       try {
-        if (await this._detectReorg()) {
-          logger.debug('_syncEvents detected reorg - resetting');
-          this._chainCache.clear();
-          this._chainCache.applyBatchedUpdates(
-            await this._fetcher.getBlockNumber(),
-            [],
-            [],
-            [],
-            []
-          );
-          this._resetPairsFetching();
-          setTimeout(processEvents, 1);
-          return;
-        }
-
         const latestBlock = this._chainCache.getLatestBlockNumber();
         const currentBlock = await this._fetcher.getBlockNumber();
 
-        await this._storeBlocksMetadata(currentBlock);
-
         if (currentBlock > latestBlock) {
+          if (await this._detectReorg()) {
+            logger.debug('_syncEvents detected reorg - resetting');
+            this._chainCache.clear();
+            this._chainCache.applyBatchedUpdates(currentBlock, [], [], [], []);
+            this._resetPairsFetching();
+            setTimeout(processEvents, 1);
+            return;
+          }
+          await this._storeBlocksMetadata(currentBlock);
+
           const cachedPairs = new Set<string>(
             this._chainCache
               .getCachedPairs()
