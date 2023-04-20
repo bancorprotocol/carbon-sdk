@@ -9,7 +9,13 @@ import {
 import Contracts from './Contracts';
 import { isETHAddress, MultiCall, multicall } from './utils';
 import { Logger } from '../common/logger';
-import { EncodedStrategy, TokenPair, TradeData } from '../common/types';
+import {
+  EncodedStrategy,
+  Fetcher,
+  TokenPair,
+  TradeData,
+  BlockMetadata,
+} from '../common/types';
 const logger = new Logger('Reader.ts');
 
 function toStrategy(res: StrategyStructOutput): EncodedStrategy {
@@ -46,7 +52,7 @@ function toStrategy(res: StrategyStructOutput): EncodedStrategy {
 /**
  * Class that provides methods to read data from contracts.
  */
-export default class Reader {
+export default class Reader implements Fetcher {
   private _contracts: Contracts;
 
   public constructor(contracts: Contracts) {
@@ -256,5 +262,9 @@ export default class Reader {
 
   public getBlockNumber = async (): Promise<number> => {
     return this._contracts.provider.getBlockNumber();
+  };
+
+  public getBlock = async (blockNumber: number): Promise<BlockMetadata> => {
+    return this._contracts.provider.getBlock(blockNumber);
   };
 }

@@ -1,16 +1,26 @@
-import { Fetcher } from './types';
 import { ChainCache } from './ChainCache';
 import { findAndRemoveLeading, toPairKey } from './utils';
 import { Logger } from '../common/logger';
-import { EncodedStrategy, TokenPair, TradeData } from '../common/types';
+import {
+  BlockMetadata,
+  EncodedStrategy,
+  Fetcher,
+  TokenPair,
+  TradeData,
+} from '../common/types';
 
 const logger = new Logger('index.ts');
+
+const BLOCKS_TO_KEEP = 8;
 
 export class ChainSync {
   private _fetcher: Fetcher;
   private _chainCache: ChainCache;
   private _syncCalled: boolean = false;
   private _slowPollPairs: boolean = false;
+  private _pairs: TokenPair[] = [];
+  // keep the time stamp of last fetch
+  private _lastFetch: number = Date.now();
   private _initialSyncDone: boolean = false;
 
   constructor(fetcher: Fetcher, chainCache: ChainCache) {
@@ -30,8 +40,7 @@ export class ChainSync {
       // cache starts from scratch so we want to avoid getting events from the beginning of time
       this._chainCache.applyBatchedUpdates(blockNumber, [], [], [], []);
     }
-    // TODO: if blockNumber is much bigger than the latest block number in the cache, we should
-    // consider discarding the cache and starting from scratch
+
     await Promise.all([
       this._trackFees(),
       this._populatePairsData(),
@@ -60,30 +69,30 @@ export class ChainSync {
   // 6. if there are no more pairs, it sets a timeout to call itself again
   private async _populatePairsData(): Promise<void> {
     logger.debug('_populatePairsData called');
-    let pairs: TokenPair[] = [];
+    this._pairs = [];
     // keep the time stamp of last fetch
-    let lastFetch = Date.now();
+    this._lastFetch = Date.now();
     // this indicates we want to poll for pairs only once a minute.
     // Set this to false when we have an indication that new pair was created - which we want to fetch now
     this._slowPollPairs = false;
 
     const processPairs = async () => {
       try {
-        if (pairs.length === 0) {
+        if (this._pairs.length === 0) {
           // if we have no pairs we need to fetch - unless we're in slow poll mode and less than a minute has passed since last fetch
-          if (this._slowPollPairs && Date.now() - lastFetch < 60000) {
+          if (this._slowPollPairs && Date.now() - this._lastFetch < 60000) {
             // go back to sleep
             setTimeout(processPairs, 1000);
             return;
           }
           logger.debug('_populatePairsData fetches pairs');
-          pairs = [...(await this._fetcher.pairs())];
-          logger.debug('_populatePairsData fetched pairs', pairs);
-          lastFetch = Date.now();
+          this._pairs = [...(await this._fetcher.pairs())];
+          logger.debug('_populatePairsData fetched pairs', this._pairs);
+          this._lastFetch = Date.now();
         }
         // let's find the first pair that's not in the cache and clear it from the list along with all the items before it
         const nextPairToSync = findAndRemoveLeading<TokenPair>(
-          pairs,
+          this._pairs,
           (pair) => !this._chainCache.hasCachedPair(pair[0], pair[1])
         );
         if (nextPairToSync) {
@@ -149,8 +158,25 @@ export class ChainSync {
     const interval = 1000; // 1 second
     const processEvents = async () => {
       try {
+        if (await this._detectReorg()) {
+          logger.debug('_syncEvents detected reorg - resetting');
+          this._chainCache.clear();
+          this._chainCache.applyBatchedUpdates(
+            await this._fetcher.getBlockNumber(),
+            [],
+            [],
+            [],
+            []
+          );
+          this._resetPairsFetching();
+          setTimeout(processEvents, 1);
+          return;
+        }
+
         const latestBlock = this._chainCache.getLatestBlockNumber();
         const currentBlock = await this._fetcher.getBlockNumber();
+
+        await this._storeBlocksMetadata(currentBlock);
 
         if (currentBlock > latestBlock) {
           const cachedPairs = new Set<string>(
@@ -267,5 +293,41 @@ export class ChainSync {
       setTimeout(processEvents, interval);
     };
     setTimeout(processEvents, 1);
+  }
+  private _resetPairsFetching() {
+    this._pairs = [];
+    this._slowPollPairs = false;
+    this._initialSyncDone = false;
+  }
+
+  private async _storeBlocksMetadata(currentBlock: number): Promise<void> {
+    logger.debug('_storeBlocksMetadata called');
+    // get blocks metadata for blocks current to current - BLOCKS_TO_KEEP + 1
+    const blocksMetadata: BlockMetadata[] = [];
+    for (let i = 0; i < BLOCKS_TO_KEEP; i++) {
+      blocksMetadata.push(await this._fetcher.getBlock(currentBlock - i));
+    }
+    this._chainCache.blocksMetadata = blocksMetadata;
+  }
+
+  private async _detectReorg(): Promise<boolean> {
+    logger.debug('_detectReorg called');
+    const blocksMetadata: BlockMetadata[] = this._chainCache.blocksMetadata;
+    for (let blockMetadata of blocksMetadata) {
+      const { number, hash } = blockMetadata;
+      const currentHash = (await this._fetcher.getBlock(number)).hash;
+      if (hash !== currentHash) {
+        console.log(
+          'reorg detected for block number',
+          number,
+          'old hash',
+          hash,
+          'new hash',
+          currentHash
+        );
+        return true;
+      }
+    }
+    return false;
   }
 }
