@@ -162,7 +162,7 @@ export class ChainSync {
         const currentBlock = await this._fetcher.getBlockNumber();
 
         if (currentBlock > latestBlock) {
-          if (await this._detectReorg()) {
+          if (await this._detectReorg(currentBlock)) {
             logger.debug('_syncEvents detected reorg - resetting');
             this._chainCache.clear();
             this._chainCache.applyBatchedUpdates(currentBlock, [], [], [], []);
@@ -170,7 +170,6 @@ export class ChainSync {
             setTimeout(processEvents, 1);
             return;
           }
-          await this._storeBlocksMetadata(currentBlock);
 
           const cachedPairs = new Set<string>(
             this._chainCache
@@ -293,21 +292,23 @@ export class ChainSync {
     this._initialSyncDone = false;
   }
 
-  private async _storeBlocksMetadata(currentBlock: number): Promise<void> {
-    logger.debug('_storeBlocksMetadata called');
-    // get blocks metadata for blocks current to current - BLOCKS_TO_KEEP + 1
-    const blocksMetadata: BlockMetadata[] = [];
-    for (let i = 0; i < BLOCKS_TO_KEEP; i++) {
-      blocksMetadata.push(await this._fetcher.getBlock(currentBlock - i));
-    }
-    this._chainCache.blocksMetadata = blocksMetadata;
-  }
-
-  private async _detectReorg(): Promise<boolean> {
+  private async _detectReorg(currentBlock: number): Promise<boolean> {
     logger.debug('_detectReorg called');
     const blocksMetadata: BlockMetadata[] = this._chainCache.blocksMetadata;
+    const numberToBlockMetadata: { [key: number]: BlockMetadata } = {};
     for (let blockMetadata of blocksMetadata) {
       const { number, hash } = blockMetadata;
+      if (number > currentBlock) {
+        console.log(
+          'reorg detected for block number',
+          number,
+          'larger than current block',
+          currentBlock,
+          'with hash',
+          hash
+        );
+        return true;
+      }
       const currentHash = (await this._fetcher.getBlock(number)).hash;
       if (hash !== currentHash) {
         console.log(
@@ -320,7 +321,27 @@ export class ChainSync {
         );
         return true;
       }
+      // blockMetadata is valid, let's store it so that we don't have to fetch it again below
+      numberToBlockMetadata[number] = blockMetadata;
     }
+
+    // no reorg detected
+    logger.debug('_detectReorg no reorg detected, updating blocks metadata');
+    // let's store the new blocks metadata
+    const latestBlocksMetadata: BlockMetadata[] = [];
+    for (let i = 0; i < BLOCKS_TO_KEEP; i++) {
+      // get the blocks metadata either from numberToBlockMetadata or from the blockchain
+      if (numberToBlockMetadata[currentBlock - i]) {
+        latestBlocksMetadata.push(numberToBlockMetadata[currentBlock - i]);
+      } else {
+        latestBlocksMetadata.push(
+          await this._fetcher.getBlock(currentBlock - i)
+        );
+      }
+    }
+    this._chainCache.blocksMetadata = latestBlocksMetadata;
+    logger.debug('_detectReorg updated blocks metadata');
+
     return false;
   }
 }
