@@ -11,7 +11,7 @@ import {
 
 const logger = new Logger('index.ts');
 
-const BLOCKS_TO_KEEP = 8;
+const BLOCKS_TO_KEEP = 3;
 
 export class ChainSync {
   private _fetcher: Fetcher;
