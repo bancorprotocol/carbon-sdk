@@ -1,13 +1,22 @@
 import { BigNumber } from '../utils/numerics';
 
-function getVerbosityLevel(): number {
-  if (self !== undefined) {
-    return Number((self as any).CARBON_DEFI_SDK_VERBOSITY) || 0;
-  } else if (typeof window !== 'undefined') {
-    return Number((window as any).CARBON_DEFI_SDK_VERBOSITY) || 0;
-  } else if (typeof process !== 'undefined' && process.env) {
-    return Number(process.env.CARBON_DEFI_SDK_VERBOSITY) || 0;
+const globalObject = (() => {
+  try {
+    return self;
+  } catch (e) {
+    try {
+      return window;
+    } catch (e) {
+      return global;
+    }
   }
+})();
+
+function getVerbosityLevel(): number {
+  if (globalObject !== undefined) {
+    return Number((globalObject as any).CARBON_DEFI_SDK_VERBOSITY) || 0;
+  }
+
   return 0;
 }
 
