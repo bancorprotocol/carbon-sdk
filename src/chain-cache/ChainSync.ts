@@ -116,7 +116,7 @@ export class ChainSync {
           setTimeout(processPairs, 1000);
         }
       } catch (e) {
-        console.error('Error while syncing pairs data', e);
+        logger.error('Error while syncing pairs data', e);
         setTimeout(processPairs, 60000);
       }
     };
@@ -279,7 +279,7 @@ export class ChainSync {
           );
         }
       } catch (err) {
-        console.error('Error syncing events:', err);
+        logger.error('Error syncing events:', err);
       }
 
       setTimeout(processEvents, interval);
@@ -299,7 +299,7 @@ export class ChainSync {
     for (let blockMetadata of blocksMetadata) {
       const { number, hash } = blockMetadata;
       if (number > currentBlock) {
-        console.log(
+        logger.log(
           'reorg detected for block number',
           number,
           'larger than current block',
@@ -311,7 +311,7 @@ export class ChainSync {
       }
       const currentHash = (await this._fetcher.getBlock(number)).hash;
       if (hash !== currentHash) {
-        console.log(
+        logger.log(
           'reorg detected for block number',
           number,
           'old hash',

@@ -77,6 +77,20 @@ const init = async (
 };
 ```
 
+## Notes
+
+- The SDK Logger supports 3 verbosity levels:
+  - `0` (default) only prints errors and important logs.
+  - `1` (debug) prints highly verbose logs.
+  - `2` (debug readable) is same as `1` but also converts any BigNumber to an easy to read string (impacting performance).
+  
+  To use it in Node, set the environment variable `CARBON_DEFI_SDK_VERBOSITY` to the desired level.
+  To use it from a browser app do, before importing the SDK:
+
+  ```js
+  window.CARBON_DEFI_SDK_VERBOSITY = 2;
+  ```
+
 ## Authors
 
 - [@zavelevsky](https://www.github.com/zavelevsky)

@@ -131,11 +131,12 @@ export default class Reader implements Fetcher {
     return this._contracts.token(address).decimals();
   };
 
-  public getLatestStrategyCreatedStrategies = async (
+  private _getFilteredStrategies = async (
+    eventType: 'StrategyCreated' | 'StrategyUpdated' | 'StrategyDeleted',
     fromBlock: number,
     toBlock: number
   ): Promise<EncodedStrategy[]> => {
-    const filter = this._contracts.carbonController.filters.StrategyCreated(
+    const filter = this._contracts.carbonController.filters[eventType](
       null,
       null,
       null,
@@ -147,112 +148,55 @@ export default class Reader implements Fetcher {
       fromBlock,
       toBlock
     );
+
     if (logs.length === 0) return [];
 
     const strategies = logs.map((log) => {
-      const res: StrategyCreatedEventObject = log.args;
+      const logArgs:
+        | StrategyCreatedEventObject
+        | StrategyUpdatedEventObject
+        | StrategyDeletedEventObject = log.args;
+
       return {
-        id: res.id,
-        token0: res.token0,
-        token1: res.token1,
+        id: logArgs.id,
+        token0: logArgs.token0,
+        token1: logArgs.token1,
         order0: {
-          y: res.order0.y,
-          z: res.order0.z,
-          A: res.order0.A,
-          B: res.order0.B,
+          y: logArgs.order0.y,
+          z: logArgs.order0.z,
+          A: logArgs.order0.A,
+          B: logArgs.order0.B,
         },
         order1: {
-          y: res.order1.y,
-          z: res.order1.z,
-          A: res.order1.A,
-          B: res.order1.B,
+          y: logArgs.order1.y,
+          z: logArgs.order1.z,
+          A: logArgs.order1.A,
+          B: logArgs.order1.B,
         },
       };
     });
     return strategies;
+  };
+
+  public getLatestStrategyCreatedStrategies = async (
+    fromBlock: number,
+    toBlock: number
+  ): Promise<EncodedStrategy[]> => {
+    return this._getFilteredStrategies('StrategyCreated', fromBlock, toBlock);
   };
 
   public getLatestStrategyUpdatedStrategies = async (
     fromBlock: number,
     toBlock: number
   ): Promise<EncodedStrategy[]> => {
-    const filter = this._contracts.carbonController.filters.StrategyUpdated(
-      null,
-      null,
-      null,
-      null,
-      null,
-      null
-    );
-    const logs = await this._contracts.carbonController.queryFilter(
-      filter,
-      fromBlock,
-      toBlock
-    );
-    if (logs.length === 0) return [];
-
-    const strategies = logs.map((log) => {
-      const res: StrategyUpdatedEventObject = log.args;
-      return {
-        id: res.id,
-        token0: res.token0,
-        token1: res.token1,
-        order0: {
-          y: res.order0.y,
-          z: res.order0.z,
-          A: res.order0.A,
-          B: res.order0.B,
-        },
-        order1: {
-          y: res.order1.y,
-          z: res.order1.z,
-          A: res.order1.A,
-          B: res.order1.B,
-        },
-      };
-    });
-    return strategies;
+    return this._getFilteredStrategies('StrategyUpdated', fromBlock, toBlock);
   };
 
   public getLatestStrategyDeletedStrategies = async (
     fromBlock: number,
     toBlock: number
   ): Promise<EncodedStrategy[]> => {
-    const filter = this._contracts.carbonController.filters.StrategyDeleted(
-      null,
-      null,
-      null,
-      null,
-      null
-    );
-    const logs = await this._contracts.carbonController.queryFilter(
-      filter,
-      fromBlock,
-      toBlock
-    );
-    if (logs.length === 0) return [];
-
-    const strategies = logs.map((log) => {
-      const res: StrategyDeletedEventObject = log.args;
-      return {
-        id: res.id,
-        token0: res.token0,
-        token1: res.token1,
-        order0: {
-          y: res.order0.y,
-          z: res.order0.z,
-          A: res.order0.A,
-          B: res.order0.B,
-        },
-        order1: {
-          y: res.order1.y,
-          z: res.order1.z,
-          A: res.order1.A,
-          B: res.order1.B,
-        },
-      };
-    });
-    return strategies;
+    return this._getFilteredStrategies('StrategyDeleted', fromBlock, toBlock);
   };
 
   public getLatestTokensTradedTrades = async (

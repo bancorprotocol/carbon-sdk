@@ -64,7 +64,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
       cache._deserialize(serializedCache);
       return cache;
     } catch (e) {
-      console.error('Failed to deserialize cache, returning clear cache', e);
+      logger.error('Failed to deserialize cache, returning clear cache', e);
     }
     return new ChainCache();
   }
@@ -73,7 +73,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     const parsedCache = JSON.parse(serializedCache) as SerializableDump;
     const { schemeVersion: version } = parsedCache;
     if (version !== schemeVersion) {
-      console.log(
+      logger.log(
         'Cache version mismatch, ignoring cache. Expected',
         schemeVersion,
         'got',
