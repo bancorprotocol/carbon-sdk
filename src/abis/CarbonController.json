@@ -1,5 +1,5 @@
 {
-  "address": "0x6Db6EE351fc802833ed2f28A25BBBF971D8b12C1",
+  "address": "0xC537e898CD774e2dCBa3B14Ea6f34C93d5eA45e1",
   "abi": [
     {
       "anonymous": false,
@@ -123,11 +123,6 @@
     },
     {
       "inputs": [],
-      "name": "AmountExceedsBalance",
-      "type": "error"
-    },
-    {
-      "inputs": [],
       "name": "DeadlineExpired",
       "type": "error"
     },
@@ -229,11 +224,6 @@
     {
       "inputs": [],
       "name": "UnnecessaryNativeTokenReceived",
-      "type": "error"
-    },
-    {
-      "inputs": [],
-      "name": "UnsetDelegator",
       "type": "error"
     },
     {
@@ -767,6 +757,88 @@
           "internalType": "uint256",
           "name": "",
           "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "Token",
+          "name": "sourceToken",
+          "type": "address"
+        },
+        {
+          "internalType": "Token",
+          "name": "targetToken",
+          "type": "address"
+        },
+        {
+          "components": [
+            {
+              "internalType": "uint256",
+              "name": "strategyId",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint128",
+              "name": "amount",
+              "type": "uint128"
+            }
+          ],
+          "internalType": "struct TradeAction[]",
+          "name": "tradeActions",
+          "type": "tuple[]"
+        }
+      ],
+      "name": "calculateTradeSourceAmount",
+      "outputs": [
+        {
+          "internalType": "uint128",
+          "name": "",
+          "type": "uint128"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "Token",
+          "name": "sourceToken",
+          "type": "address"
+        },
+        {
+          "internalType": "Token",
+          "name": "targetToken",
+          "type": "address"
+        },
+        {
+          "components": [
+            {
+              "internalType": "uint256",
+              "name": "strategyId",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint128",
+              "name": "amount",
+              "type": "uint128"
+            }
+          ],
+          "internalType": "struct TradeAction[]",
+          "name": "tradeActions",
+          "type": "tuple[]"
+        }
+      ],
+      "name": "calculateTradeTargetAmount",
+      "outputs": [
+        {
+          "internalType": "uint128",
+          "name": "",
+          "type": "uint128"
         }
       ],
       "stateMutability": "view",
@@ -1453,88 +1525,6 @@
       "type": "function"
     },
     {
-      "inputs": [
-        {
-          "internalType": "Token",
-          "name": "sourceToken",
-          "type": "address"
-        },
-        {
-          "internalType": "Token",
-          "name": "targetToken",
-          "type": "address"
-        },
-        {
-          "components": [
-            {
-              "internalType": "uint256",
-              "name": "strategyId",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint128",
-              "name": "amount",
-              "type": "uint128"
-            }
-          ],
-          "internalType": "struct TradeAction[]",
-          "name": "tradeActions",
-          "type": "tuple[]"
-        }
-      ],
-      "name": "tradeSourceAmount",
-      "outputs": [
-        {
-          "internalType": "uint128",
-          "name": "",
-          "type": "uint128"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "Token",
-          "name": "sourceToken",
-          "type": "address"
-        },
-        {
-          "internalType": "Token",
-          "name": "targetToken",
-          "type": "address"
-        },
-        {
-          "components": [
-            {
-              "internalType": "uint256",
-              "name": "strategyId",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint128",
-              "name": "amount",
-              "type": "uint128"
-            }
-          ],
-          "internalType": "struct TradeAction[]",
-          "name": "tradeActions",
-          "type": "tuple[]"
-        }
-      ],
-      "name": "tradeTargetAmount",
-      "outputs": [
-        {
-          "internalType": "uint128",
-          "name": "",
-          "type": "uint128"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
       "inputs": [],
       "name": "tradingFeePPM",
       "outputs": [
@@ -1637,14 +1627,14 @@
     {
       "inputs": [
         {
-          "internalType": "uint256",
-          "name": "amount",
-          "type": "uint256"
-        },
-        {
           "internalType": "Token",
           "name": "token",
           "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
         },
         {
           "internalType": "address",
@@ -1653,7 +1643,13 @@
         }
       ],
       "name": "withdrawFees",
-      "outputs": [],
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
       "stateMutability": "nonpayable",
       "type": "function"
     },

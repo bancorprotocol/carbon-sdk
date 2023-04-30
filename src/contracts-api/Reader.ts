@@ -9,7 +9,13 @@ import {
 import Contracts from './Contracts';
 import { isETHAddress, MultiCall, multicall } from './utils';
 import { Logger } from '../common/logger';
-import { EncodedStrategy, TokenPair, TradeData } from '../common/types';
+import {
+  EncodedStrategy,
+  Fetcher,
+  TokenPair,
+  TradeData,
+  BlockMetadata,
+} from '../common/types';
 const logger = new Logger('Reader.ts');
 
 function toStrategy(res: StrategyStructOutput): EncodedStrategy {
@@ -46,7 +52,7 @@ function toStrategy(res: StrategyStructOutput): EncodedStrategy {
 /**
  * Class that provides methods to read data from contracts.
  */
-export default class Reader {
+export default class Reader implements Fetcher {
   private _contracts: Contracts;
 
   public constructor(contracts: Contracts) {
@@ -125,11 +131,12 @@ export default class Reader {
     return this._contracts.token(address).decimals();
   };
 
-  public getLatestStrategyCreatedStrategies = async (
+  private _getFilteredStrategies = async (
+    eventType: 'StrategyCreated' | 'StrategyUpdated' | 'StrategyDeleted',
     fromBlock: number,
     toBlock: number
   ): Promise<EncodedStrategy[]> => {
-    const filter = this._contracts.carbonController.filters.StrategyCreated(
+    const filter = this._contracts.carbonController.filters[eventType](
       null,
       null,
       null,
@@ -141,82 +148,55 @@ export default class Reader {
       fromBlock,
       toBlock
     );
+
     if (logs.length === 0) return [];
 
     const strategies = logs.map((log) => {
-      const res: StrategyCreatedEventObject = log.args;
+      const logArgs:
+        | StrategyCreatedEventObject
+        | StrategyUpdatedEventObject
+        | StrategyDeletedEventObject = log.args;
+
       return {
-        id: res.id,
-        token0: res.token0,
-        token1: res.token1,
-        order0: res.order0,
-        order1: res.order1,
+        id: logArgs.id,
+        token0: logArgs.token0,
+        token1: logArgs.token1,
+        order0: {
+          y: logArgs.order0.y,
+          z: logArgs.order0.z,
+          A: logArgs.order0.A,
+          B: logArgs.order0.B,
+        },
+        order1: {
+          y: logArgs.order1.y,
+          z: logArgs.order1.z,
+          A: logArgs.order1.A,
+          B: logArgs.order1.B,
+        },
       };
     });
     return strategies;
+  };
+
+  public getLatestStrategyCreatedStrategies = async (
+    fromBlock: number,
+    toBlock: number
+  ): Promise<EncodedStrategy[]> => {
+    return this._getFilteredStrategies('StrategyCreated', fromBlock, toBlock);
   };
 
   public getLatestStrategyUpdatedStrategies = async (
     fromBlock: number,
     toBlock: number
   ): Promise<EncodedStrategy[]> => {
-    const filter = this._contracts.carbonController.filters.StrategyUpdated(
-      null,
-      null,
-      null,
-      null,
-      null,
-      null
-    );
-    const logs = await this._contracts.carbonController.queryFilter(
-      filter,
-      fromBlock,
-      toBlock
-    );
-    if (logs.length === 0) return [];
-
-    const strategies = logs.map((log) => {
-      const res: StrategyUpdatedEventObject = log.args;
-      return {
-        id: res.id,
-        token0: res.token0,
-        token1: res.token1,
-        order0: res.order0,
-        order1: res.order1,
-      };
-    });
-    return strategies;
+    return this._getFilteredStrategies('StrategyUpdated', fromBlock, toBlock);
   };
 
   public getLatestStrategyDeletedStrategies = async (
     fromBlock: number,
     toBlock: number
   ): Promise<EncodedStrategy[]> => {
-    const filter = this._contracts.carbonController.filters.StrategyDeleted(
-      null,
-      null,
-      null,
-      null,
-      null
-    );
-    const logs = await this._contracts.carbonController.queryFilter(
-      filter,
-      fromBlock,
-      toBlock
-    );
-    if (logs.length === 0) return [];
-
-    const strategies = logs.map((log) => {
-      const res: StrategyDeletedEventObject = log.args;
-      return {
-        id: res.id,
-        token0: res.token0,
-        token1: res.token1,
-        order0: res.order0,
-        order1: res.order1,
-      };
-    });
-    return strategies;
+    return this._getFilteredStrategies('StrategyDeleted', fromBlock, toBlock);
   };
 
   public getLatestTokensTradedTrades = async (
@@ -256,5 +236,9 @@ export default class Reader {
 
   public getBlockNumber = async (): Promise<number> => {
     return this._contracts.provider.getBlockNumber();
+  };
+
+  public getBlock = async (blockNumber: number): Promise<BlockMetadata> => {
+    return this._contracts.provider.getBlock(blockNumber);
   };
 }

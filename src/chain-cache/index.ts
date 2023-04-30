@@ -1,6 +1,6 @@
+import { Fetcher } from '../common/types';
 import { ChainCache } from './ChainCache';
 import { ChainSync } from './ChainSync';
-import { Fetcher } from './types';
 
 export { ChainCache, ChainSync };
 export * from './types';

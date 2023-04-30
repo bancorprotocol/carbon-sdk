@@ -117,3 +117,35 @@ export type AtLeastOneOf<T> = {
 export type StrategyUpdate = AtLeastOneOf<
   Omit<Strategy, 'id' | 'encoded' | 'baseToken' | 'quoteToken'>
 >;
+
+export type BlockMetadata = {
+  number: number;
+  hash: string;
+};
+
+export interface Fetcher {
+  pairs(): Promise<TokenPair[]>;
+  strategiesByPair(token0: string, token1: string): Promise<EncodedStrategy[]>;
+  getLatestStrategyCreatedStrategies(
+    fromBlock: number,
+    toBlock: number
+  ): Promise<EncodedStrategy[]>;
+  getLatestStrategyUpdatedStrategies(
+    fromBlock: number,
+    toBlock: number
+  ): Promise<EncodedStrategy[]>;
+  getLatestStrategyDeletedStrategies(
+    fromBlock: number,
+    toBlock: number
+  ): Promise<EncodedStrategy[]>;
+  getLatestTokensTradedTrades(
+    fromBlock: number,
+    toBlock: number
+  ): Promise<TradeData[]>;
+  getBlockNumber(): Promise<number>;
+  tradingFeePPM(): Promise<number>;
+  onTradingFeePPMUpdated(
+    listener: (prevFeePPM: number, newFeePPM: number) => void
+  ): void;
+  getBlock(blockNumber: number): Promise<BlockMetadata>;
+}

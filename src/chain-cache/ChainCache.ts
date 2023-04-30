@@ -7,6 +7,7 @@ import {
   isOrderTradable,
 } from './utils';
 import {
+  BlockMetadata,
   EncodedOrder,
   EncodedStrategy,
   OrdersMap,
@@ -24,7 +25,7 @@ import {
 import { Logger } from '../common/logger';
 const logger = new Logger('ChainCache.ts');
 
-const schemeVersion = 2; // bump this when the serialization format changes
+const schemeVersion = 4; // bump this when the serialization format changes
 
 type PairToStrategiesMap = { [key: string]: EncodedStrategy[] };
 type StrategyById = { [key: string]: EncodedStrategy };
@@ -38,6 +39,7 @@ type SerializableDump = {
   latestBlockNumber: number;
   latestTradesByPair: { [key: string]: TradeData };
   latestTradesByDirectedPair: { [key: string]: TradeData };
+  blocksMetadata: BlockMetadata[];
 };
 
 export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<CacheEvents>) {
@@ -48,6 +50,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
   private _latestBlockNumber: number = 0;
   private _latestTradesByPair: { [key: string]: TradeData } = {};
   private _latestTradesByDirectedPair: { [key: string]: TradeData } = {};
+  private _blocksMetadata: BlockMetadata[] = [];
 
   private _handleCacheMiss:
     | ((token0: string, token1: string) => Promise<void>)
@@ -61,7 +64,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
       cache._deserialize(serializedCache);
       return cache;
     } catch (e) {
-      console.error('Failed to deserialize cache, returning clear cache', e);
+      logger.error('Failed to deserialize cache, returning clear cache', e);
     }
     return new ChainCache();
   }
@@ -70,7 +73,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     const parsedCache = JSON.parse(serializedCache) as SerializableDump;
     const { schemeVersion: version } = parsedCache;
     if (version !== schemeVersion) {
-      console.log(
+      logger.log(
         'Cache version mismatch, ignoring cache. Expected',
         schemeVersion,
         'got',
@@ -111,6 +114,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     this._latestBlockNumber = parsedCache.latestBlockNumber;
     this._latestTradesByPair = parsedCache.latestTradesByPair;
     this._latestTradesByDirectedPair = parsedCache.latestTradesByDirectedPair;
+    this._blocksMetadata = parsedCache.blocksMetadata;
   }
 
   public serialize(): string {
@@ -146,6 +150,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
       latestBlockNumber: this._latestBlockNumber,
       latestTradesByPair: this._latestTradesByPair,
       latestTradesByDirectedPair: this._latestTradesByDirectedPair,
+      blocksMetadata: this._blocksMetadata,
     };
     return JSON.stringify(dump);
   }
@@ -163,6 +168,18 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     logger.debug('Cache miss for pair', token0, token1);
     await this._handleCacheMiss(token0, token1);
     logger.debug('Cache miss for pair', token0, token1, 'resolved');
+  }
+
+  public clear(): void {
+    const pairs = Object.keys(this._strategiesByPair).map(fromPairKey);
+    this._strategiesByPair = {};
+    this._strategiesById = {};
+    this._ordersByDirectedPair = {};
+    this._latestBlockNumber = 0;
+    this._latestTradesByPair = {};
+    this._latestTradesByDirectedPair = {};
+    this._blocksMetadata = [];
+    this.emit('onPairDataChanged', pairs);
   }
 
   //#region public getters
@@ -241,6 +258,14 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
 
   public getLatestBlockNumber(): number {
     return this._latestBlockNumber;
+  }
+
+  public get blocksMetadata(): BlockMetadata[] {
+    return this._blocksMetadata;
+  }
+
+  public set blocksMetadata(blocks: BlockMetadata[]) {
+    this._blocksMetadata = blocks;
   }
   //#endregion public getters
 

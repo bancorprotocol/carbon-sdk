@@ -1,16 +1,26 @@
-import { Fetcher } from './types';
 import { ChainCache } from './ChainCache';
 import { findAndRemoveLeading, toPairKey } from './utils';
 import { Logger } from '../common/logger';
-import { EncodedStrategy, TokenPair, TradeData } from '../common/types';
+import {
+  BlockMetadata,
+  EncodedStrategy,
+  Fetcher,
+  TokenPair,
+  TradeData,
+} from '../common/types';
 
 const logger = new Logger('index.ts');
+
+const BLOCKS_TO_KEEP = 3;
 
 export class ChainSync {
   private _fetcher: Fetcher;
   private _chainCache: ChainCache;
   private _syncCalled: boolean = false;
   private _slowPollPairs: boolean = false;
+  private _pairs: TokenPair[] = [];
+  // keep the time stamp of last fetch
+  private _lastFetch: number = Date.now();
   private _initialSyncDone: boolean = false;
 
   constructor(fetcher: Fetcher, chainCache: ChainCache) {
@@ -30,8 +40,7 @@ export class ChainSync {
       // cache starts from scratch so we want to avoid getting events from the beginning of time
       this._chainCache.applyBatchedUpdates(blockNumber, [], [], [], []);
     }
-    // TODO: if blockNumber is much bigger than the latest block number in the cache, we should
-    // consider discarding the cache and starting from scratch
+
     await Promise.all([
       this._trackFees(),
       this._populatePairsData(),
@@ -60,30 +69,30 @@ export class ChainSync {
   // 6. if there are no more pairs, it sets a timeout to call itself again
   private async _populatePairsData(): Promise<void> {
     logger.debug('_populatePairsData called');
-    let pairs: TokenPair[] = [];
+    this._pairs = [];
     // keep the time stamp of last fetch
-    let lastFetch = Date.now();
+    this._lastFetch = Date.now();
     // this indicates we want to poll for pairs only once a minute.
     // Set this to false when we have an indication that new pair was created - which we want to fetch now
     this._slowPollPairs = false;
 
     const processPairs = async () => {
       try {
-        if (pairs.length === 0) {
+        if (this._pairs.length === 0) {
           // if we have no pairs we need to fetch - unless we're in slow poll mode and less than a minute has passed since last fetch
-          if (this._slowPollPairs && Date.now() - lastFetch < 60000) {
+          if (this._slowPollPairs && Date.now() - this._lastFetch < 60000) {
             // go back to sleep
             setTimeout(processPairs, 1000);
             return;
           }
           logger.debug('_populatePairsData fetches pairs');
-          pairs = [...(await this._fetcher.pairs())];
-          logger.debug('_populatePairsData fetched pairs', pairs);
-          lastFetch = Date.now();
+          this._pairs = [...(await this._fetcher.pairs())];
+          logger.debug('_populatePairsData fetched pairs', this._pairs);
+          this._lastFetch = Date.now();
         }
         // let's find the first pair that's not in the cache and clear it from the list along with all the items before it
         const nextPairToSync = findAndRemoveLeading<TokenPair>(
-          pairs,
+          this._pairs,
           (pair) => !this._chainCache.hasCachedPair(pair[0], pair[1])
         );
         if (nextPairToSync) {
@@ -107,7 +116,7 @@ export class ChainSync {
           setTimeout(processPairs, 1000);
         }
       } catch (e) {
-        console.error('Error while syncing pairs data', e);
+        logger.error('Error while syncing pairs data', e);
         setTimeout(processPairs, 60000);
       }
     };
@@ -153,6 +162,15 @@ export class ChainSync {
         const currentBlock = await this._fetcher.getBlockNumber();
 
         if (currentBlock > latestBlock) {
+          if (await this._detectReorg(currentBlock)) {
+            logger.debug('_syncEvents detected reorg - resetting');
+            this._chainCache.clear();
+            this._chainCache.applyBatchedUpdates(currentBlock, [], [], [], []);
+            this._resetPairsFetching();
+            setTimeout(processEvents, 1);
+            return;
+          }
+
           const cachedPairs = new Set<string>(
             this._chainCache
               .getCachedPairs()
@@ -261,11 +279,69 @@ export class ChainSync {
           );
         }
       } catch (err) {
-        console.error('Error syncing events:', err);
+        logger.error('Error syncing events:', err);
       }
 
       setTimeout(processEvents, interval);
     };
     setTimeout(processEvents, 1);
+  }
+  private _resetPairsFetching() {
+    this._pairs = [];
+    this._slowPollPairs = false;
+    this._initialSyncDone = false;
+  }
+
+  private async _detectReorg(currentBlock: number): Promise<boolean> {
+    logger.debug('_detectReorg called');
+    const blocksMetadata: BlockMetadata[] = this._chainCache.blocksMetadata;
+    const numberToBlockMetadata: { [key: number]: BlockMetadata } = {};
+    for (let blockMetadata of blocksMetadata) {
+      const { number, hash } = blockMetadata;
+      if (number > currentBlock) {
+        logger.log(
+          'reorg detected for block number',
+          number,
+          'larger than current block',
+          currentBlock,
+          'with hash',
+          hash
+        );
+        return true;
+      }
+      const currentHash = (await this._fetcher.getBlock(number)).hash;
+      if (hash !== currentHash) {
+        logger.log(
+          'reorg detected for block number',
+          number,
+          'old hash',
+          hash,
+          'new hash',
+          currentHash
+        );
+        return true;
+      }
+      // blockMetadata is valid, let's store it so that we don't have to fetch it again below
+      numberToBlockMetadata[number] = blockMetadata;
+    }
+
+    // no reorg detected
+    logger.debug('_detectReorg no reorg detected, updating blocks metadata');
+    // let's store the new blocks metadata
+    const latestBlocksMetadata: BlockMetadata[] = [];
+    for (let i = 0; i < BLOCKS_TO_KEEP; i++) {
+      // get the blocks metadata either from numberToBlockMetadata or from the blockchain
+      if (numberToBlockMetadata[currentBlock - i]) {
+        latestBlocksMetadata.push(numberToBlockMetadata[currentBlock - i]);
+      } else {
+        latestBlocksMetadata.push(
+          await this._fetcher.getBlock(currentBlock - i)
+        );
+      }
+    }
+    this._chainCache.blocksMetadata = latestBlocksMetadata;
+    logger.debug('_detectReorg updated blocks metadata');
+
+    return false;
   }
 }
