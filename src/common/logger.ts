@@ -1,28 +1,24 @@
 import { BigNumber } from '../utils/numerics';
 
-declare global {
-  interface Window {
-    CARBON_DEFI_SDK_VERBOSITY?: number;
-  }
-}
-
 function getVerbosityLevel(): number {
-  if (typeof window !== 'undefined') {
-    return Number(window.CARBON_DEFI_SDK_VERBOSITY) || 0;
+  if (self !== undefined) {
+    return Number((self as any).CARBON_DEFI_SDK_VERBOSITY) || 0;
+  } else if (typeof window !== 'undefined') {
+    return Number((window as any).CARBON_DEFI_SDK_VERBOSITY) || 0;
   } else if (typeof process !== 'undefined' && process.env) {
     return Number(process.env.CARBON_DEFI_SDK_VERBOSITY) || 0;
   }
   return 0;
 }
 
-const verbose = getVerbosityLevel();
+const verbosity = getVerbosityLevel();
 
 function isVerbose(): boolean {
-  return verbose >= 1;
+  return verbosity >= 1;
 }
 
 function shouldConvertBigNumbersToStrings(): boolean {
-  return verbose >= 2;
+  return verbosity >= 2;
 }
 
 const originalLog = console.log;
