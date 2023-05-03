@@ -72,7 +72,7 @@
     "@rollup/plugin-commonjs": "^24.1.0",
     "@rollup/plugin-node-resolve": "^15.0.2",
     "@typechain/ethers-v5": "^10.2.0",
-    "@types/chai": "^4.3.4",
+    "@types/chai": "^4.3.5",
     "@types/mocha": "^10.0.0",
     "@types/node": "^18.15.11",
     "@types/sinon": "^10.0.14",
