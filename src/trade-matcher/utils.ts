@@ -1,6 +1,6 @@
 import { Rate } from '../common/types';
 
-export const cmpMin = (x: Rate, y: Rate): number => {
+export const sortByMinRate = (x: Rate, y: Rate): number => {
   const lhs = x.output.mul(y.input);
   const rhs = y.output.mul(x.input);
   const lt = lhs.lt(rhs);
@@ -11,4 +11,4 @@ export const cmpMin = (x: Rate, y: Rate): number => {
   return +is_lt - +is_gt;
 };
 
-export const cmpMax = (x: Rate, y: Rate): number => cmpMin(y, x);
+export const sortByMaxRate = (x: Rate, y: Rate): number => sortByMinRate(y, x);

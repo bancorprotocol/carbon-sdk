@@ -141,7 +141,7 @@ export const getEncodedTradeSourceAmount = (
   try {
     return uint128(getEncodedTradeByTargetAmount(x, y, z, A, B));
   } catch (error) {
-    return MAX_UINT256; /* rate = amount / infinity = zero */
+    return MAX_UINT128; /* rate = amount / infinity = zero */
   }
 };
 

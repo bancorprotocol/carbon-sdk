@@ -18,7 +18,6 @@ import {
   DecodedStrategy,
   EncodedStrategy,
   Filter,
-  MatchAction,
   Action,
   Strategy,
   StrategyUpdate,
@@ -26,6 +25,8 @@ import {
   MatchActionBNStr,
   TradeActionBNStr,
   EncodedStrategyBNStr,
+  MatchType,
+  MatchOptions,
 } from '../common/types';
 import { DecimalFetcher, Decimals } from '../utils/decimals';
 
@@ -111,16 +112,27 @@ export class Toolkit {
     amountWei: string,
     tradeByTargetAmount: boolean,
     ordersMap: OrdersMapBNStr,
+    matchType: MatchType = MatchType.Fast,
     filter?: Filter
   ): MatchActionBNStr[] {
     const orders = ordersMapStrToBN(ordersMap);
-    let result: MatchAction[];
+    let result: MatchOptions;
     if (tradeByTargetAmount) {
-      result = matchByTargetAmount(BigNumber.from(amountWei), orders, filter);
+      result = matchByTargetAmount(
+        BigNumber.from(amountWei),
+        orders,
+        [matchType],
+        filter
+      );
     } else {
-      result = matchBySourceAmount(BigNumber.from(amountWei), orders, filter);
+      result = matchBySourceAmount(
+        BigNumber.from(amountWei),
+        orders,
+        [matchType],
+        filter
+      );
     }
-    return result.map(matchActionBNToStr);
+    return result[matchType]?.map(matchActionBNToStr) ?? [];
   }
 
   /**
@@ -330,6 +342,7 @@ export class Toolkit {
    * @param {string} targetToken - The target token for the trade.
    * @param {string} amount - The amount of source tokens or target tokens to trade, depending on the value of `tradeByTargetAmount`.
    * @param {boolean} tradeByTargetAmount - Whether to trade by target amount (`true`) or source amount (`false`).
+   * @param {MatchType} [matchType] - The type of match to perform. Defaults to `MatchType.Fast`.
    * @param {(rate: Rate) => boolean} [filter] - Optional function to filter the available orders.
    *
    * @returns {Promise<Object>} An object containing the trade actions and other relevant data.
@@ -346,6 +359,7 @@ export class Toolkit {
     targetToken: string,
     amount: string,
     tradeByTargetAmount: boolean,
+    matchType: MatchType = MatchType.Fast,
     filter?: Filter
   ): Promise<{
     tradeActions: TradeActionBNStr[];
@@ -367,6 +381,7 @@ export class Toolkit {
       amountWei,
       tradeByTargetAmount,
       orders,
+      matchType,
       filter
     );
 
