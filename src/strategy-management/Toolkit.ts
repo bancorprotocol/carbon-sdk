@@ -211,7 +211,7 @@ export class Toolkit {
 
     const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
     const maxSourceAmountWei = Object.values(orders).reduce(
-      (acc, order) => acc.add(getEncodedTradeSourceAmount(order.y, order)),
+      (acc, order) => acc.add(getEncodedTradeSourceAmount(order.y, order, false)),
       BigNumber.from(0)
     );
     const decimals = await this._decimals.fetchDecimals(sourceToken);

@@ -33,8 +33,18 @@ const getEncodedTradeBySourceAmount = (
   y: BigNumber,
   z: BigNumber,
   A: BigNumber,
-  B: BigNumber
+  B: BigNumber,
+  simulated: boolean
 ): BigNumber => {
+  if (simulated) {
+    const temp1 = z.mul(C);
+    const temp2 = y.mul(A).add(z.mul(B));
+    const temp3 = temp2.mul(x);
+    const temp4 = temp1.mul(temp1);
+    const temp5 = temp3.mul(A);
+    return mulDivF(temp2, temp3, temp4.add(temp5));
+  }
+
   if (A.eq(0)) {
     return mulDivF(x, mul(B, B), mul(C, C));
   }
@@ -62,8 +72,18 @@ const getEncodedTradeByTargetAmount = (
   y: BigNumber,
   z: BigNumber,
   A: BigNumber,
-  B: BigNumber
+  B: BigNumber,
+  simulated: boolean
 ): BigNumber => {
+  if (simulated) {
+    const temp1 = z.mul(C);
+    const temp2 = y.mul(A).add(z.mul(B));
+    const temp3 = temp2.sub(x.mul(A));
+    const temp4 = temp1.mul(temp1);
+    const temp5 = temp2.mul(temp3);
+    return mulDivC(x, temp4, temp5);
+  }
+
   if (A.eq(0)) {
     return mulDivC(x, mul(C, C), mul(B, B));
   }
@@ -115,7 +135,8 @@ const getDecodedTradeByTargetAmount = (
 
 export const getEncodedTradeTargetAmount = (
   amount: BigNumber,
-  order: EncodedOrder
+  order: EncodedOrder,
+  simulated: boolean
 ): BigNumber => {
   const x = amount;
   const y = order.y;
@@ -123,7 +144,7 @@ export const getEncodedTradeTargetAmount = (
   const A = decodeFloat(order.A);
   const B = decodeFloat(order.B);
   try {
-    return uint128(getEncodedTradeBySourceAmount(x, y, z, A, B));
+    return uint128(getEncodedTradeBySourceAmount(x, y, z, A, B, simulated));
   } catch (error) {
     return BigNumber.from(0); /* rate = zero / amount = zero */
   }
@@ -131,7 +152,8 @@ export const getEncodedTradeTargetAmount = (
 
 export const getEncodedTradeSourceAmount = (
   amount: BigNumber,
-  order: EncodedOrder
+  order: EncodedOrder,
+  simulated: boolean
 ): BigNumber => {
   const x = amount;
   const y = order.y;
@@ -139,7 +161,7 @@ export const getEncodedTradeSourceAmount = (
   const A = decodeFloat(order.A);
   const B = decodeFloat(order.B);
   try {
-    return uint128(getEncodedTradeByTargetAmount(x, y, z, A, B));
+    return uint128(getEncodedTradeByTargetAmount(x, y, z, A, B, simulated));
   } catch (error) {
     return MAX_UINT128; /* rate = amount / infinity = zero */
   }
