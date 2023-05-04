@@ -34,7 +34,7 @@ const getEncodedTradeBySourceAmount = (
   z: BigNumber,
   A: BigNumber,
   B: BigNumber,
-  simulated = false
+  simulated: boolean
 ): BigNumber => {
   if (simulated) {
     const temp1 = z.mul(C);
@@ -73,7 +73,7 @@ const getEncodedTradeByTargetAmount = (
   z: BigNumber,
   A: BigNumber,
   B: BigNumber,
-  simulated = false
+  simulated: boolean
 ): BigNumber => {
   if (simulated) {
     const temp1 = z.mul(C);
@@ -136,7 +136,7 @@ const getDecodedTradeByTargetAmount = (
 export const getEncodedTradeTargetAmount = (
   amount: BigNumber,
   order: EncodedOrder,
-  simulated = false
+  simulated: boolean
 ): BigNumber => {
   const x = amount;
   const y = order.y;
@@ -153,7 +153,7 @@ export const getEncodedTradeTargetAmount = (
 export const getEncodedTradeSourceAmount = (
   amount: BigNumber,
   order: EncodedOrder,
-  simulated = false
+  simulated: boolean
 ): BigNumber => {
   const x = amount;
   const y = order.y;
