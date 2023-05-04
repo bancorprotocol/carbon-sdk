@@ -42,7 +42,7 @@ const getEncodedTradeBySourceAmount = (
     const temp3 = temp2.mul(x);
     const temp4 = temp1.mul(temp1);
     const temp5 = temp3.mul(A);
-    return temp2.mul(temp3).div(temp4.add(temp5));
+    return mulDivF(temp2, temp3, temp4.add(temp5));
   }
 
   if (A.eq(0)) {
@@ -81,7 +81,7 @@ const getEncodedTradeByTargetAmount = (
     const temp3 = temp2.sub(x.mul(A));
     const temp4 = temp1.mul(temp1);
     const temp5 = temp2.mul(temp3);
-    return x.mul(temp4).div(temp5);
+    return mulDivC(x, temp4, temp5);
   }
 
   if (A.eq(0)) {
