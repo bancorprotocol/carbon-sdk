@@ -7,6 +7,8 @@ function bitLength(value: BigNumber) {
     : 0;
 }
 
+export const LARGE_Z = BigNumber.from(2).pow(112);
+
 export const encodeRate = (value: Decimal) => {
   const data = DecToBn(value.sqrt().mul(ONE).floor());
   const length = bitLength(data.div(ONE));
@@ -51,7 +53,7 @@ export const encodeOrder = (order: DecodedOrder): EncodedOrder => {
   const M = DecToBn(encodeRate(marginalRate));
   return {
     y: y,
-    z: H.eq(M) ? y : y.mul(H.sub(L)).div(M.sub(L)),
+    z: H.eq(L) ? LARGE_Z : H.eq(M) ? y : y.mul(H.sub(L)).div(M.sub(L)),
     A: encodeFloat(H.sub(L)),
     B: encodeFloat(L),
   };

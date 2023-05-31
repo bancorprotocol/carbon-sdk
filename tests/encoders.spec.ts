@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { encodeOrder, decodeOrder } from '../src/utils/encoders';
+import { encodeOrder, decodeOrder, LARGE_Z } from '../src/utils/encoders';
 import {
   buildStrategyObject,
   encodeStrategy,
@@ -43,7 +43,7 @@ describe('encoders', () => {
       };
       const encodedOrder = encodeOrder(order);
       expect(encodedOrder.y.toString()).to.equal('100');
-      expect(encodedOrder.z.toString()).to.equal('100');
+      expect(encodedOrder.z.toString()).to.equal(`${LARGE_Z}`);
       expect(encodedOrder.A.toString()).to.equal('0');
       expect(encodedOrder.B.toString()).to.equal('199032864766430');
     });

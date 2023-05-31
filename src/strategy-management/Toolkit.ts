@@ -56,7 +56,7 @@ import {
 } from './utils';
 
 // Encoder utility
-import { decodeOrder } from '../utils/encoders';
+import { decodeOrder, LARGE_Z } from '../utils/encoders';
 import {
   encodedStrategyStrToBN,
   matchActionBNToStr,
@@ -64,8 +64,6 @@ import {
   ordersMapStrToBN,
   tradeActionStrToBN,
 } from '../utils';
-
-const LARGE_Z = BigNumber.from(2).pow(112);
 
 /**
  * Enum representing options for the marginal price parameter of the function.
