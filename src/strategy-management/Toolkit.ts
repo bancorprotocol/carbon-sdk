@@ -65,6 +65,8 @@ import {
   tradeActionStrToBN,
 } from '../utils';
 
+const LARGE_Z = BigNumber.from(2).pow(112);
+
 /**
  * Enum representing options for the marginal price parameter of the function.
  */
@@ -807,11 +809,14 @@ export class Toolkit {
       newEncodedStrategy.order0.B = encodedBN.order0.B;
     }
 
-    if (buyBudget !== undefined) {
+    if (newEncodedStrategy.order1.A.isZero()) {
+        newEncodedStrategy.order1.z = LARGE_Z;
+    } else if (buyBudget !== undefined) {
       if (
         buyMarginalPrice === undefined ||
         buyMarginalPrice === MarginalPriceOptions.reset ||
-        encodedBN.order1.y.isZero()
+        encodedBN.order1.y.isZero() ||
+        encodedBN.order1.A.isZero()
       ) {
         newEncodedStrategy.order1.z = newEncodedStrategy.order1.y;
       } else if (buyMarginalPrice === MarginalPriceOptions.maintain) {
@@ -824,11 +829,14 @@ export class Toolkit {
       }
     }
 
-    if (sellBudget !== undefined) {
+    if (newEncodedStrategy.order0.A.isZero()) {
+        newEncodedStrategy.order0.z = LARGE_Z;
+    } else if (sellBudget !== undefined) {
       if (
         sellMarginalPrice === undefined ||
         sellMarginalPrice === MarginalPriceOptions.reset ||
-        encodedBN.order0.y.isZero()
+        encodedBN.order0.y.isZero() ||
+        encodedBN.order0.A.isZero()
       ) {
         newEncodedStrategy.order0.z = newEncodedStrategy.order0.y;
       } else if (sellMarginalPrice === MarginalPriceOptions.maintain) {
@@ -842,10 +850,18 @@ export class Toolkit {
     }
 
     if (buyPriceLow !== undefined || buyPriceHigh !== undefined) {
-      newEncodedStrategy.order1.z = newEncodedStrategy.order1.y;
+      if (newEncodedStrategy.order1.A.isZero()) {
+        newEncodedStrategy.order1.z = LARGE_Z;
+      } else {
+        newEncodedStrategy.order1.z = newEncodedStrategy.order1.y;
+      }
     }
     if (sellPriceLow !== undefined || sellPriceHigh !== undefined) {
-      newEncodedStrategy.order0.z = newEncodedStrategy.order0.y;
+      if (newEncodedStrategy.order0.A.isZero()) {
+        newEncodedStrategy.order0.z = LARGE_Z;
+      } else {
+        newEncodedStrategy.order0.z = newEncodedStrategy.order0.y;
+      }
     }
 
     if (
