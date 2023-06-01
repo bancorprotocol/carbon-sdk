@@ -42,7 +42,7 @@ import { getDepths, getMaxRate, getMinRate } from './stats';
 
 // Logger
 import { Logger } from '../common/logger';
-const logger = new Logger('index.ts');
+const logger = new Logger('Toolkit.ts');
 
 // Strategy utils
 import {
