@@ -79,10 +79,17 @@ export default class Reader implements Fetcher {
     );
     if (!results || results.length === 0) return [];
 
-    return results.map((strategyRes) => {
-      const strategy = strategyRes[0] as StrategyStructOutput;
-      return toStrategy(strategy);
-    });
+    return results
+      .map((strategyRes) => {
+        try {
+          if (!strategyRes) return null;
+          const strategy = strategyRes[0] as StrategyStructOutput;
+          return toStrategy(strategy);
+        } catch {
+          return null as any;
+        }
+      })
+      .filter((s) => !!s);
   }
 
   public pairs(): Promise<TokenPair[]> {
@@ -134,7 +141,7 @@ export default class Reader implements Fetcher {
     const strategies = results
       .map((strategyRes) => {
         try {
-          if (strategyRes[0].length === 0) return null;
+          if (!strategyRes || strategyRes[0].length === 0) return null;
           const strategy = strategyRes[0][0] as StrategyStructOutput;
           return toStrategy(strategy);
         } catch {
