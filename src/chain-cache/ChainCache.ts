@@ -288,7 +288,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     strategies: EncodedStrategy[],
     noPairAddedEvent: boolean = false
   ): void {
-    logger.debug('Adding pair to cache', token0, token1);
+    logger.debug('Adding pair with', strategies.length, ' strategies to cache', token0, token1);
     const key = toPairKey(token0, token1);
     if (this._strategiesByPair[key]) {
       throw new Error(`Pair ${key} already cached`);

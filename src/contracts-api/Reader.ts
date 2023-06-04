@@ -168,6 +168,8 @@ export default class Reader implements Fetcher {
         0
       );
     } catch (e) {
+      logger.log('error while fetching strategiesByPair', e);
+      console.dir(e);
       error = e;
     }
 
@@ -175,7 +177,7 @@ export default class Reader implements Fetcher {
       return res.map((r) => toStrategy(r));
     }
 
-    if ((error as any).errorName === 'StrategyDoesNotExist') {
+    if (error) { //if ((error as any).errorName === 'StrategyDoesNotExist') {
       return this._strategiesByPairWithMulticall(token0, token1);
     }
 
