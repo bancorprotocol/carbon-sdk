@@ -9,7 +9,7 @@ import {
   TradeData,
 } from '../common/types';
 
-const logger = new Logger('index.ts');
+const logger = new Logger('ChainSync.ts');
 
 const BLOCKS_TO_KEEP = 3;
 

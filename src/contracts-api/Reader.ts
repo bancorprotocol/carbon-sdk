@@ -79,27 +79,109 @@ export default class Reader implements Fetcher {
     );
     if (!results || results.length === 0) return [];
 
-    return results.map((strategyRes) => {
-      const strategy = strategyRes[0] as StrategyStructOutput;
-      return toStrategy(strategy);
-    });
+    return results
+      .map((strategyRes) => {
+        try {
+          if (!strategyRes) return null;
+          const strategy = strategyRes[0] as StrategyStructOutput;
+          return toStrategy(strategy);
+        } catch {
+          return null as any;
+        }
+      })
+      .filter((s) => !!s);
   }
 
   public pairs(): Promise<TokenPair[]> {
     return this._contracts.carbonController.pairs();
   }
 
+  private async _strategiesByPairWithMulticall(
+    token0: string,
+    token1: string
+  ): Promise<EncodedStrategy[]> {
+    logger.debug('_strategiesByPairWithMulticall called', arguments);
+    const count = await this._contracts.carbonController.strategiesByPairCount(
+      token0,
+      token1
+    );
+    logger.debug(
+      '_strategiesByPairWithMulticall has',
+      count,
+      'for',
+      token0,
+      token1
+    );
+
+    const calls = [];
+    for (let i = 0; count.gt(i); i++) {
+      calls.push({
+        contractAddress: this._contracts.carbonController.address,
+        interface: this._contracts.carbonController.interface,
+        methodName: 'strategiesByPair',
+        methodParameters: [token0, token1, i, i + 1],
+      });
+    }
+
+    let results;
+    try {
+      results = await this._multicall(calls);
+    } catch (e) {
+      logger.log('--- multicall error ---');
+      logger.log(e);
+    }
+    if (!results || results.length === 0) {
+      logger.debug('no results returned from multicall');
+      return [];
+    }
+    if (results.length < calls.length) {
+      logger.debug('Not all strategies returned for pair', token0, token1);
+    }
+
+    const strategies = results
+      .map((strategyRes) => {
+        try {
+          if (!strategyRes || strategyRes[0].length === 0) return null;
+          const strategy = strategyRes[0][0] as StrategyStructOutput;
+          return toStrategy(strategy);
+        } catch {
+          return null as any;
+        }
+      })
+      .filter((s) => !!s);
+
+    logger.debug('multicall returned', strategies.length, 'strategies');
+    return strategies;
+  }
+
   public async strategiesByPair(
     token0: string,
     token1: string
   ): Promise<EncodedStrategy[]> {
-    const res = await this._contracts.carbonController.strategiesByPair(
-      token0,
-      token1,
-      0,
-      0
-    );
-    return res.map((r) => toStrategy(r));
+    let res: StrategyStructOutput[] = [];
+    let error = null;
+    try {
+      res = await this._contracts.carbonController.strategiesByPair(
+        token0,
+        token1,
+        0,
+        0
+      );
+    } catch (e) {
+      logger.log('error while fetching strategiesByPair', e);
+      console.dir(e);
+      error = e;
+    }
+
+    if (!error) {
+      return res.map((r) => toStrategy(r));
+    }
+
+    if (error) { //if ((error as any).errorName === 'StrategyDoesNotExist') {
+      return this._strategiesByPairWithMulticall(token0, token1);
+    }
+
+    return [];
   }
 
   public async tokensByOwner(owner: string) {
