@@ -4,7 +4,6 @@ import { PayableOverrides } from 'ethers';
 import {
   BigNumber,
   Decimal,
-  mulDiv,
   tenPow,
   formatUnits,
   parseUnits,
@@ -56,7 +55,7 @@ import {
 } from './utils';
 
 // Encoder utility
-import { decodeOrder, LARGE_Z } from '../utils/encoders';
+import { decodeOrder } from '../utils/encoders';
 import {
   encodedStrategyStrToBN,
   matchActionBNToStr,
@@ -754,7 +753,8 @@ export class Toolkit {
   ): Promise<PopulatedTransaction> {
     logger.debug('updateStrategy called', arguments);
     // step 1: decode and parse the encoded strategy back to a Strategy object and use it to replace undefined values
-    const decodedOriginal = decodeStrategy(encodedStrategyStrToBN(encoded));
+    const encodedBN = encodedStrategyStrToBN(encoded);
+    const decodedOriginal = decodeStrategy(encodedBN);
     const originalStrategy = await parseStrategy(
       decodedOriginal,
       this._decimals
@@ -781,107 +781,23 @@ export class Toolkit {
       sellPriceHigh ?? originalStrategy.sellPriceHigh,
       sellBudget ?? originalStrategy.sellBudget
     );
+
+    for (const [oldOrder, newOrder] of [
+      [decodedOriginal.order0, newStrategy.order0],
+      [decodedOriginal.order1, newStrategy.order1]
+    ]) {
+      const newL = new Decimal(newOrder.lowestRate);
+      const newH = new Decimal(newOrder.highestRate);
+      if (newH.gt(newL)) {
+        const oldL = new Decimal(oldOrder.lowestRate);
+        const oldH = new Decimal(oldOrder.highestRate);
+        const oldM = new Decimal(oldOrder.marginalRate);
+        const newM = oldM.sub(oldL).mul(newH.sub(newL)).div(oldH.sub(oldL)).add(newL);
+        newOrder.marginalRate = newM.toFixed();
+      }
+    }
+
     const newEncodedStrategy = encodeStrategy(newStrategy);
-
-    // step 3: to avoid changes due to rounding errors, we will override the new encoded strategy with selected values from the old encoded strategy:
-    // - if budget wasn't defined - we will use the old y
-    // - if no price was defined - we will use the old A and B
-    // - if any price was defined - we will reset z to y
-    // - if any budget was defined - will set z according to MarginalPriceOptions
-    // - if marginalPrice is a number - we will use it to calculate z
-    const encodedBN = encodedStrategyStrToBN(encoded);
-    if (buyBudget === undefined) {
-      newEncodedStrategy.order1.y = encodedBN.order1.y;
-    }
-    if (sellBudget === undefined) {
-      newEncodedStrategy.order0.y = encodedBN.order0.y;
-    }
-
-    if (buyPriceLow === undefined && buyPriceHigh === undefined) {
-      newEncodedStrategy.order1.A = encodedBN.order1.A;
-      newEncodedStrategy.order1.B = encodedBN.order1.B;
-    }
-
-    if (sellPriceLow === undefined && sellPriceHigh === undefined) {
-      newEncodedStrategy.order0.A = encodedBN.order0.A;
-      newEncodedStrategy.order0.B = encodedBN.order0.B;
-    }
-
-    if (newEncodedStrategy.order1.A.isZero()) {
-        newEncodedStrategy.order1.z = LARGE_Z;
-    } else if (buyBudget !== undefined) {
-      if (
-        buyMarginalPrice === undefined ||
-        buyMarginalPrice === MarginalPriceOptions.reset ||
-        encodedBN.order1.y.isZero() ||
-        encodedBN.order1.A.isZero()
-      ) {
-        newEncodedStrategy.order1.z = newEncodedStrategy.order1.y;
-      } else if (buyMarginalPrice === MarginalPriceOptions.maintain) {
-        // maintain the current ratio of y/z
-        newEncodedStrategy.order1.z = mulDiv(
-          encodedBN.order1.z,
-          newEncodedStrategy.order1.y,
-          encodedBN.order1.y
-        );
-      }
-    }
-
-    if (newEncodedStrategy.order0.A.isZero()) {
-        newEncodedStrategy.order0.z = LARGE_Z;
-    } else if (sellBudget !== undefined) {
-      if (
-        sellMarginalPrice === undefined ||
-        sellMarginalPrice === MarginalPriceOptions.reset ||
-        encodedBN.order0.y.isZero() ||
-        encodedBN.order0.A.isZero()
-      ) {
-        newEncodedStrategy.order0.z = newEncodedStrategy.order0.y;
-      } else if (sellMarginalPrice === MarginalPriceOptions.maintain) {
-        // maintain the current ratio of y/z
-        newEncodedStrategy.order0.z = mulDiv(
-          encodedBN.order0.z,
-          newEncodedStrategy.order0.y,
-          encodedBN.order0.y
-        );
-      }
-    }
-
-    if (buyPriceLow !== undefined || buyPriceHigh !== undefined) {
-      if (newEncodedStrategy.order1.A.isZero()) {
-        newEncodedStrategy.order1.z = LARGE_Z;
-      } else {
-        newEncodedStrategy.order1.z = newEncodedStrategy.order1.y;
-      }
-    }
-    if (sellPriceLow !== undefined || sellPriceHigh !== undefined) {
-      if (newEncodedStrategy.order0.A.isZero()) {
-        newEncodedStrategy.order0.z = LARGE_Z;
-      } else {
-        newEncodedStrategy.order0.z = newEncodedStrategy.order0.y;
-      }
-    }
-
-    if (
-      buyMarginalPrice !== undefined &&
-      buyMarginalPrice !== MarginalPriceOptions.reset &&
-      buyMarginalPrice !== MarginalPriceOptions.maintain
-    ) {
-      // TODO: set newEncodedStrategy.order1.z according to the given marginal price
-      throw new Error(
-        'Support for custom marginal price is not implemented yet'
-      );
-    }
-    if (
-      sellMarginalPrice !== undefined &&
-      sellMarginalPrice !== MarginalPriceOptions.reset &&
-      sellMarginalPrice !== MarginalPriceOptions.maintain
-    ) {
-      // TODO: set newEncodedStrategy.order0.z according to the given marginal price
-      throw new Error(
-        'Support for custom marginal price is not implemented yet'
-      );
-    }
 
     logger.debug('updateStrategy info:', {
       baseDecimals,

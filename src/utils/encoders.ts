@@ -1,13 +1,13 @@
 import { BigNumber, Decimal, BnToDec, DecToBn, ONE } from './numerics';
 import { DecodedOrder, EncodedOrder } from '../common/types';
 
+const LARGE_Z = BigNumber.from(2).pow(112);
+
 function bitLength(value: BigNumber) {
   return value.gt(0)
     ? Decimal.log2(value.toString()).add(1).floor().toNumber()
     : 0;
 }
-
-export const LARGE_Z = BigNumber.from(2).pow(112);
 
 export const encodeRate = (value: Decimal) => {
   const data = DecToBn(value.sqrt().mul(ONE).floor());
