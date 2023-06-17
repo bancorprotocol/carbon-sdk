@@ -43,7 +43,7 @@ describe('encoders', () => {
       };
       const encodedOrder = encodeOrder(order);
       expect(encodedOrder.y.toString()).to.equal('100');
-      expect(encodedOrder.z.toString()).to.equal(`${BigNumber.from(2).pow(112)}`);
+      expect(encodedOrder.z.toString()).to.equal(`${BigNumber.from(2).pow(112).sub(1)}`);
       expect(encodedOrder.A.toString()).to.equal('0');
       expect(encodedOrder.B.toString()).to.equal('199032864766430');
     });

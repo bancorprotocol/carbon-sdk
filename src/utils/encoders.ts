@@ -1,7 +1,7 @@
 import { BigNumber, Decimal, BnToDec, DecToBn, ONE } from './numerics';
 import { DecodedOrder, EncodedOrder } from '../common/types';
 
-const LARGE_Z = BigNumber.from(2).pow(112);
+const LARGE_Z = BigNumber.from(2).pow(112).sub(1);
 
 function bitLength(value: BigNumber) {
   return value.gt(0)
