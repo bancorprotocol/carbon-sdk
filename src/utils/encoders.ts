@@ -1,6 +1,8 @@
 import { BigNumber, Decimal, BnToDec, DecToBn, ONE } from './numerics';
 import { DecodedOrder, EncodedOrder } from '../common/types';
 
+const LARGE_Z = BigNumber.from(2).pow(112).sub(1);
+
 function bitLength(value: BigNumber) {
   return value.gt(0)
     ? Decimal.log2(value.toString()).add(1).floor().toNumber()
@@ -51,7 +53,7 @@ export const encodeOrder = (order: DecodedOrder): EncodedOrder => {
   const M = DecToBn(encodeRate(marginalRate));
   return {
     y: y,
-    z: H.eq(M) ? y : y.mul(H.sub(L)).div(M.sub(L)),
+    z: H.eq(L) ? LARGE_Z : H.eq(M) ? y : y.mul(H.sub(L)).div(M.sub(L)),
     A: encodeFloat(H.sub(L)),
     B: encodeFloat(L),
   };
