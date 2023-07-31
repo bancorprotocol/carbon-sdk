@@ -78,7 +78,7 @@
     "@types/sinon": "^10.0.14",
     "chai": "^4.3.7",
     "mocha": "^10.1.0",
-    "rollup": "^3.21.4",
+    "rollup": "^3.27.0",
     "rollup-plugin-typescript2": "^0.34.1",
     "sinon": "^15.0.4",
     "ts-node": "^10.9.1",
