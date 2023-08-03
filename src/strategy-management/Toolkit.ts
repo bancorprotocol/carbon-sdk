@@ -228,6 +228,56 @@ export class Toolkit {
   }
 
   /**
+   * Gets all the strategies that belong to the given pair
+   *
+   * If the cache is synced, it will return the strategies from the cache.
+   * Otherwise, it will fetch the strategies from the chain.
+   *
+   * @param {string} token0 - Address of one of the tokens in the pair - the order is not important.
+   * @param {string} token1 - Address of one of the tokens in the pair - the order is not important.
+   */
+  public async getStrategiesByPair(
+    token0: string,
+    token1: string
+  ): Promise<Strategy[]> {
+    logger.debug('getStrategiesByPair called', arguments);
+
+    let encodedStrategies: EncodedStrategy[] | undefined;
+
+    if (this._cache) {
+      encodedStrategies = await this._cache.getStrategiesByPair(token0, token1);
+    }
+
+    if (encodedStrategies) {
+      logger.debug('getStrategiesByPair fetched from cache');
+    } else {
+      logger.debug('getStrategiesByPair fetching from chain');
+      encodedStrategies = await this._api.reader.strategiesByPair(
+        token0,
+        token1
+      );
+    }
+
+    const decodedStrategies = encodedStrategies.map(decodeStrategy);
+
+    const strategies = await Promise.all(
+      decodedStrategies.map(async (strategy) => {
+        return await parseStrategy(strategy, this._decimals);
+      })
+    );
+
+    logger.debug('getStrategiesByPair info:', {
+      token0,
+      token1,
+      encodedStrategies,
+      decodedStrategies,
+      strategies,
+    });
+
+    return strategies;
+  }
+
+  /**
    * Gets the strategies that are owned by the user.
    * It does so by reading the voucher token and
    * figuring out strategy IDs from them.
