@@ -69,7 +69,7 @@
   },
   "homepage": "https://github.com/bancorprotocol/carbon-sdk#readme",
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^24.1.0",
+    "@rollup/plugin-commonjs": "^25.0.3",
     "@rollup/plugin-node-resolve": "^15.0.2",
     "@typechain/ethers-v5": "^10.2.0",
     "@types/chai": "^4.3.5",
