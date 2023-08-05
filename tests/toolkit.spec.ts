@@ -1,11 +1,10 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { Toolkit } from '../src/strategy-management';
-import { ContractsApi } from '../src/contracts-api';
 import { ChainCache } from '../src/chain-cache';
 import { EncodedStrategy, Strategy } from '../src/common/types';
 import { BigNumber } from '../src/utils/numerics';
-import { Decimals, encodedStrategyBNToStr } from '../src/utils';
+import { encodedStrategyBNToStr } from '../src/utils';
 
 const encodedStrategies: EncodedStrategy[] = [
   {
@@ -87,6 +86,78 @@ describe('Toolkit', () => {
     };
     cacheMock = sinon.createStubInstance(ChainCache);
     decimalFetcher = () => 18;
+  });
+
+  describe('hasLiquidityByPair', () => {
+    it('should return true if there are orders', async () => {
+      const orderMap = {
+        [encodedStrategies[0].id.toString()]: encodedStrategies[0].order0,
+        [encodedStrategies[1].id.toString()]: encodedStrategies[1].order0,
+      };
+
+      cacheMock.getOrdersByPair.resolves(orderMap);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      const hasLiquidity = await toolkit.hasLiquidityByPair(
+        'sourceToken',
+        'targetToken'
+      );
+
+      expect(cacheMock.getOrdersByPair.calledWith('sourceToken', 'targetToken'))
+        .to.be.true;
+      expect(hasLiquidity).to.be.true;
+    });
+
+    it('should return false if there are no orders', async () => {
+      const orders = {};
+      cacheMock.getOrdersByPair.resolves(orders);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      const hasLiquidity = await toolkit.hasLiquidityByPair(
+        'sourceToken',
+        'targetToken'
+      );
+
+      expect(cacheMock.getOrdersByPair.calledWith('sourceToken', 'targetToken'))
+        .to.be.true;
+      expect(hasLiquidity).to.be.false;
+    });
+  });
+
+  describe('getLiquidityByPair', () => {
+    it('should calculate liquidity correctly if there are orders', async () => {
+      const orderMap = {
+        [encodedStrategies[0].id.toString()]: encodedStrategies[0].order0,
+        [encodedStrategies[1].id.toString()]: encodedStrategies[1].order0,
+      };
+
+      cacheMock.getOrdersByPair.resolves(orderMap);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      const liquidity = await toolkit.getLiquidityByPair(
+        'sourceToken',
+        'targetToken'
+      );
+
+      expect(cacheMock.getOrdersByPair.calledWith('sourceToken', 'targetToken'))
+        .to.be.true;
+      expect(liquidity).to.equal('0.000000000000000001');
+    });
+
+    it('should return 0 if there are no orders', async () => {
+      const orders = {};
+      cacheMock.getOrdersByPair.resolves(orders);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      const liquidity = await toolkit.getLiquidityByPair(
+        'sourceToken',
+        'targetToken'
+      );
+
+      expect(cacheMock.getOrdersByPair.calledWith('sourceToken', 'targetToken'))
+        .to.be.true;
+      expect(liquidity).to.equal('0');
+    });
   });
 
   describe('getStrategiesByPair', () => {
