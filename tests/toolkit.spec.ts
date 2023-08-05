@@ -72,6 +72,11 @@ const expectedStrategies: Strategy[] = [
   },
 ];
 
+const orderMap = {
+  [encodedStrategies[0].id.toString()]: encodedStrategies[0].order0,
+  [encodedStrategies[1].id.toString()]: encodedStrategies[1].order0,
+};
+
 describe('Toolkit', () => {
   let apiMock: any;
   let cacheMock: any;
@@ -90,11 +95,6 @@ describe('Toolkit', () => {
 
   describe('hasLiquidityByPair', () => {
     it('should return true if there are orders', async () => {
-      const orderMap = {
-        [encodedStrategies[0].id.toString()]: encodedStrategies[0].order0,
-        [encodedStrategies[1].id.toString()]: encodedStrategies[1].order0,
-      };
-
       cacheMock.getOrdersByPair.resolves(orderMap);
 
       const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
@@ -126,11 +126,6 @@ describe('Toolkit', () => {
 
   describe('getLiquidityByPair', () => {
     it('should calculate liquidity correctly if there are orders', async () => {
-      const orderMap = {
-        [encodedStrategies[0].id.toString()]: encodedStrategies[0].order0,
-        [encodedStrategies[1].id.toString()]: encodedStrategies[1].order0,
-      };
-
       cacheMock.getOrdersByPair.resolves(orderMap);
 
       const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
