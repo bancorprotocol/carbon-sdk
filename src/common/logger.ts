@@ -14,6 +14,7 @@ const globalObject = (() => {
 
 function getVerbosityLevel(): number {
   if (globalObject !== undefined) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return Number((globalObject as any).CARBON_DEFI_SDK_VERBOSITY) || 0;
   }
 
@@ -32,6 +33,7 @@ function shouldConvertBigNumbersToStrings(): boolean {
 
 const originalLog = console.log;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function convertBigNumbersToStrings(obj: any): any {
   if (obj instanceof BigNumber) {
     return obj.toString();
@@ -51,6 +53,7 @@ function convertBigNumbersToStrings(obj: any): any {
 }
 
 if (shouldConvertBigNumbersToStrings()) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   console.debug = (...args: any[]) => {
     const convertedArgs = args.map(convertBigNumbersToStrings);
     originalLog.apply(console, convertedArgs);
@@ -62,14 +65,17 @@ export class Logger {
     this._prefix = `[SDK][${file}]:`;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public error(...args: any[]) {
     console.error(this._prefix, ...args);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public log(...args: any[]) {
     console.log(this._prefix, ...args);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public debug(...args: any[]) {
     isVerbose() && console.debug(this._prefix, ...args);
   }
