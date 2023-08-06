@@ -427,7 +427,7 @@ export class Toolkit {
       tradeByTargetAmount
     );
 
-    let actionsWei: MatchActionBNStr[] = Toolkit.getMatchActions(
+    const actionsWei: MatchActionBNStr[] = Toolkit.getMatchActions(
       amountWei,
       tradeByTargetAmount,
       orders,

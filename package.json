@@ -41,9 +41,10 @@
     "clean": "rm -rf dist && rm -rf src/abis/types",
     "compile-abis": "typechain --target ethers-v5 --out-dir 'src/abis/types' 'src/abis/**/*.json'",
     "prebuild": "yarn clean && yarn compile-abis",
-    "build": "rollup -c",
-    "dev": "rollup -c -w",
-    "test": "mocha"
+    "build": "yarn lint && rollup -c",
+    "dev": "yarn lint && rollup -c -w",
+    "test": "yarn lint && mocha",
+    "lint": "eslint src --ext .ts"
   },
   "publishConfig": {
     "access": "public"
@@ -76,14 +77,17 @@
     "@types/mocha": "^10.0.0",
     "@types/node": "^18.16.3",
     "@types/sinon": "^10.0.15",
+    "@typescript-eslint/eslint-plugin": "^6.2.1",
+    "@typescript-eslint/parser": "^6.2.1",
     "chai": "^4.3.7",
+    "eslint": "^8.46.0",
     "mocha": "^10.1.0",
     "rollup": "^3.27.0",
     "rollup-plugin-typescript2": "^0.34.1",
     "sinon": "^15.0.4",
     "ts-node": "^10.9.1",
     "typechain": "^8.1.1",
-    "typescript": "^5.0.3"
+    "typescript": "^5.1.6"
   },
   "dependencies": {
     "@ethersproject/abi": "^5.7.0",

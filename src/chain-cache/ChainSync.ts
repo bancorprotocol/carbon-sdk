@@ -296,7 +296,7 @@ export class ChainSync {
     logger.debug('_detectReorg called');
     const blocksMetadata: BlockMetadata[] = this._chainCache.blocksMetadata;
     const numberToBlockMetadata: { [key: number]: BlockMetadata } = {};
-    for (let blockMetadata of blocksMetadata) {
+    for (const blockMetadata of blocksMetadata) {
       const { number, hash } = blockMetadata;
       if (number > currentBlock) {
         logger.log(
