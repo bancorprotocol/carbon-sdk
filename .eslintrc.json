@@ -9,7 +9,8 @@
       {
         "argsIgnorePattern": "^_"
       }
-    ]
+    ],
+    "prefer-rest-params": "off"
   },
   "root": true
 }
