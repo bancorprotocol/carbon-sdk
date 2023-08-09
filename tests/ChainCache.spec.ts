@@ -140,6 +140,17 @@ describe('ChainCache', () => {
       cache.applyBatchedUpdates(5, [], [], [], []);
       expect(affectedPairs).to.deep.equal([['abc', 'xyz']]);
     });
+    it('should contain a single copy of a strategy that was updated', async () => {
+      const cache = new ChainCache();
+      const encodedStrategy1_mod = {
+        ...encodedStrategy1,
+        id: BigNumber.from(encodedStrategy1.id.toString()),
+      };
+      cache.addPair('abc', 'xyz', [encodedStrategy1]);
+      cache.applyBatchedUpdates(10, [], [], [encodedStrategy1_mod], []);
+      const strategies = await cache.getStrategiesByPair('abc', 'xyz');
+      expect(strategies).to.have.length(1);
+    });
   });
   describe('cache miss', () => {
     it('getStrategiesByPair call miss handler when pair is not cached', async () => {
