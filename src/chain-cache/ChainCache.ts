@@ -25,7 +25,7 @@ import {
 import { Logger } from '../common/logger';
 const logger = new Logger('ChainCache.ts');
 
-const schemeVersion = 4; // bump this when the serialization format changes
+const schemeVersion = 5; // bump this when the serialization format changes
 
 type PairToStrategiesMap = { [key: string]: EncodedStrategy[] };
 type StrategyById = { [key: string]: EncodedStrategy };
@@ -458,7 +458,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     }
     const key = toPairKey(strategy.token0, strategy.token1);
     const strategies = (this._strategiesByPair[key] || []).filter(
-      (s) => s.id !== strategy.id
+      (s) => !s.id.eq(strategy.id)
     );
     strategies.push(strategy);
     this._strategiesByPair[key] = strategies;
@@ -479,7 +479,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     const key = toPairKey(strategy.token0, strategy.token1);
     delete this._strategiesById[strategy.id.toString()];
     const strategies = (this._strategiesByPair[key] || []).filter(
-      (s) => s.id !== strategy.id
+      (s) => !s.id.eq(strategy.id)
     );
     this._strategiesByPair[key] = strategies;
     this._removeStrategyOrders(strategy);
