@@ -151,6 +151,17 @@ describe('ChainCache', () => {
       const strategies = await cache.getStrategiesByPair('abc', 'xyz');
       expect(strategies).to.have.length(1);
     });
+    it('should not contain a strategy after it was deleted', async () => {
+      const cache = new ChainCache();
+      const encodedStrategy1_mod = {
+        ...encodedStrategy1,
+        id: BigNumber.from(encodedStrategy1.id.toString()),
+      };
+      cache.addPair('abc', 'xyz', [encodedStrategy1]);
+      cache.applyBatchedUpdates(10, [], [], [], [encodedStrategy1_mod]);
+      const strategies = await cache.getStrategiesByPair('abc', 'xyz');
+      expect(strategies).to.have.length(0);
+    });
   });
   describe('cache miss', () => {
     it('getStrategiesByPair call miss handler when pair is not cached', async () => {
