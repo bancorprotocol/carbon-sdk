@@ -2,7 +2,7 @@
   "name": "@bancor/carbon-sdk",
   "type": "module",
   "source": "src/index.ts",
-  "version": "0.0.80-DEV",
+  "version": "0.0.81-DEV",
   "description": "The SDK is a READ-ONLY tool, intended to facilitate working with Carbon contracts. It's a convenient wrapper around our matching algorithm, allowing programs and users get a ready to use transaction data that will allow them to manage strategies and fulfill trades",
   "main": "dist/index.js",
   "module": "dist/index.js",
