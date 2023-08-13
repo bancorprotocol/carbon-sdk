@@ -144,6 +144,8 @@ export type BlockMetadata = {
 export interface Fetcher {
   pairs(): Promise<TokenPair[]>;
   strategiesByPair(token0: string, token1: string): Promise<EncodedStrategy[]>;
+  pairTradingFeePPM(token0: string, token1: string): Promise<number>;
+  pairsTradingFeePPM(pairs: TokenPair[]): Promise<[string, string, number][]>;
   getLatestStrategyCreatedStrategies(
     fromBlock: number,
     toBlock: number
@@ -160,10 +162,10 @@ export interface Fetcher {
     fromBlock: number,
     toBlock: number
   ): Promise<TradeData[]>;
+  getLatestPairTradingFeeUpdates(
+    fromBlock: number,
+    toBlock: number
+  ): Promise<[string, string, number][]>; // [token0, token1, feePPM]
   getBlockNumber(): Promise<number>;
-  tradingFeePPM(): Promise<number>;
-  onTradingFeePPMUpdated(
-    listener: (prevFeePPM: number, newFeePPM: number) => void
-  ): void;
   getBlock(blockNumber: number): Promise<BlockMetadata>;
 }
