@@ -8,7 +8,6 @@ import {
   TokenPair,
   TradeData,
 } from '../common/types';
-import { log } from 'console';
 
 const logger = new Logger('ChainSync.ts');
 
@@ -306,7 +305,7 @@ export class ChainSync {
 
           // let's check created strategies and see if we have a pair that's not cached yet,
           // which means we need to set slow poll mode to false so that it will be fetched quickly
-          let newlyCreatedPairs: TokenPair[] = [];
+          const newlyCreatedPairs: TokenPair[] = [];
           for (const strategy of createdStrategies) {
             if (
               !this._chainCache.hasCachedPair(strategy.token0, strategy.token1)
