@@ -8,6 +8,7 @@ import {
   TokenPair,
   TradeData,
 } from '../common/types';
+import { log } from 'console';
 
 const logger = new Logger('ChainSync.ts');
 
@@ -46,7 +47,7 @@ export class ChainSync {
 
     // _populateFeesData() should run first, before _populatePairsData() gets to manipulate the pairs list
     await Promise.all([
-      this._populateFeesData(),
+      this._populateFeesData(this._pairs),
       this._populatePairsData(),
       this._syncEvents(),
     ]);
@@ -65,22 +66,21 @@ export class ChainSync {
     }
   }
 
-  // this is a one time operation that populates the fees data
-  private async _populateFeesData(): Promise<void> {
+  private async _populateFeesData(
+    pairs: TokenPair[],
+    skipCache = false
+  ): Promise<void> {
     logger.debug('populateFeesData called');
-    if (this._pairs.length === 0) {
+    if (pairs.length === 0) {
       logger.error('populateFeesData called with no pairs - skipping');
       return;
     }
-    const uncachedPairs = this._pairs.filter(
-      (pair) => !this._chainCache.hasCachedPair(pair[0], pair[1])
-    );
+    const uncachedPairs = skipCache
+      ? pairs
+      : pairs.filter(
+          (pair) => !this._chainCache.hasCachedPair(pair[0], pair[1])
+        );
 
-    logger.debug(
-      'populateFeesData found',
-      uncachedPairs.length,
-      'uncached pairs that requires fees update'
-    );
     if (uncachedPairs.length === 0) return;
 
     const feeUpdates: [string, string, number][] =
@@ -231,6 +231,7 @@ export class ChainSync {
           const deletedStrategiesChunks: EncodedStrategy[][] = [];
           const tradesChunks: TradeData[][] = [];
           const feeUpdatesChunks: [string, string, number][][] = [];
+          const defaultFeeUpdatesChunks: number[][] = [];
 
           for (const blockChunk of blockChunks) {
             logger.debug('_syncEvents fetches events for chunk', blockChunk);
@@ -259,12 +260,18 @@ export class ChainSync {
                 blockChunk[0],
                 blockChunk[1]
               );
+            const defaultFeeUpdatesChunk: number[] =
+              await this._fetcher.getLatestTradingFeeUpdates(
+                blockChunk[0],
+                blockChunk[1]
+              );
 
             createdStrategiesChunks.push(createdStrategiesChunk);
             updatedStrategiesChunks.push(updatedStrategiesChunk);
             deletedStrategiesChunks.push(deletedStrategiesChunk);
             tradesChunks.push(tradesChunk);
             feeUpdatesChunks.push(feeUpdatesChunk);
+            defaultFeeUpdatesChunks.push(defaultFeeUpdatesChunk);
             logger.debug(
               '_syncEvents fetched the following events for chunks',
               blockChunks,
@@ -274,6 +281,7 @@ export class ChainSync {
                 deletedStrategiesChunk,
                 tradesChunk,
                 feeUpdatesChunk,
+                defaultFeeUpdatesChunk,
               }
             );
           }
@@ -283,6 +291,8 @@ export class ChainSync {
           const deletedStrategies = deletedStrategiesChunks.flat();
           const trades = tradesChunks.flat();
           const feeUpdates = feeUpdatesChunks.flat();
+          const defaultFeeWasUpdated =
+            defaultFeeUpdatesChunks.flat().length > 0;
 
           logger.debug(
             '_syncEvents fetched events',
@@ -290,22 +300,18 @@ export class ChainSync {
             updatedStrategies,
             deletedStrategies,
             trades,
-            feeUpdates
+            feeUpdates,
+            defaultFeeWasUpdated
           );
 
           // let's check created strategies and see if we have a pair that's not cached yet,
           // which means we need to set slow poll mode to false so that it will be fetched quickly
+          let newlyCreatedPairs: TokenPair[] = [];
           for (const strategy of createdStrategies) {
             if (
               !this._chainCache.hasCachedPair(strategy.token0, strategy.token1)
             ) {
-              logger.debug(
-                '_syncEvents sets slow poll mode to false because of new pair',
-                strategy.token0,
-                strategy.token1
-              );
-              this._slowPollPairs = false;
-              break;
+              newlyCreatedPairs.push([strategy.token0, strategy.token1]);
             }
           }
 
@@ -325,6 +331,25 @@ export class ChainSync {
               cachedPairs.has(toPairKey(strategy.token0, strategy.token1))
             )
           );
+
+          // lastly - handle side effects such as new pair detected or default fee update
+          if (defaultFeeWasUpdated) {
+            logger.debug(
+              '_syncEvents noticed at least one default fee update - refetching pair fees for all pairs'
+            );
+            await this._populateFeesData(
+              [...(await this._fetcher.pairs())],
+              true
+            );
+          }
+          if (newlyCreatedPairs.length > 0) {
+            logger.debug(
+              '_syncEvents noticed at least one new pair created - setting slow poll mode to false'
+            );
+            this._slowPollPairs = false;
+            logger.debug('_syncEvents fetching fees for the new pairs');
+            await this._populateFeesData(newlyCreatedPairs, true);
+          }
         }
       } catch (err) {
         logger.error('Error syncing events:', err);

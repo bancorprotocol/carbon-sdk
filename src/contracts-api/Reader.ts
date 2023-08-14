@@ -109,6 +109,22 @@ export default class Reader implements Fetcher {
     return this._contracts.voucher.tokensByOwner(owner, 0, 0);
   }
 
+  public tradingFeePPM(): Promise<number> {
+    return this._contracts.carbonController.tradingFeePPM();
+  }
+
+  public onTradingFeePPMUpdated(
+    listener: (prevFeePPM: number, newFeePPM: number) => void
+  ) {
+    return this._contracts.carbonController.on(
+      'TradingFeePPMUpdated',
+      function (prevFeePPM: number, newFeePPM: number) {
+        logger.debug('TradingFeePPMUpdated fired with', arguments);
+        listener(prevFeePPM, newFeePPM);
+      }
+    );
+  }
+
   public pairTradingFeePPM(token0: string, token1: string): Promise<number> {
     return this._contracts.carbonController.pairTradingFeePPM(token0, token1);
   }
@@ -261,6 +277,29 @@ export default class Reader implements Fetcher {
     });
     return trades;
   };
+
+  public async getLatestTradingFeeUpdates(
+    fromBlock: number,
+    toBlock: number
+  ): Promise<number[]> {
+    const filter =
+      this._contracts.carbonController.filters.TradingFeePPMUpdated(null, null);
+
+    const logs = await this._contracts.carbonController.queryFilter(
+      filter,
+      fromBlock,
+      toBlock
+    );
+
+    if (logs.length === 0) return [];
+
+    const updates: number[] = logs.map((log) => {
+      const logArgs = log.args;
+      return logArgs.newFeePPM;
+    });
+
+    return updates;
+  }
 
   public async getLatestPairTradingFeeUpdates(
     fromBlock: number,

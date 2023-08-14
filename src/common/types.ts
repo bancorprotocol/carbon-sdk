@@ -146,6 +146,10 @@ export interface Fetcher {
   strategiesByPair(token0: string, token1: string): Promise<EncodedStrategy[]>;
   pairTradingFeePPM(token0: string, token1: string): Promise<number>;
   pairsTradingFeePPM(pairs: TokenPair[]): Promise<[string, string, number][]>;
+  tradingFeePPM(): Promise<number>;
+  onTradingFeePPMUpdated(
+    listener: (prevFeePPM: number, newFeePPM: number) => void
+  ): void;
   getLatestStrategyCreatedStrategies(
     fromBlock: number,
     toBlock: number
@@ -162,6 +166,10 @@ export interface Fetcher {
     fromBlock: number,
     toBlock: number
   ): Promise<TradeData[]>;
+  getLatestTradingFeeUpdates(
+    fromBlock: number,
+    toBlock: number
+  ): Promise<number[]>;
   getLatestPairTradingFeeUpdates(
     fromBlock: number,
     toBlock: number
