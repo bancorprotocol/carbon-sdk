@@ -101,9 +101,6 @@ export class ChainSync {
   // 6. if there are no more pairs, it sets a timeout to call itself again
   private async _populatePairsData(): Promise<void> {
     logger.debug('_populatePairsData called');
-    this._pairs = [];
-    // keep the time stamp of last fetch
-    this._lastFetch = Date.now();
     // this indicates we want to poll for pairs only once a minute.
     // Set this to false when we have an indication that new pair was created - which we want to fetch now
     this._slowPollPairs = false;
