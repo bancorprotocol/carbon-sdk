@@ -114,7 +114,7 @@ export class ChainSync {
             setTimeout(processPairs, 1000);
             return;
           }
-          this._updatePairsFromChain();
+          await this._updatePairsFromChain();
         }
         // let's find the first pair that's not in the cache and clear it from the list along with all the items before it
         const nextPairToSync = findAndRemoveLeading<TokenPair>(
@@ -206,7 +206,7 @@ export class ChainSync {
 
           const cachedPairs = new Set<string>(
             this._chainCache
-              .getCachedPairs()
+              .getCachedPairs(false)
               .map((pair) => toPairKey(pair[0], pair[1]))
           );
 
