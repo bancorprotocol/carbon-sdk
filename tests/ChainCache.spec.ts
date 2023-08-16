@@ -57,7 +57,7 @@ describe('ChainCache', () => {
       cache = new ChainCache();
       cache.addPair('abc', 'xyz', [encodedStrategy1, encodedStrategy2]);
       cache.addPair('foo', 'bar', []);
-      cache.applyBatchedUpdates(7, [trade], [], [], []);
+      cache.applyBatchedUpdates(7, [], [trade], [], [], []);
       serialized = cache.serialize();
       deserialized = ChainCache.fromSerialized(serialized);
     });
@@ -127,17 +127,17 @@ describe('ChainCache', () => {
         affectedPairs = pairs;
       });
       cache.addPair('abc', 'xyz', [encodedStrategy1]);
-      cache.applyBatchedUpdates(1, [trade], [], [], []);
+      cache.applyBatchedUpdates(1, [], [trade], [], [], []);
       expect(affectedPairs).to.deep.equal([['abc', 'xyz']]);
-      cache.applyBatchedUpdates(2, [], [encodedStrategy2], [], []);
+      cache.applyBatchedUpdates(2, [], [], [encodedStrategy2], [], []);
       expect(affectedPairs).to.deep.equal([['abc', 'xyz']]);
-      cache.applyBatchedUpdates(3, [], [], [encodedStrategy1], []);
+      cache.applyBatchedUpdates(3, [], [], [], [encodedStrategy1], []);
       expect(affectedPairs).to.deep.equal([['abc', 'xyz']]);
-      cache.applyBatchedUpdates(4, [], [], [], [encodedStrategy1]);
+      cache.applyBatchedUpdates(4, [], [], [], [], [encodedStrategy1]);
       expect(affectedPairs).to.deep.equal([['abc', 'xyz']]);
 
       // this shouldn't fire the event - so affectedPairs should remain the same
-      cache.applyBatchedUpdates(5, [], [], [], []);
+      cache.applyBatchedUpdates(5, [], [], [], [], []);
       expect(affectedPairs).to.deep.equal([['abc', 'xyz']]);
     });
     it('should contain a single copy of a strategy that was updated', async () => {
@@ -147,7 +147,7 @@ describe('ChainCache', () => {
         id: BigNumber.from(encodedStrategy1.id.toString()),
       };
       cache.addPair('abc', 'xyz', [encodedStrategy1]);
-      cache.applyBatchedUpdates(10, [], [], [encodedStrategy1_mod], []);
+      cache.applyBatchedUpdates(10, [], [], [], [encodedStrategy1_mod], []);
       const strategies = await cache.getStrategiesByPair('abc', 'xyz');
       expect(strategies).to.have.length(1);
     });
@@ -158,9 +158,19 @@ describe('ChainCache', () => {
         id: BigNumber.from(encodedStrategy1.id.toString()),
       };
       cache.addPair('abc', 'xyz', [encodedStrategy1]);
-      cache.applyBatchedUpdates(10, [], [], [], [encodedStrategy1_mod]);
+      cache.applyBatchedUpdates(10, [], [], [], [], [encodedStrategy1_mod]);
       const strategies = await cache.getStrategiesByPair('abc', 'xyz');
       expect(strategies).to.have.length(0);
+    });
+    it('should cache the latest fees', async () => {
+      const cache = new ChainCache();
+      cache.applyBatchedUpdates(1, [['abc', 'xyz', 10]], [], [], [], []);
+      expect(await cache.getTradingFeePPMByPair('xyz', 'abc')).to.equal(10);
+      expect(await cache.getTradingFeePPMByPair('xyz', 'def')).to.be.undefined;
+      cache.applyBatchedUpdates(1, [['abc', 'xyz', 11]], [], [], [], []);
+      expect(await cache.getTradingFeePPMByPair('xyz', 'abc')).to.equal(11);
+      cache.applyBatchedUpdates(1, [['abc', 'xyz', 12], ['abc', 'xyz', 13]], [], [], [], []);
+      expect(await cache.getTradingFeePPMByPair('xyz', 'abc')).to.equal(13);
     });
   });
   describe('cache miss', () => {

@@ -467,10 +467,15 @@ export class Toolkit {
   }> {
     logger.debug('getTradeDataFromActions called', arguments);
 
-    const feePPM = this._cache.tradingFeePPM;
+    const feePPM = await this._cache.getTradingFeePPMByPair(
+      sourceToken,
+      targetToken
+    );
 
-    // intentional == instead of ===
-    if (feePPM == undefined) throw new Error('tradingFeePPM is undefined');
+    if (feePPM === undefined)
+      throw new Error(
+        `tradingFeePPM is undefined for this pair: ${sourceToken}-${targetToken}`
+      );
 
     const decimals = this._decimals;
     const sourceDecimals = await decimals.fetchDecimals(sourceToken);
