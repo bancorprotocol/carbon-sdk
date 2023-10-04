@@ -118,9 +118,11 @@ export type Strategy = {
   baseToken: string;
   quoteToken: string;
   buyPriceLow: string; // in quote tkn per 1 base tkn
+  buyPriceMarginal: string; // in quote tkn per 1 base tkn
   buyPriceHigh: string; // in quote tkn per 1 base tkn
   buyBudget: string; // in quote tkn
   sellPriceLow: string; // in quote tkn per 1 base tkn
+  sellPriceMarginal: string; // in quote tkn per 1 base tkn
   sellPriceHigh: string; // in quote tkn per 1 base tkn
   sellBudget: string; // in base tkn
   encoded: EncodedStrategyBNStr; // the encoded strategy
@@ -133,7 +135,15 @@ export type AtLeastOneOf<T> = {
 }[keyof T];
 
 export type StrategyUpdate = AtLeastOneOf<
-  Omit<Strategy, 'id' | 'encoded' | 'baseToken' | 'quoteToken'>
+  Omit<
+    Strategy,
+    | 'id'
+    | 'encoded'
+    | 'baseToken'
+    | 'quoteToken'
+    | 'buyPriceMarginal'
+    | 'sellPriceMarginal'
+  >
 >;
 
 export type BlockMetadata = {

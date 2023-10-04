@@ -82,9 +82,19 @@ export async function parseStrategy(
   const decimals0 = await decimals.fetchDecimals(token0);
   const decimals1 = await decimals.fetchDecimals(token1);
   const buyPriceLow = normalizeRate(order1.lowestRate, decimals0, decimals1);
+  const buyPriceMarginal = normalizeRate(
+    order1.marginalRate,
+    decimals0,
+    decimals1
+  );
   const buyPriceHigh = normalizeRate(order1.highestRate, decimals0, decimals1);
   const sellPriceLow = normalizeInvertedRate(
     order0.highestRate,
+    decimals1,
+    decimals0
+  );
+  const sellPriceMarginal = normalizeInvertedRate(
+    order0.marginalRate,
     decimals1,
     decimals0
   );
@@ -109,9 +119,11 @@ export async function parseStrategy(
     baseToken: token0,
     quoteToken: token1,
     buyPriceLow,
+    buyPriceMarginal,
     buyPriceHigh,
     buyBudget,
     sellPriceLow,
+    sellPriceMarginal,
     sellPriceHigh,
     sellBudget,
     encoded: strEncoded,
@@ -122,9 +134,11 @@ export async function parseStrategy(
     baseToken: token0,
     quoteToken: token1,
     buyPriceLow,
+    buyPriceMarginal,
     buyPriceHigh,
     buyBudget,
     sellPriceLow,
+    sellPriceMarginal,
     sellPriceHigh,
     sellBudget,
     encoded: strEncoded,

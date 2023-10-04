@@ -573,9 +573,11 @@ describe('encoders', () => {
         baseToken: '0x6b175474e89094c44da98b954eedeac495271d0f',
         quoteToken: '0x57ab1e02fee23774580c119740129eac7081e9d3',
         buyPriceLow: '1.5',
+        buyPriceMarginal: '2',
         buyPriceHigh: '2',
         buyBudget: '200',
         sellPriceLow: '0.5',
+        sellPriceMarginal: '0.5',
         sellPriceHigh: '0.6',
         sellBudget: '100',
       };
@@ -614,10 +616,23 @@ describe('encoders', () => {
       expect(Strategy.baseToken).to.equal(expectedStrategy.baseToken);
       expect(Strategy.quoteToken).to.equal(expectedStrategy.quoteToken);
       expect(Strategy.buyPriceLow).to.equal(expectedStrategy.buyPriceLow);
+      expect(Strategy.buyPriceMarginal).to.equal(
+        expectedStrategy.buyPriceMarginal
+      );
       expect(Strategy.buyPriceHigh).to.equal(expectedStrategy.buyPriceHigh);
       expect(Strategy.buyBudget).to.equal(expectedStrategy.buyBudget);
       expect(Strategy.sellPriceLow).to.equal(expectedStrategy.sellPriceLow);
-      expect(+Strategy.sellPriceHigh).to.equal(+expectedStrategy.sellPriceHigh);
+      expect(Strategy.sellPriceMarginal).to.equal(
+        expectedStrategy.sellPriceMarginal
+      );
+      expect(
+        ...isAlmostEqual(
+          Strategy.sellPriceHigh,
+          expectedStrategy.sellPriceHigh,
+          '1e-18',
+          '0'
+        )
+      ).to.be.true;
       expect(Strategy.sellBudget).to.equal(expectedStrategy.sellBudget);
     });
   });

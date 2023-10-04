@@ -49,9 +49,11 @@ const expectedStrategies: Strategy[] = [
     baseToken: 'abc',
     quoteToken: 'xyz',
     buyPriceLow: '0',
+    buyPriceMarginal: '0',
     buyPriceHigh: '0',
     buyBudget: '0',
     sellPriceLow: '0',
+    sellPriceMarginal: '0',
     sellPriceHigh: '0',
     sellBudget: '0',
     encoded: encodedStrategyBNToStr(encodedStrategies[0]),
@@ -62,10 +64,13 @@ const expectedStrategies: Strategy[] = [
     quoteToken: 'abc',
     buyPriceLow:
       '0.000000000000000000000000000012621774483536188886587657044524579674771302961744368076324462890625',
+    buyPriceMarginal:
+      '0.0000000000000000000000000000504870979341447555463506281780983186990852118469774723052978515625',
     buyPriceHigh:
       '0.0000000000000000000000000000504870979341447555463506281780983186990852118469774723052978515625',
     buyBudget: '0.000000000000000001',
     sellPriceLow: '19807040628566084398385987584',
+    sellPriceMarginal: '19807040628566084398385987584',
     sellPriceHigh: '79228162514264337593543950336',
     sellBudget: '0.000000000000000001',
     encoded: encodedStrategyBNToStr(encodedStrategies[1]),
