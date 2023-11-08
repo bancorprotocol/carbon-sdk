@@ -24,14 +24,15 @@ import BigPoolMatch from './data/BigPoolMatch.json' assert { type: 'json' };
 import EthUsdcMatch from './data/EthUsdcMatch.json' assert { type: 'json' };
 import SpecialMatch from './data/SpecialMatch.json' assert { type: 'json' };
 
-type TradeMethod = (amount: BigNumber, order: EncodedOrder) => BigNumber;
+type TradeMethod = (amount: BigNumber, order: EncodedOrder, simulated: boolean) => BigNumber;
 type MatchMethod = 'matchBySourceAmount' | 'matchByTargetAmount';
 
 type MatchFunction = (
   amount: BigNumber,
   ordersMap: OrdersMap,
   matchTypes: MatchType[],
-  filter: Filter
+  filter: Filter,
+  simulated: boolean
 ) => MatchOptions;
 
 const methods: {
@@ -122,7 +123,8 @@ describe('Match', () => {
           BigNumber.from(test.amount),
           ordersMap,
           Object.keys(test.actions) as MatchType[],
-          filter
+          filter,
+          false
         );
         for (const matchType in actions) {
           expect(actions[matchType as MatchType]!.length).to.equal(
@@ -145,7 +147,7 @@ describe('Match', () => {
             ).to.be.true;
             expect(
               action.output.eq(
-                trade(action.input, ordersMap[action.id.toNumber()])
+                trade(action.input, ordersMap[action.id.toNumber()], false)
               )
             ).to.be.true;
           }
