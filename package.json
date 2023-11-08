@@ -82,7 +82,7 @@
     "chai": "^4.3.10",
     "eslint": "^8.46.0",
     "mocha": "^10.1.0",
-    "rollup": "^3.29.4",
+    "rollup": "^4.3.0",
     "rollup-plugin-typescript2": "^0.36.0",
     "sinon": "^16.0.0",
     "ts-node": "^10.9.1",
