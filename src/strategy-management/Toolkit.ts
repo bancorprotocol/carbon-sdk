@@ -46,8 +46,10 @@ const logger = new Logger('Toolkit.ts');
 
 // Strategy utils
 import {
+  OverlappingDistributionResult,
   addFee,
   buildStrategyObject,
+  calculateOverlappingDistribution,
   decodeStrategy,
   encodeStrategy,
   normalizeRate,
@@ -694,6 +696,50 @@ export class Toolkit {
       parseUnits(minReturn, targetDecimals),
       overrides
     );
+  }
+
+  /**
+   * Calculates the parameters for the overlapping strategy.
+   *
+   * @param {string} baseToken - The address of the base token for the strategy.
+   * @param {string} quoteToken - The address of the quote token for the strategy.
+   * @param {string} buyPriceLow - The minimum buy price for the strategy, in in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} buyBudget - The maximum budget for buying tokens in the strategy, in `quoteToken`, as a string.
+   * @param {string} sellPriceHigh - The maximum sell price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} marketPrice - The market price, in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} spreadPercentage - The spread percentage, e.g. for 10%, enter `10`.
+   * @return {Promise<OverlappingDistributionResult>} The result of the calculation.
+   */
+  public async calculateOverlappingStrategyParams(
+    baseToken: string,
+    quoteToken: string,
+    buyPriceLow: string,
+    buyBudget: string,
+    sellPriceHigh: string,
+    marketPrice: string,
+    spreadPercentage: string
+  ): Promise<OverlappingDistributionResult> {
+    logger.debug('calculateOverlappingStrategyParams called', arguments);
+    const decimals = this._decimals;
+    const baseDecimals = await decimals.fetchDecimals(baseToken);
+    const quoteDecimals = await decimals.fetchDecimals(quoteToken);
+    const result = calculateOverlappingDistribution(
+      baseDecimals,
+      quoteDecimals,
+      buyPriceLow,
+      sellPriceHigh,
+      marketPrice,
+      spreadPercentage,
+      buyBudget
+    );
+
+    logger.debug('calculateOverlappingStrategyParams info:', {
+      baseDecimals,
+      quoteDecimals,
+      result,
+    });
+
+    return result;
   }
 
   /**

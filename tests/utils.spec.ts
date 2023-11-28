@@ -5,9 +5,81 @@ import {
   normalizeInvertedRate,
   subtractFee,
   addFee,
+  calculateOverlappingDistribution,
 } from '../src/strategy-management';
 
 describe('utils', () => {
+  describe('calculateOverlappingDistribution', () => {
+    const testCases = [
+      {
+        baseTokenDecimals: 18,
+        quoteTokenDecimals: 6,
+        buyPriceLow: '0.005',
+        sellPriceHigh: '0.03',
+        marketPrice: '0.007241',
+        spreadPercentage: '0.1',
+        buyBudget: '3090.190579',
+        buyPriceHigh: '0.029975',
+        sellPriceLow: '0.005025',
+        buyPriceMarginal: '0.007228',
+        sellPriceMarginal: '0.007253',
+        sellBudget:
+          '2575381.534852473816997609',
+      },
+      {
+        baseTokenDecimals: 18,
+        quoteTokenDecimals: 6,
+        buyPriceLow: '1500',
+        sellPriceHigh: '2000',
+        marketPrice: '1600',
+        spreadPercentage: '0.1',
+        buyBudget: '100',
+        buyPriceHigh: '1999.5',
+        sellPriceLow: '1500.5',
+        buyPriceMarginal: '1599.75',
+        sellPriceMarginal: '1600.25',
+        sellBudget: '0.231374205622609422',
+      },
+    ];
+
+    testCases.forEach(
+      ({
+        baseTokenDecimals,
+        quoteTokenDecimals,
+        buyPriceLow,
+        sellPriceHigh,
+        marketPrice,
+        spreadPercentage,
+        buyBudget,
+        buyPriceHigh,
+        sellPriceLow,
+        buyPriceMarginal,
+        sellPriceMarginal,
+        sellBudget,
+      }) => {
+        it(`should successfully calculate overlapping distribution for inputs: 
+            baseTokenDecimals: ${baseTokenDecimals}, quoteTokenDecimals: ${quoteTokenDecimals},
+            buyPriceLow: ${buyPriceLow}, sellPriceHigh: ${sellPriceHigh}, 
+            marketPrice: ${marketPrice}, spreadPercentage: ${spreadPercentage}, 
+            buyBudget: ${buyBudget}`, () => {
+          const result = calculateOverlappingDistribution(
+            baseTokenDecimals,
+            quoteTokenDecimals,
+            buyPriceLow,
+            sellPriceHigh,
+            marketPrice,
+            spreadPercentage,
+            buyBudget
+          );
+          expect(result.buyPriceHigh).to.equal(buyPriceHigh);
+          expect(result.sellPriceLow).to.equal(sellPriceLow);
+          expect(result.buyPriceMarginal).to.equal(buyPriceMarginal);
+          expect(result.sellPriceMarginal).to.equal(sellPriceMarginal);
+          expect(result.sellBudget).to.equal(sellBudget);
+        });
+      }
+    );
+  });
   describe('parseUnits', () => {
     const testCases = [
       { amount: '1', decimals: 0, expectedResult: '1' },

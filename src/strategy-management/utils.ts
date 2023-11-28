@@ -5,6 +5,7 @@ import {
   formatUnits,
   parseUnits,
   tenPow,
+  trimDecimal,
 } from '../utils/numerics';
 import {
   DecodedOrder,
@@ -286,4 +287,74 @@ export function subtractFee(
     .mul(PPM_RESOLUTION - tradingFeePPM)
     .div(PPM_RESOLUTION)
     .floor();
+}
+
+export type OverlappingDistributionResult = {
+  buyPriceHigh: string; // in quote tkn per 1 base tkn
+  buyPriceMarginal: string; // in quote tkn per 1 base tkn
+  sellPriceLow: string; // in quote tkn per 1 base tkn
+  sellPriceMarginal: string; // in quote tkn per 1 base tkn
+  sellBudget: string; // in base tkn
+};
+
+export function calculateOverlappingDistribution(
+  baseTokenDecimals: number,
+  quoteTokenDecimals: number,
+  buyPriceLow: string, // in quote tkn per 1 base tkn
+  sellPriceHigh: string, // in quote tkn per 1 base tkn
+  marketPrice: string, // in quote tkn per 1 base tkn
+  spreadPercentage: string, // e.g. for 0.1% pass '0.1'
+  buyBudget: string // in quote tkn
+): OverlappingDistributionResult {
+  const sellPriceHighDec = new Decimal(sellPriceHigh);
+  const buyPriceLowDec = new Decimal(buyPriceLow);
+  const marketPriceDec = new Decimal(marketPrice);
+
+  const totalPriceRange = sellPriceHighDec.minus(buyPriceLowDec);
+
+  const spread = totalPriceRange.mul(spreadPercentage).div(100);
+
+  const buyPriceHigh = sellPriceHighDec.minus(spread);
+
+  const sellPriceLow = buyPriceLowDec.plus(spread);
+
+  const buyPriceRange = buyPriceHigh.minus(buyPriceLowDec);
+
+  const sellPriceRange = sellPriceHighDec.minus(sellPriceLow);
+
+  const buyLowRange = marketPriceDec.minus(buyPriceLowDec).minus(spread.div(2));
+
+  const buyLowBudgetRatio = buyLowRange.div(buyPriceRange);
+
+  const buyOrderYint = new Decimal(buyBudget).div(buyLowBudgetRatio);
+
+  const buyPriceMarginal = buyPriceLowDec.plus(
+    buyPriceRange.mul(buyLowBudgetRatio)
+  );
+
+  const geoMean = buyPriceLowDec.mul(sellPriceHighDec).sqrt();
+
+  const sellOrderYint = buyOrderYint.div(geoMean);
+
+  const sellHighBudgetRatio = new Decimal(1).minus(buyLowBudgetRatio);
+
+  const sellBudget = sellOrderYint.mul(sellHighBudgetRatio);
+
+  const sellPriceMarginal = sellPriceHighDec.minus(
+    sellPriceRange.mul(sellHighBudgetRatio)
+  );
+
+  return {
+    buyPriceHigh: trimDecimal(buyPriceHigh.toString(), quoteTokenDecimals),
+    buyPriceMarginal: trimDecimal(
+      buyPriceMarginal.toString(),
+      quoteTokenDecimals
+    ),
+    sellPriceLow: trimDecimal(sellPriceLow.toString(), quoteTokenDecimals),
+    sellPriceMarginal: trimDecimal(
+      sellPriceMarginal.toString(),
+      quoteTokenDecimals
+    ),
+    sellBudget: trimDecimal(sellBudget.toString(), baseTokenDecimals),
+  };
 }
