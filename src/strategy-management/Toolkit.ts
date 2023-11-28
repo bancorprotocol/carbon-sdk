@@ -791,9 +791,11 @@ export class Toolkit {
     baseToken: string,
     quoteToken: string,
     buyPriceLow: string,
+    buyPriceMarginal: string,
     buyPriceHigh: string,
     buyBudget: string,
     sellPriceLow: string,
+    sellPriceMarginal: string,
     sellPriceHigh: string,
     sellBudget: string,
     overrides?: PayableOverrides
@@ -808,9 +810,11 @@ export class Toolkit {
       baseDecimals,
       quoteDecimals,
       buyPriceLow,
+      buyPriceMarginal,
       buyPriceHigh,
       buyBudget,
       sellPriceLow,
+      sellPriceMarginal,
       sellPriceHigh,
       sellBudget
     );
@@ -849,8 +853,8 @@ export class Toolkit {
       sellPriceHigh,
       sellBudget,
     }: StrategyUpdate,
-    buyMarginalPrice?: MarginalPriceOptions | string,
-    sellMarginalPrice?: MarginalPriceOptions | string,
+    buyPriceMarginal?: MarginalPriceOptions | string,
+    sellPriceMarginal?: MarginalPriceOptions | string,
     overrides?: PayableOverrides
   ): Promise<PopulatedTransaction> {
     logger.debug('updateStrategy called', arguments);
@@ -876,9 +880,19 @@ export class Toolkit {
       baseDecimals,
       quoteDecimals,
       buyPriceLow ?? originalStrategy.buyPriceLow,
+      buyPriceMarginal &&
+        buyPriceMarginal !== MarginalPriceOptions.reset &&
+        buyPriceMarginal !== MarginalPriceOptions.maintain
+        ? buyPriceMarginal
+        : originalStrategy.buyPriceMarginal,
       buyPriceHigh ?? originalStrategy.buyPriceHigh,
       buyBudget ?? originalStrategy.buyBudget,
       sellPriceLow ?? originalStrategy.sellPriceLow,
+      sellPriceMarginal &&
+        sellPriceMarginal !== MarginalPriceOptions.reset &&
+        sellPriceMarginal !== MarginalPriceOptions.maintain
+        ? sellPriceMarginal
+        : originalStrategy.sellPriceMarginal,
       sellPriceHigh ?? originalStrategy.sellPriceHigh,
       sellBudget ?? originalStrategy.sellBudget
     );
@@ -910,12 +924,12 @@ export class Toolkit {
 
     if (buyBudget !== undefined) {
       if (
-        buyMarginalPrice === undefined ||
-        buyMarginalPrice === MarginalPriceOptions.reset ||
+        buyPriceMarginal === undefined ||
+        buyPriceMarginal === MarginalPriceOptions.reset ||
         encodedBN.order1.y.isZero()
       ) {
         newEncodedStrategy.order1.z = newEncodedStrategy.order1.y;
-      } else if (buyMarginalPrice === MarginalPriceOptions.maintain) {
+      } else if (buyPriceMarginal === MarginalPriceOptions.maintain) {
         // maintain the current ratio of y/z
         newEncodedStrategy.order1.z = mulDiv(
           encodedBN.order1.z,
@@ -927,12 +941,12 @@ export class Toolkit {
 
     if (sellBudget !== undefined) {
       if (
-        sellMarginalPrice === undefined ||
-        sellMarginalPrice === MarginalPriceOptions.reset ||
+        sellPriceMarginal === undefined ||
+        sellPriceMarginal === MarginalPriceOptions.reset ||
         encodedBN.order0.y.isZero()
       ) {
         newEncodedStrategy.order0.z = newEncodedStrategy.order0.y;
-      } else if (sellMarginalPrice === MarginalPriceOptions.maintain) {
+      } else if (sellPriceMarginal === MarginalPriceOptions.maintain) {
         // maintain the current ratio of y/z
         newEncodedStrategy.order0.z = mulDiv(
           encodedBN.order0.z,
@@ -947,27 +961,6 @@ export class Toolkit {
     }
     if (sellPriceLow !== undefined || sellPriceHigh !== undefined) {
       newEncodedStrategy.order0.z = newEncodedStrategy.order0.y;
-    }
-
-    if (
-      buyMarginalPrice !== undefined &&
-      buyMarginalPrice !== MarginalPriceOptions.reset &&
-      buyMarginalPrice !== MarginalPriceOptions.maintain
-    ) {
-      // TODO: set newEncodedStrategy.order1.z according to the given marginal price
-      throw new Error(
-        'Support for custom marginal price is not implemented yet'
-      );
-    }
-    if (
-      sellMarginalPrice !== undefined &&
-      sellMarginalPrice !== MarginalPriceOptions.reset &&
-      sellMarginalPrice !== MarginalPriceOptions.maintain
-    ) {
-      // TODO: set newEncodedStrategy.order0.z according to the given marginal price
-      throw new Error(
-        'Support for custom marginal price is not implemented yet'
-      );
     }
 
     logger.debug('updateStrategy info:', {

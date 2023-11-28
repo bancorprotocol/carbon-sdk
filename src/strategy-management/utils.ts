@@ -152,26 +152,36 @@ export function buildStrategyObject(
   baseDecimals: number,
   quoteDecimals: number,
   buyPriceLow: string, // in quote tkn per 1 base tkn
+  buyPriceMarginal: string, // in quote tkn per 1 base tkn
   buyPriceHigh: string, // in quote tkn per 1 base tkn
   buyBudget: string, // in quote tkn
   sellPriceLow: string, // in quote tkn per 1 base tkn
+  sellPriceMarginal: string, // in quote tkn per 1 base tkn
   sellPriceHigh: string, // in quote tkn per 1 base tkn
   sellBudget: string // in base tkn
 ): DecodedStrategy {
   logger.debug('buildStrategyObject called', arguments);
   if (
     new Decimal(buyPriceLow).isNegative() ||
+    new Decimal(buyPriceMarginal).isNegative() ||
     new Decimal(buyPriceHigh).isNegative() ||
     new Decimal(sellPriceLow).isNegative() ||
+    new Decimal(sellPriceMarginal).isNegative() ||
     new Decimal(sellPriceHigh).isNegative()
   ) {
     throw new Error('prices cannot be negative');
   }
   if (
+    new Decimal(buyPriceLow).gt(buyPriceMarginal) ||
     new Decimal(buyPriceLow).gt(buyPriceHigh) ||
-    new Decimal(sellPriceLow).gt(sellPriceHigh)
+    new Decimal(buyPriceMarginal).gt(buyPriceHigh) ||
+    new Decimal(sellPriceLow).gt(sellPriceMarginal) ||
+    new Decimal(sellPriceLow).gt(sellPriceHigh) ||
+    new Decimal(sellPriceMarginal).gt(sellPriceHigh)
   ) {
-    throw new Error('low price must be lower than or equal to high price');
+    throw new Error(
+      'low/marginal price must be lower than or equal to marginal/high price'
+    );
   }
   if (
     new Decimal(buyBudget).isNegative() ||
@@ -184,9 +194,11 @@ export function buildStrategyObject(
     baseDecimals,
     quoteDecimals,
     buyPriceLow,
+    buyPriceMarginal,
     buyPriceHigh,
     buyBudget,
     sellPriceLow,
+    sellPriceMarginal,
     sellPriceHigh,
     sellBudget
   );
@@ -210,9 +222,11 @@ export function createOrders(
   baseTokenDecimals: number,
   quoteTokenDecimals: number,
   buyPriceLow: string,
+  buyPriceMarginal: string,
   buyPriceHigh: string,
   buyBudget: string,
   sellPriceLow: string,
+  sellPriceMarginal: string,
   sellPriceHigh: string,
   sellBudget: string
 ): { order0: DecodedOrder; order1: DecodedOrder } {
@@ -226,6 +240,12 @@ export function createOrders(
   Converting to wei in order to factor out different decimals */
   const lowestRate0 = normalizeInvertedRate(
     sellPriceHigh,
+    quoteTokenDecimals,
+    baseTokenDecimals
+  );
+
+  const marginalRate0 = normalizeInvertedRate(
+    sellPriceMarginal,
     quoteTokenDecimals,
     baseTokenDecimals
   );
@@ -247,6 +267,11 @@ export function createOrders(
     quoteTokenDecimals,
     baseTokenDecimals
   );
+  const marginalRate1 = normalizeRate(
+    buyPriceMarginal,
+    quoteTokenDecimals,
+    baseTokenDecimals
+  );
   const highestRate1 = normalizeRate(
     buyPriceHigh,
     quoteTokenDecimals,
@@ -257,14 +282,14 @@ export function createOrders(
     liquidity: liquidity0.toString(),
     lowestRate: lowestRate0,
     highestRate: highestRate0,
-    marginalRate: highestRate0,
+    marginalRate: marginalRate0,
   };
 
   const order1: DecodedOrder = {
     liquidity: liquidity1.toString(),
     lowestRate: lowestRate1,
     highestRate: highestRate1,
-    marginalRate: highestRate1,
+    marginalRate: marginalRate1,
   };
   logger.debug('createOrders info:', { order0, order1 });
   return { order0, order1 };
