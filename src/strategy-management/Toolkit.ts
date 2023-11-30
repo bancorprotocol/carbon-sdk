@@ -8,6 +8,7 @@ import {
   tenPow,
   formatUnits,
   parseUnits,
+  trimDecimal,
 } from '../utils/numerics';
 
 // Internal modules
@@ -46,10 +47,11 @@ const logger = new Logger('Toolkit.ts');
 
 // Strategy utils
 import {
-  OverlappingDistributionResult,
   addFee,
   buildStrategyObject,
-  calculateOverlappingDistribution,
+  calculateOverlappingBuyBudget,
+  calculateOverlappingPriceRanges,
+  calculateOverlappingSellBudget,
   decodeStrategy,
   encodeStrategy,
   normalizeRate,
@@ -698,43 +700,123 @@ export class Toolkit {
     );
   }
 
-  /**
-   * Calculates the parameters for the overlapping strategy.
-   *
-   * @param {string} baseToken - The address of the base token for the strategy.
-   * @param {string} quoteToken - The address of the quote token for the strategy.
-   * @param {string} buyPriceLow - The minimum buy price for the strategy, in in `quoteToken` per 1 `baseToken`, as a string.
-   * @param {string} buyBudget - The maximum budget for buying tokens in the strategy, in `quoteToken`, as a string.
-   * @param {string} sellPriceHigh - The maximum sell price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
-   * @param {string} marketPrice - The market price, in `quoteToken` per 1 `baseToken`, as a string.
-   * @param {string} spreadPercentage - The spread percentage, e.g. for 10%, enter `10`.
-   * @return {Promise<OverlappingDistributionResult>} The result of the calculation.
-   */
-  public async calculateOverlappingStrategyParams(
-    baseToken: string,
+  public async calculateOverlappingStrategyPrices(
     quoteToken: string,
     buyPriceLow: string,
-    buyBudget: string,
     sellPriceHigh: string,
     marketPrice: string,
     spreadPercentage: string
-  ): Promise<OverlappingDistributionResult> {
-    logger.debug('calculateOverlappingStrategyParams called', arguments);
+  ): Promise<{
+    buyPriceHigh: string;
+    buyPriceMarginal: string;
+    sellPriceLow: string;
+    sellPriceMarginal: string;
+  }> {
+    logger.debug('calculateOverlappingStrategyPrices called', arguments);
+
     const decimals = this._decimals;
-    const baseDecimals = await decimals.fetchDecimals(baseToken);
     const quoteDecimals = await decimals.fetchDecimals(quoteToken);
-    const result = calculateOverlappingDistribution(
-      baseDecimals,
-      quoteDecimals,
-      buyPriceLow,
-      sellPriceHigh,
-      marketPrice,
-      spreadPercentage,
-      buyBudget
+    const prices = calculateOverlappingPriceRanges(
+      new Decimal(buyPriceLow),
+      new Decimal(sellPriceHigh),
+      new Decimal(marketPrice),
+      new Decimal(spreadPercentage)
     );
 
-    logger.debug('calculateOverlappingStrategyParams info:', {
+    const result = {
+      buyPriceHigh: trimDecimal(prices.buyPriceHigh.toString(), quoteDecimals),
+      buyPriceMarginal: trimDecimal(
+        prices.buyPriceMarginal.toString(),
+        quoteDecimals
+      ),
+      sellPriceLow: trimDecimal(prices.sellPriceLow.toString(), quoteDecimals),
+      sellPriceMarginal: trimDecimal(
+        prices.sellPriceMarginal.toString(),
+        quoteDecimals
+      ),
+    };
+
+    logger.debug('calculateOverlappingStrategyPrices info:', {
+      quoteDecimals,
+      result,
+    });
+
+    return result;
+  }
+
+  /**
+   * Calculates the sell budget given a buy budget of an overlapping strategy.
+   *
+   * @param {string} baseToken - The address of the base token for the strategy.
+   * @param {string} buyPriceLow - The minimum buy price for the strategy, in in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} sellPriceHigh - The maximum sell price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} marketPrice - The market price, in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} spreadPercentage - The spread percentage, e.g. for 10%, enter `10`.
+   * @param {string} buyBudget - The budget for buying tokens in the strategy, in `quoteToken`, as a string.
+   * @return {Promise<string>} The result of the calculation - the sell budget in token res in base token.
+   */
+  public async calculateOverlappingStrategySellBudget(
+    baseToken: string,
+    buyPriceLow: string,
+    sellPriceHigh: string,
+    marketPrice: string,
+    spreadPercentage: string,
+    buyBudget: string
+  ): Promise<string> {
+    logger.debug('calculateOverlappingStrategySellBudget called', arguments);
+    const decimals = this._decimals;
+    const baseDecimals = await decimals.fetchDecimals(baseToken);
+    const budget = calculateOverlappingSellBudget(
+      new Decimal(buyPriceLow),
+      new Decimal(sellPriceHigh),
+      new Decimal(marketPrice),
+      new Decimal(spreadPercentage),
+      new Decimal(buyBudget)
+    );
+
+    const result = trimDecimal(budget.toString(), baseDecimals);
+
+    logger.debug('calculateOverlappingStrategySellBudget info:', {
       baseDecimals,
+      result,
+    });
+
+    return result;
+  }
+
+  /**
+   * Calculates the buy budget given a sell budget of an overlapping strategy.
+   *
+   * @param {string} quoteToken - The address of the base token for the strategy.
+   * @param {string} buyPriceLow - The minimum buy price for the strategy, in in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} sellPriceHigh - The maximum sell price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} marketPrice - The market price, in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} spreadPercentage - The spread percentage, e.g. for 10%, enter `10`.
+   * @param {string} sellBudget - The budget for selling tokens in the strategy, in `baseToken`, as a string.
+   * @return {Promise<string>} The result of the calculation - the buy budget in token res in quote token.
+   */
+  public async calculateOverlappingStrategyBuyBudget(
+    quoteToken: string,
+    buyPriceLow: string,
+    sellPriceHigh: string,
+    marketPrice: string,
+    spreadPercentage: string,
+    sellBudget: string
+  ): Promise<string> {
+    logger.debug('calculateOverlappingStrategyBuyBudget called', arguments);
+    const decimals = this._decimals;
+    const quoteDecimals = await decimals.fetchDecimals(quoteToken);
+    const budget = calculateOverlappingBuyBudget(
+      new Decimal(buyPriceLow),
+      new Decimal(sellPriceHigh),
+      new Decimal(marketPrice),
+      new Decimal(spreadPercentage),
+      new Decimal(sellBudget)
+    );
+
+    const result = trimDecimal(budget.toString(), quoteDecimals);
+
+    logger.debug('calculateOverlappingStrategyBuyBudget info:', {
       quoteDecimals,
       result,
     });

@@ -1,44 +1,54 @@
 import { expect } from 'chai';
-import { formatUnits, parseUnits, BigNumber } from '../src/utils/numerics';
+import {
+  formatUnits,
+  parseUnits,
+  BigNumber,
+  Decimal,
+  trimDecimal,
+} from '../src/utils/numerics';
 import {
   normalizeRate,
   normalizeInvertedRate,
   subtractFee,
   addFee,
-  calculateOverlappingDistribution,
+  calculateOverlappingBuyBudget,
+  calculateOverlappingSellBudget,
+  calculateOverlappingPriceRanges,
 } from '../src/strategy-management';
+import { isAlmostEqual } from './test-utils';
 
 describe('utils', () => {
-  describe('calculateOverlappingDistribution', () => {
+  describe('overlapping strategies', () => {
     const testCases = [
       {
         baseTokenDecimals: 18,
         quoteTokenDecimals: 6,
-        buyPriceLow: '0.005',
-        sellPriceHigh: '0.03',
-        marketPrice: '0.007241',
-        spreadPercentage: '0.1',
-        buyBudget: '3090.190579',
-        buyPriceHigh: '0.029975',
-        sellPriceLow: '0.005025',
-        buyPriceMarginal: '0.007228',
-        sellPriceMarginal: '0.007253',
-        sellBudget:
-          '2575381.534852473816997609',
+        buyPriceLow: new Decimal('1500'),
+        sellPriceHigh: new Decimal('2000'),
+        marketPrice: new Decimal('1600'),
+        spreadPercentage: new Decimal('0.1'),
+        spread: new Decimal('0.5'),
+        buyBudget: new Decimal('100'),
+        buyPriceHigh: new Decimal('1999.5'),
+        sellPriceLow: new Decimal('1500.5'),
+        buyPriceMarginal: new Decimal('1599.75'),
+        sellPriceMarginal: new Decimal('1600.25'),
+        sellBudget: new Decimal('0.231403132822275197'),
       },
       {
         baseTokenDecimals: 18,
         quoteTokenDecimals: 6,
-        buyPriceLow: '1500',
-        sellPriceHigh: '2000',
-        marketPrice: '1600',
-        spreadPercentage: '0.1',
-        buyBudget: '100',
-        buyPriceHigh: '1999.5',
-        sellPriceLow: '1500.5',
-        buyPriceMarginal: '1599.75',
-        sellPriceMarginal: '1600.25',
-        sellBudget: '0.231374205622609422',
+        buyPriceLow: new Decimal('0.005'),
+        sellPriceHigh: new Decimal('0.03'),
+        marketPrice: new Decimal('0.007241'),
+        spreadPercentage: new Decimal('0.1'),
+        spread: new Decimal('0.000025'),
+        buyBudget: new Decimal('3090.190579'),
+        buyPriceHigh: new Decimal('0.029975'),
+        sellPriceLow: new Decimal('0.005025'),
+        buyPriceMarginal: new Decimal('0.0072285'),
+        sellPriceMarginal: new Decimal('0.0072535'),
+        sellBudget: new Decimal('2576455.281630354877824211'),
       },
     ];
 
@@ -50,6 +60,7 @@ describe('utils', () => {
         sellPriceHigh,
         marketPrice,
         spreadPercentage,
+        spread,
         buyBudget,
         buyPriceHigh,
         sellPriceLow,
@@ -62,20 +73,53 @@ describe('utils', () => {
             buyPriceLow: ${buyPriceLow}, sellPriceHigh: ${sellPriceHigh}, 
             marketPrice: ${marketPrice}, spreadPercentage: ${spreadPercentage}, 
             buyBudget: ${buyBudget}`, () => {
-          const result = calculateOverlappingDistribution(
-            baseTokenDecimals,
-            quoteTokenDecimals,
+          const prices = calculateOverlappingPriceRanges(
+            buyPriceLow,
+            sellPriceHigh,
+            marketPrice,
+            spreadPercentage
+          );
+
+          expect(prices.buyPriceHigh.toString()).to.equal(
+            buyPriceHigh.toString()
+          );
+          expect(prices.sellPriceLow.toString()).to.equal(
+            sellPriceLow.toString()
+          );
+          expect(prices.buyPriceMarginal.toString()).to.equal(
+            buyPriceMarginal.toString()
+          );
+          expect(prices.sellPriceMarginal.toString()).to.equal(
+            sellPriceMarginal.toString()
+          );
+          expect(prices.spread.toString()).to.equal(spread.toString());
+
+          const sellRes = calculateOverlappingSellBudget(
             buyPriceLow,
             sellPriceHigh,
             marketPrice,
             spreadPercentage,
             buyBudget
           );
-          expect(result.buyPriceHigh).to.equal(buyPriceHigh);
-          expect(result.sellPriceLow).to.equal(sellPriceLow);
-          expect(result.buyPriceMarginal).to.equal(buyPriceMarginal);
-          expect(result.sellPriceMarginal).to.equal(sellPriceMarginal);
-          expect(result.sellBudget).to.equal(sellBudget);
+          expect(trimDecimal(sellRes.toString(), baseTokenDecimals)).to.equal(
+            sellBudget.toString()
+          );
+
+          const buyRes = calculateOverlappingBuyBudget(
+            buyPriceLow,
+            sellPriceHigh,
+            marketPrice,
+            spreadPercentage,
+            sellBudget
+          );
+          expect(
+            ...isAlmostEqual(
+              buyRes.toString(),
+              buyBudget.toString(),
+              '100',
+              '0.0003'
+            )
+          ).to.be.true;
         });
       }
     );
