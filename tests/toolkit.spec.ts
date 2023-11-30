@@ -98,6 +98,49 @@ describe('Toolkit', () => {
     decimalFetcher = () => 18;
   });
 
+  describe('overlappingStrategies', () => {
+    it('should calculate strategy prices', async () => {
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      const result = await toolkit.calculateOverlappingStrategyPrices(
+        'quoteToken',
+        '1500',
+        '2000',
+        '1600',
+        '0.1'
+      );
+      expect(result).to.deep.equal({
+        buyPriceHigh: '1999.5',
+        buyPriceMarginal: '1599.75',
+        sellPriceLow: '1500.5',
+        sellPriceMarginal: '1600.25',
+      });
+    });
+    it('should calculate strategy sell budget', async () => {
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      const result = await toolkit.calculateOverlappingStrategySellBudget(
+        'baseToken',
+        '1500',
+        '2000',
+        '1600',
+        '0.1',
+        '100'
+      );
+      expect(result).to.equal('0.231403132822275197');
+    });
+    it('should calculate strategy buy budget', async () => {
+      const toolkit = new Toolkit(apiMock, cacheMock, () => 6);
+      const result = await toolkit.calculateOverlappingStrategyBuyBudget(
+        'quoteToken',
+        '1500',
+        '2000',
+        '1600',
+        '0.1',
+        '0.231403132822275197'
+      );
+      expect(result).to.equal('100.029169');
+    });
+  });
+
   describe('hasLiquidityByPair', () => {
     it('should return true if there are orders', async () => {
       cacheMock.getOrdersByPair.resolves(orderMap);

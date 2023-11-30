@@ -191,7 +191,9 @@ describe('encoders', () => {
         quoteTokenDecimals,
         buyPriceLow,
         buyPriceHigh,
+        buyPriceHigh,
         buyBudget,
+        sellPriceLow,
         sellPriceLow,
         sellPriceHigh,
         sellBudget
@@ -236,7 +238,9 @@ describe('encoders', () => {
         quoteToken.decimals,
         buyPriceLow,
         buyPriceHigh,
+        buyPriceHigh,
         buyBudget,
+        sellPriceLow,
         sellPriceLow,
         sellPriceHigh,
         sellBudget
@@ -284,12 +288,16 @@ describe('encoders', () => {
           quoteToken.decimals,
           buyPriceLow,
           buyPriceHigh,
+          buyPriceHigh,
           buyBudget,
+          sellPriceLow,
           sellPriceLow,
           sellPriceHigh,
           sellBudget
         );
-      }).to.throw('low price must be lower than or equal to high price');
+      }).to.throw(
+        'low/marginal price must be lower than or equal to marginal/high price'
+      );
     });
 
     it('should throw an error if sellPriceLow is greater than sellPriceHigh', () => {
@@ -316,12 +324,16 @@ describe('encoders', () => {
           quoteToken.decimals,
           buyPriceLow,
           buyPriceHigh,
+          buyPriceHigh,
           buyBudget,
+          sellPriceLow,
           sellPriceLow,
           sellPriceHigh,
           sellBudget
         );
-      }).to.throw('low price must be lower than or equal to high price');
+      }).to.throw(
+        'low/marginal price must be lower than or equal to marginal/high price'
+      );
     });
 
     it('should throw an error if buyPriceLow is negative', () => {
@@ -348,7 +360,9 @@ describe('encoders', () => {
           quoteToken.decimals,
           buyPriceLow,
           buyPriceHigh,
+          buyPriceHigh,
           buyBudget,
+          sellPriceLow,
           sellPriceLow,
           sellPriceHigh,
           sellBudget
@@ -380,7 +394,9 @@ describe('encoders', () => {
           quoteToken.decimals,
           buyPriceLow,
           buyPriceHigh,
+          buyPriceHigh,
           buyBudget,
+          sellPriceLow,
           sellPriceLow,
           sellPriceHigh,
           sellBudget
@@ -412,7 +428,9 @@ describe('encoders', () => {
           quoteToken.decimals,
           buyPriceLow,
           buyPriceHigh,
+          buyPriceHigh,
           buyBudget,
+          sellPriceLow,
           sellPriceLow,
           sellPriceHigh,
           sellBudget
@@ -444,7 +462,9 @@ describe('encoders', () => {
           quoteToken.decimals,
           buyPriceLow,
           buyPriceHigh,
+          buyPriceHigh,
           buyBudget,
+          sellPriceLow,
           sellPriceLow,
           sellPriceHigh,
           sellBudget
@@ -475,7 +495,9 @@ describe('encoders', () => {
         quoteToken.decimals,
         buyPriceLow,
         buyPriceHigh,
+        buyPriceHigh,
         buyBudget,
+        sellPriceLow,
         sellPriceLow,
         sellPriceHigh,
         sellBudget
@@ -516,7 +538,9 @@ describe('encoders', () => {
         quoteToken.decimals,
         buyPriceLow,
         buyPriceHigh,
+        buyPriceHigh,
         buyBudget,
+        sellPriceLow,
         sellPriceLow,
         sellPriceHigh,
         sellBudget
