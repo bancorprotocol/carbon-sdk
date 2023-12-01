@@ -25,30 +25,20 @@ describe('utils', () => {
         quoteTokenDecimals: 6,
         buyPriceLow: new Decimal('1500'),
         sellPriceHigh: new Decimal('2000'),
-        marketPrice: new Decimal('1600'),
-        spreadPercentage: new Decimal('0.1'),
-        spread: new Decimal('0.5'),
+        marketPrice: new Decimal('1845'),
+        spreadPercentage: new Decimal('0.01'),
         buyBudget: new Decimal('100'),
-        buyPriceHigh: new Decimal('1999.5'),
-        sellPriceLow: new Decimal('1500.5'),
-        buyPriceMarginal: new Decimal('1599.75'),
-        sellPriceMarginal: new Decimal('1600.25'),
-        sellBudget: new Decimal('0.231403132822275197'),
-      },
-      {
-        baseTokenDecimals: 18,
-        quoteTokenDecimals: 6,
-        buyPriceLow: new Decimal('0.005'),
-        sellPriceHigh: new Decimal('0.03'),
-        marketPrice: new Decimal('0.007241'),
-        spreadPercentage: new Decimal('0.1'),
-        spread: new Decimal('0.000025'),
-        buyBudget: new Decimal('3090.190579'),
-        buyPriceHigh: new Decimal('0.029975'),
-        sellPriceLow: new Decimal('0.005025'),
-        buyPriceMarginal: new Decimal('0.0072285'),
-        sellPriceMarginal: new Decimal('0.0072535'),
-        sellBudget: new Decimal('2576455.281630354877824211'),
+        buyPriceHigh: new Decimal(
+          '1980.19801980198019801980198019801980198019801980198019801980198019801980198019801980198019801980198'
+        ),
+        sellPriceLow: new Decimal('1515'),
+        buyPriceMarginal: new Decimal(
+          '1835.843615937429955302430075647665154941937455663234267436323585007036269526077757760470083423519019'
+        ),
+        sellPriceMarginal: new Decimal(
+          '1854.202052096804254855454376404141806491356830219866610110686820857106632221338535338074784257754209'
+        ),
+        sellBudget: new Decimal('0.024939801923642185'),
       },
     ];
 
@@ -60,7 +50,6 @@ describe('utils', () => {
         sellPriceHigh,
         marketPrice,
         spreadPercentage,
-        spread,
         buyBudget,
         buyPriceHigh,
         sellPriceLow,
@@ -92,7 +81,6 @@ describe('utils', () => {
           expect(prices.sellPriceMarginal.toString()).to.equal(
             sellPriceMarginal.toString()
           );
-          expect(prices.spread.toString()).to.equal(spread.toString());
 
           const sellRes = calculateOverlappingSellBudget(
             buyPriceLow,

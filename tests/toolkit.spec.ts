@@ -105,14 +105,14 @@ describe('Toolkit', () => {
         'quoteToken',
         '1500',
         '2000',
-        '1600',
-        '0.1'
+        '1845',
+        '0.01'
       );
       expect(result).to.deep.equal({
-        buyPriceHigh: '1999.5',
-        buyPriceMarginal: '1599.75',
-        sellPriceLow: '1500.5',
-        sellPriceMarginal: '1600.25',
+        buyPriceHigh: '1980.198019801980198019',
+        buyPriceMarginal: '1835.843615937429955302',
+        sellPriceLow: '1515',
+        sellPriceMarginal: '1854.202052096804254855',
       });
     });
     it('should calculate strategy sell budget', async () => {
@@ -121,11 +121,11 @@ describe('Toolkit', () => {
         'baseToken',
         '1500',
         '2000',
-        '1600',
-        '0.1',
+        '1845',
+        '0.01',
         '100'
       );
-      expect(result).to.equal('0.231403132822275197');
+      expect(result).to.equal('0.024939801923642185');
     });
     it('should calculate strategy buy budget', async () => {
       const toolkit = new Toolkit(apiMock, cacheMock, () => 6);
@@ -133,11 +133,11 @@ describe('Toolkit', () => {
         'quoteToken',
         '1500',
         '2000',
-        '1600',
-        '0.1',
-        '0.231403132822275197'
+        '1845',
+        '0.01',
+        '0.024939801923642185'
       );
-      expect(result).to.equal('100.029169');
+      expect(result).to.equal('100.999999');
     });
   });
 
