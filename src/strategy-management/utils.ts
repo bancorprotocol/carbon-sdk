@@ -323,26 +323,21 @@ export function calculateOverlappingPriceRanges(
   buyPriceMarginal: Decimal;
   sellPriceLow: Decimal;
   sellPriceMarginal: Decimal;
-  spread: Decimal;
 } {
-  const totalPriceRange = sellPriceHigh.minus(buyPriceLow);
-
-  const spread = totalPriceRange.mul(spreadPercentage).div(100);
-
-  const buyPriceHigh = sellPriceHigh.minus(spread);
-
-  const sellPriceLow = buyPriceLow.plus(spread);
+  const spreadFactor = spreadPercentage.plus(1);
+  const buyPriceHigh = sellPriceHigh.div(spreadFactor);
+  const sellPriceLow = buyPriceLow.mul(spreadFactor);
 
   // buy marginal price is the market price minus 0.5 spread. But it can never be lower than buyPriceLow
   const buyPriceMarginal = Decimal.max(
     buyPriceLow,
-    marketPrice.minus(spread.div(2))
+    marketPrice.div(spreadFactor.sqrt())
   );
 
   // sell marginal price is the market price plus 0.5 spread. But ir can never be higher than sellPriceHigh
   const sellPriceMarginal = Decimal.min(
     sellPriceHigh,
-    marketPrice.plus(spread.div(2))
+    marketPrice.mul(spreadFactor.sqrt())
   );
 
   return {
@@ -350,7 +345,6 @@ export function calculateOverlappingPriceRanges(
     buyPriceMarginal,
     sellPriceLow,
     sellPriceMarginal,
-    spread,
   };
 }
 
@@ -364,25 +358,26 @@ export function calculateOverlappingSellBudget(
   // zero buy budget means zero sell budget
   if (buyBudget.isZero()) return new Decimal(0);
 
-  const { buyPriceHigh, spread } = calculateOverlappingPriceRanges(
-    buyPriceLow,
-    sellPriceHigh,
-    marketPrice,
-    spreadPercentage
-  );
+  const { buyPriceHigh, sellPriceMarginal, buyPriceMarginal } =
+    calculateOverlappingPriceRanges(
+      buyPriceLow,
+      sellPriceHigh,
+      marketPrice,
+      spreadPercentage
+    );
 
   // if buy range takes the entire range then there's zero sell budget
-  if (marketPrice.minus(spread.div(2)).gte(buyPriceHigh)) return new Decimal(0);
+  if (sellPriceMarginal.gte(sellPriceHigh)) return new Decimal(0);
 
   // if buy range is zero there's no point to this call
-  if (marketPrice.minus(spread.div(2)).lte(buyPriceLow)) {
+  if (buyPriceMarginal.lte(buyPriceLow)) {
     throw new Error(
       'calculateOverlappingSellBudget called with zero buy range and non zero buy budget'
     );
   }
 
   const buyPriceRange = buyPriceHigh.minus(buyPriceLow);
-  const buyLowRange = marketPrice.minus(buyPriceLow).minus(spread.div(2));
+  const buyLowRange = buyPriceMarginal.minus(buyPriceLow);
   const buyLowBudgetRatio = buyLowRange.div(buyPriceRange);
   const buyOrderYint = new Decimal(buyBudget).div(buyLowBudgetRatio);
   const geoMeanOfBuyRange = buyPriceLow.mul(buyPriceHigh).sqrt();
@@ -403,25 +398,26 @@ export function calculateOverlappingBuyBudget(
   // zero sell budget means zero buy budget
   if (sellBudget.isZero()) return new Decimal(0);
 
-  const { sellPriceLow, spread } = calculateOverlappingPriceRanges(
-    buyPriceLow,
-    sellPriceHigh,
-    marketPrice,
-    spreadPercentage
-  );
+  const { sellPriceLow, sellPriceMarginal, buyPriceMarginal } =
+    calculateOverlappingPriceRanges(
+      buyPriceLow,
+      sellPriceHigh,
+      marketPrice,
+      spreadPercentage
+    );
 
   // if sell range takes the entire range then there's zero buy budget
-  if (marketPrice.plus(spread.div(2)).lte(sellPriceLow)) return new Decimal(0);
+  if (buyPriceMarginal.lte(buyPriceLow)) return new Decimal(0);
 
   // if sell range is zero there's no point to this call
-  if (marketPrice.plus(spread.div(2)).gte(sellPriceHigh)) {
+  if (sellPriceMarginal.gte(sellPriceHigh)) {
     throw new Error(
       'calculateOverlappingBuyBudget called with zero sell range and non zero sell budget'
     );
   }
 
   const sellPriceRange = sellPriceHigh.minus(sellPriceLow);
-  const sellHighRange = sellPriceHigh.minus(marketPrice).minus(spread.div(2));
+  const sellHighRange = sellPriceHigh.minus(sellPriceMarginal);
   const sellHighBudgetRatio = sellHighRange.div(sellPriceRange);
   const sellOrderYint = new Decimal(sellBudget).div(sellHighBudgetRatio);
   const geoMeanOfSellRange = sellPriceHigh.mul(sellPriceLow).sqrt();
