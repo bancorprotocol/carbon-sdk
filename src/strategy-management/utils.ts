@@ -324,7 +324,7 @@ export function calculateOverlappingPriceRanges(
   sellPriceLow: Decimal;
   sellPriceMarginal: Decimal;
 } {
-  const spreadFactor = spreadPercentage.plus(1);
+  const spreadFactor = spreadPercentage.div(100).plus(1);
   const buyPriceHigh = sellPriceHigh.div(spreadFactor);
   const sellPriceLow = buyPriceLow.mul(spreadFactor);
 
