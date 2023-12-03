@@ -26,7 +26,7 @@ describe('utils', () => {
         buyPriceLow: new Decimal('1500'),
         sellPriceHigh: new Decimal('2000'),
         marketPrice: new Decimal('1845'),
-        spreadPercentage: new Decimal('0.01'),
+        spreadPercentage: new Decimal('1'),
         buyBudget: new Decimal('100'),
         buyPriceHigh: new Decimal(
           '1980.19801980198019801980198019801980198019801980198019801980198019801980198019801980198019801980198'
