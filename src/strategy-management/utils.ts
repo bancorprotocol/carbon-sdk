@@ -313,11 +313,30 @@ export function subtractFee(
     .floor();
 }
 
+export function enforcePriceRange(
+  minPrice: Decimal,
+  maxPrice: Decimal,
+  marginalPrice: Decimal,
+  tokenDecimals: number,
+  canEqualMin: boolean,
+  canEqualMax: boolean
+) {
+  const oneWei = new Decimal(1).div(new Decimal(10).pow(tokenDecimals));
+  if (marginalPrice.lte(minPrice))
+    return canEqualMin ? minPrice : minPrice.plus(oneWei);
+
+  if (marginalPrice.gte(maxPrice))
+    return canEqualMax ? maxPrice : maxPrice.minus(oneWei);
+
+  return marginalPrice;
+}
+
 export function calculateOverlappingPriceRanges(
   buyPriceLow: Decimal, // in quote tkn per 1 base tkn
   sellPriceHigh: Decimal, // in quote tkn per 1 base tkn
   marketPrice: Decimal, // in quote tkn per 1 base tkn
-  spreadPercentage: Decimal // e.g. for 0.1% pass '0.1'
+  spreadPercentage: Decimal, // e.g. for 0.1% pass '0.1'
+  tokenDecimals: number
 ): {
   buyPriceHigh: Decimal;
   buyPriceMarginal: Decimal;
@@ -328,16 +347,24 @@ export function calculateOverlappingPriceRanges(
   const buyPriceHigh = sellPriceHigh.div(spreadFactor);
   const sellPriceLow = buyPriceLow.mul(spreadFactor);
 
-  // buy marginal price is the market price minus 0.5 spread. But it can never be lower than buyPriceLow
-  const buyPriceMarginal = Decimal.max(
+  // buy marginal price is derived from the market price. But must be LTE buyPriceHigh and GT buyPriceLow
+  const buyPriceMarginal = enforcePriceRange(
     buyPriceLow,
-    marketPrice.div(spreadFactor.sqrt())
+    buyPriceHigh,
+    marketPrice.div(spreadFactor.sqrt()),
+    tokenDecimals,
+    false,
+    true
   );
 
-  // sell marginal price is the market price plus 0.5 spread. But ir can never be higher than sellPriceHigh
-  const sellPriceMarginal = Decimal.min(
+  // sell marginal price is derived from the market price. But must be GTE sellPriceLow and LT sellPriceHigh
+  const sellPriceMarginal = enforcePriceRange(
+    sellPriceLow,
     sellPriceHigh,
-    marketPrice.mul(spreadFactor.sqrt())
+    marketPrice.mul(spreadFactor.sqrt()),
+    tokenDecimals,
+    true,
+    false
   );
 
   return {
@@ -353,7 +380,8 @@ export function calculateOverlappingSellBudget(
   sellPriceHigh: Decimal, // in quote tkn per 1 base tkn
   marketPrice: Decimal, // in quote tkn per 1 base tkn
   spreadPercentage: Decimal, // e.g. for 0.1% pass '0.1'
-  buyBudget: Decimal // in quote tkn
+  buyBudget: Decimal, // in quote tkn
+  quoteTokenDecimals: number
 ): Decimal {
   // zero buy budget means zero sell budget
   if (buyBudget.isZero()) return new Decimal(0);
@@ -363,7 +391,8 @@ export function calculateOverlappingSellBudget(
       buyPriceLow,
       sellPriceHigh,
       marketPrice,
-      spreadPercentage
+      spreadPercentage,
+      quoteTokenDecimals
     );
 
   // if buy range takes the entire range then there's zero sell budget
@@ -393,7 +422,8 @@ export function calculateOverlappingBuyBudget(
   sellPriceHigh: Decimal, // in quote tkn per 1 base tkn
   marketPrice: Decimal, // in quote tkn per 1 base tkn
   spreadPercentage: Decimal, // e.g. for 0.1% pass '0.1'
-  sellBudget: Decimal // in quote tkn
+  sellBudget: Decimal, // in quote tkn
+  quoteTokenDecimals: number
 ): Decimal {
   // zero sell budget means zero buy budget
   if (sellBudget.isZero()) return new Decimal(0);
@@ -403,7 +433,8 @@ export function calculateOverlappingBuyBudget(
       buyPriceLow,
       sellPriceHigh,
       marketPrice,
-      spreadPercentage
+      spreadPercentage,
+      quoteTokenDecimals
     );
 
   // if sell range takes the entire range then there's zero buy budget

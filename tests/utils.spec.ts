@@ -14,10 +14,82 @@ import {
   calculateOverlappingBuyBudget,
   calculateOverlappingSellBudget,
   calculateOverlappingPriceRanges,
+  enforcePriceRange,
 } from '../src/strategy-management';
 import { isAlmostEqual } from './test-utils';
 
 describe('utils', () => {
+  describe('enforcePriceRange', () => {
+    const tokenDecimals = 6;
+    const minPrice = new Decimal(5);
+    const maxPrice = new Decimal(10);
+    const oneWei = new Decimal(1).div(new Decimal(10).pow(tokenDecimals));
+
+    it('should return minPrice when marginalPrice is less than minPrice and canEqualMin is true', () => {
+      const marginalPrice = minPrice.minus(oneWei);
+      const result = enforcePriceRange(
+        minPrice,
+        maxPrice,
+        marginalPrice,
+        tokenDecimals,
+        true,
+        false
+      );
+      expect(result.equals(minPrice)).to.be.true;
+    });
+
+    it('should return minPrice plus one wei when marginalPrice is less than minPrice and canEqualMin is false', () => {
+      const marginalPrice = minPrice.minus(oneWei);
+      const result = enforcePriceRange(
+        minPrice,
+        maxPrice,
+        marginalPrice,
+        tokenDecimals,
+        false,
+        false
+      );
+      expect(result.equals(minPrice.plus(oneWei))).to.be.true;
+    });
+
+    it('should return maxPrice when marginalPrice is greater than maxPrice and canEqualMax is true', () => {
+      const marginalPrice = maxPrice.plus(oneWei);
+      const result = enforcePriceRange(
+        minPrice,
+        maxPrice,
+        marginalPrice,
+        tokenDecimals,
+        false,
+        true
+      );
+      expect(result.equals(maxPrice)).to.be.true;
+    });
+
+    it('should return maxPrice minus one wei when marginalPrice is greater than maxPrice and canEqualMax is false', () => {
+      const marginalPrice = maxPrice.plus(oneWei);
+      const result = enforcePriceRange(
+        minPrice,
+        maxPrice,
+        marginalPrice,
+        tokenDecimals,
+        false,
+        false
+      );
+      expect(result.equals(maxPrice.minus(oneWei))).to.be.true;
+    });
+
+    it('should return marginalPrice when it is between minPrice and maxPrice', () => {
+      const marginalPrice = new Decimal(7);
+      const result = enforcePriceRange(
+        minPrice,
+        maxPrice,
+        marginalPrice,
+        tokenDecimals,
+        true,
+        true
+      );
+      expect(result.equals(marginalPrice)).to.be.true;
+    });
+  });
   describe('overlapping strategies', () => {
     const testCases = [
       {
@@ -66,7 +138,8 @@ describe('utils', () => {
             buyPriceLow,
             sellPriceHigh,
             marketPrice,
-            spreadPercentage
+            spreadPercentage,
+            quoteTokenDecimals
           );
 
           expect(prices.buyPriceHigh.toString()).to.equal(
@@ -87,7 +160,8 @@ describe('utils', () => {
             sellPriceHigh,
             marketPrice,
             spreadPercentage,
-            buyBudget
+            buyBudget,
+            baseTokenDecimals
           );
           expect(trimDecimal(sellRes.toString(), baseTokenDecimals)).to.equal(
             sellBudget.toString()
@@ -98,7 +172,8 @@ describe('utils', () => {
             sellPriceHigh,
             marketPrice,
             spreadPercentage,
-            sellBudget
+            sellBudget,
+            quoteTokenDecimals
           );
           expect(
             ...isAlmostEqual(
