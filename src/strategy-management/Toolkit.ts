@@ -700,6 +700,24 @@ export class Toolkit {
     );
   }
 
+  /**
+   * Calculate the overlapping strategy prices. Returns it with correct decimals
+   *
+   * @param {string} quoteToken - The address of the quote token.
+   * @param {string} buyPriceLow - The minimum buy price for the strategy, in in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} sellPriceHigh - The maximum sell price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} marketPrice - The market price, in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} spreadPercentage - The spread percentage, e.g. for 10%, enter `10`.
+   * @return {Promise<{
+   *   buyPriceLow: string;
+   *   buyPriceHigh: string;
+   *   buyPriceMarginal: string;
+   *   sellPriceLow: string;
+   *   sellPriceHigh: string;
+   *   sellPriceMarginal: string;
+   *   marketPrice: string;
+   * }>} The calculated overlapping strategy prices.
+   */
   public async calculateOverlappingStrategyPrices(
     quoteToken: string,
     buyPriceLow: string,
@@ -707,10 +725,13 @@ export class Toolkit {
     marketPrice: string,
     spreadPercentage: string
   ): Promise<{
+    buyPriceLow: string;
     buyPriceHigh: string;
     buyPriceMarginal: string;
     sellPriceLow: string;
+    sellPriceHigh: string;
     sellPriceMarginal: string;
+    marketPrice: string;
   }> {
     logger.debug('calculateOverlappingStrategyPrices called', arguments);
 
@@ -725,16 +746,19 @@ export class Toolkit {
     );
 
     const result = {
+      buyPriceLow: trimDecimal(buyPriceLow, quoteDecimals),
       buyPriceHigh: trimDecimal(prices.buyPriceHigh.toString(), quoteDecimals),
       buyPriceMarginal: trimDecimal(
         prices.buyPriceMarginal.toString(),
         quoteDecimals
       ),
       sellPriceLow: trimDecimal(prices.sellPriceLow.toString(), quoteDecimals),
+      sellPriceHigh: trimDecimal(sellPriceHigh, quoteDecimals),
       sellPriceMarginal: trimDecimal(
         prices.sellPriceMarginal.toString(),
         quoteDecimals
       ),
+      marketPrice: trimDecimal(marketPrice, quoteDecimals),
     };
 
     logger.debug('calculateOverlappingStrategyPrices info:', {
@@ -841,9 +865,11 @@ export class Toolkit {
    * @param {string} baseToken - The address of the base token for the strategy.
    * @param {string} quoteToken - The address of the quote token for the strategy.
    * @param {string} buyPriceLow - The minimum buy price for the strategy, in in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} buyPriceMarginal - The marginal buy price for the strategy, in in `quoteToken` per 1 `baseToken`, as a string.
    * @param {string} buyPriceHigh - The maximum buy price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
    * @param {string} buyBudget - The maximum budget for buying tokens in the strategy, in `quoteToken`, as a string.
    * @param {string} sellPriceLow - The minimum sell price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} sellPriceMarginal - The marginal sell price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
    * @param {string} sellPriceHigh - The maximum sell price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
    * @param {string} sellBudget - The maximum budget for selling tokens in the strategy, in `baseToken`, as a string.
    * @param {Overrides} [overrides] - Optional overrides for the transaction, such as gas price or nonce.
@@ -864,7 +890,9 @@ export class Toolkit {
    *   '0x6B175474E89094C44Da98b954EedeAC495271d0F',
    *   '0.1',
    *   '0.2',
+   *   '0.2',
    *   '1',
+   *   '0.5',
    *   '0.5',
    *   '0.6',
    *   '2'
@@ -919,15 +947,18 @@ export class Toolkit {
   }
 
   /**
+   * Creates an unsigned transaction to update an on chain strategy.
+   * This function takes various optional parameters to update different aspects of the strategy and returns a promise that resolves to a PopulatedTransaction object.
    *
-   * @param strategyId
-   * @param encoded
-   * @param param2
-   * @param {MarginalPriceOptions | string} marginalPrice - The marginal price parameter.
-   * Can either be a value from the `MarginalPriceOptions` enum, or a "BigNumberish" string value for advanced users -
-   * who wish to set the marginal price themselves.
-   * @param overrides
-   * @returns
+   * @param {string} strategyId - The unique identifier of the strategy to be updated.
+   * @param {EncodedStrategyBNStr} encoded - The encoded strategy string, representing the current state of the strategy in the contracts.
+   * @param {StrategyUpdate} strategyUpdate - An object containing optional fields to update in the strategy, including buy and sell price limits and budgets.
+   * @param {MarginalPriceOptions | string} [buyPriceMarginal] - Optional parameter that can be used to instruct the SDK what to do with the marginal price - or pass a value to use.
+   * If unsure leave this undefined.
+   * @param {MarginalPriceOptions | string} [sellPriceMarginal] - Optional parameter that can be used to instruct the SDK what to do with the marginal price - or pass a value to use.
+   * If unsure leave this undefined.
+   * @param {PayableOverrides} [overrides] - Optional Ethereum transaction overrides.
+   * @returns {Promise<PopulatedTransaction>} A promise that resolves to a PopulatedTransaction object.
    */
   public async updateStrategy(
     strategyId: string,

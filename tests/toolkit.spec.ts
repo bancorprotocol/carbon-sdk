@@ -291,16 +291,19 @@ describe('Toolkit', () => {
       const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
       const result = await toolkit.calculateOverlappingStrategyPrices(
         'quoteToken',
-        '1500',
+        '1500.0000000000000000001',
         '2000',
         '1845',
         '1'
       );
       expect(result).to.deep.equal({
+        buyPriceLow: '1500',
         buyPriceHigh: '1980.198019801980198019',
         buyPriceMarginal: '1835.843615937429955302',
         sellPriceLow: '1515',
+        sellPriceHigh: '2000',
         sellPriceMarginal: '1854.202052096804254855',
+        marketPrice: '1845',
       });
     });
     it('should calculate strategy sell budget', async () => {
