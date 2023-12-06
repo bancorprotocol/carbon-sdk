@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { Toolkit } from '../src/strategy-management';
+import { MarginalPriceOptions, Toolkit } from '../src/strategy-management';
 import { ChainCache } from '../src/chain-cache';
 import { EncodedStrategy, Strategy } from '../src/common/types';
 import { BigNumber } from '../src/utils/numerics';
@@ -93,9 +93,197 @@ describe('Toolkit', () => {
         getDecimalsByAddress: sinon.stub(),
         strategiesByPair: sinon.stub(),
       },
+      composer: {
+        updateStrategy: sinon.stub(),
+      },
     };
     cacheMock = sinon.createStubInstance(ChainCache);
     decimalFetcher = () => 18;
+  });
+
+  describe('updateStrategy', () => {
+    const encodedStrategy = {
+      id: '1',
+      token0: 'xyz',
+      token1: 'abc',
+      order0: {
+        y: '1',
+        z: '1',
+        A: '100',
+        B: '10000',
+      },
+      order1: {
+        y: '1',
+        z: '2',
+        A: '100',
+        B: '10000',
+      },
+    };
+    it('should only modify A and B values if only the prices change - and reset z to y', async () => {
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.updateStrategy(
+        encodedStrategy.id.toString(),
+        encodedStrategy,
+        {
+          buyPriceLow: '0.0000000000000000000002',
+        }
+      );
+      const updateArgs = apiMock.composer.updateStrategy.getCall(0).args;
+      // only A and B of the buy order (order1) are supposed to change
+      expect(updateArgs[4][1].A.toString()).to.equal('6120');
+      expect(updateArgs[4][1].B.toString()).to.equal('3980');
+      expect(updateArgs[4][1].y.toString()).to.equal('1');
+      expect(updateArgs[4][1].z.toString()).to.equal('1');
+
+      // order 0 is supposed to remain the same
+      expect(updateArgs[4][0].A.toString()).to.equal('100');
+      expect(updateArgs[4][0].B.toString()).to.equal('10000');
+      expect(updateArgs[4][0].y.toString()).to.equal('1');
+      expect(updateArgs[4][0].z.toString()).to.equal('1');
+    });
+
+    it('should only modify y and z values if only budget is provided', async () => {
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.updateStrategy(
+        encodedStrategy.id.toString(),
+        encodedStrategy,
+        {
+          buyBudget: '1',
+        }
+      );
+      const updateArgs = apiMock.composer.updateStrategy.getCall(0).args;
+      // only y and z of the buy order (order1) are supposed to change
+      expect(updateArgs[4][1].A.toString()).to.equal('100');
+      expect(updateArgs[4][1].B.toString()).to.equal('10000');
+      expect(updateArgs[4][1].y.toString()).to.equal('1000000000000000000');
+      expect(updateArgs[4][1].z.toString()).to.equal('1000000000000000000');
+
+      // order 0 is supposed to remain the same
+      expect(updateArgs[4][0].A.toString()).to.equal('100');
+      expect(updateArgs[4][0].B.toString()).to.equal('10000');
+      expect(updateArgs[4][0].y.toString()).to.equal('1');
+      expect(updateArgs[4][0].z.toString()).to.equal('1');
+    });
+
+    it('should only modify y and z values if only budget is provided and marginal maintained', async () => {
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.updateStrategy(
+        encodedStrategy.id.toString(),
+        encodedStrategy,
+        {
+          buyBudget: '1',
+        },
+        MarginalPriceOptions.maintain
+      );
+      const updateArgs = apiMock.composer.updateStrategy.getCall(0).args;
+      // only y and z of the buy order (order1) are supposed to change - z should remain 2*y
+      expect(updateArgs[4][1].A.toString()).to.equal('100');
+      expect(updateArgs[4][1].B.toString()).to.equal('10000');
+      expect(updateArgs[4][1].y.toString()).to.equal('1000000000000000000');
+      expect(updateArgs[4][1].z.toString()).to.equal('2000000000000000000');
+
+      // order 0 is supposed to remain the same
+      expect(updateArgs[4][0].A.toString()).to.equal('100');
+      expect(updateArgs[4][0].B.toString()).to.equal('10000');
+      expect(updateArgs[4][0].y.toString()).to.equal('1');
+      expect(updateArgs[4][0].z.toString()).to.equal('1');
+    });
+
+    it('should properly handle prices and budget changes - without marginal', async () => {
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.updateStrategy(
+        encodedStrategy.id.toString(),
+        encodedStrategy,
+        {
+          buyPriceLow: '0.0000000000000000000002',
+          buyBudget: '1',
+        }
+      );
+      const updateArgs = apiMock.composer.updateStrategy.getCall(0).args;
+      expect(updateArgs[4][1].A.toString()).to.equal('6120');
+      expect(updateArgs[4][1].B.toString()).to.equal('3980');
+      expect(updateArgs[4][1].y.toString()).to.equal('1000000000000000000');
+      expect(updateArgs[4][1].z.toString()).to.equal('1000000000000000000');
+
+      // order 0 is supposed to remain the same
+      expect(updateArgs[4][0].A.toString()).to.equal('100');
+      expect(updateArgs[4][0].B.toString()).to.equal('10000');
+      expect(updateArgs[4][0].y.toString()).to.equal('1');
+      expect(updateArgs[4][0].z.toString()).to.equal('1');
+    });
+
+    it('should properly handle prices and budget changes - with maintain', async () => {
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.updateStrategy(
+        encodedStrategy.id.toString(),
+        encodedStrategy,
+        {
+          buyPriceLow: '0.0000000000000000000002',
+          buyBudget: '1',
+        },
+        MarginalPriceOptions.maintain
+      );
+      const updateArgs = apiMock.composer.updateStrategy.getCall(0).args;
+      expect(updateArgs[4][1].A.toString()).to.equal('6120');
+      expect(updateArgs[4][1].B.toString()).to.equal('3980');
+      expect(updateArgs[4][1].y.toString()).to.equal('1000000000000000000');
+      expect(updateArgs[4][1].z.toString()).to.equal('2000000000000000000');
+
+      // order 0 is supposed to remain the same
+      expect(updateArgs[4][0].A.toString()).to.equal('100');
+      expect(updateArgs[4][0].B.toString()).to.equal('10000');
+      expect(updateArgs[4][0].y.toString()).to.equal('1');
+      expect(updateArgs[4][0].z.toString()).to.equal('1');
+    });
+
+    it('should change A, B and z but not y when prices and marginal are set and not budget', async () => {
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.updateStrategy(
+        encodedStrategy.id.toString(),
+        encodedStrategy,
+        {
+          buyPriceLow: '0.00002',
+          buyPriceHigh: '0.00004',
+        },
+        '0.000023'
+      );
+      const updateArgs = apiMock.composer.updateStrategy.getCall(0).args;
+      expect(updateArgs[4][1].A.toString()).to.equal('521409697717');
+      expect(updateArgs[4][1].B.toString()).to.equal('1258794363780');
+      expect(updateArgs[4][1].y.toString()).to.equal('1');
+      expect(updateArgs[4][1].z.toString()).to.equal('5');
+
+      // order 0 is supposed to remain the same
+      expect(updateArgs[4][0].A.toString()).to.equal('100');
+      expect(updateArgs[4][0].B.toString()).to.equal('10000');
+      expect(updateArgs[4][0].y.toString()).to.equal('1');
+      expect(updateArgs[4][0].z.toString()).to.equal('1');
+    });
+
+    it('should properly handle prices and budget changes - with marginal price set', async () => {
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.updateStrategy(
+        encodedStrategy.id.toString(),
+        encodedStrategy,
+        {
+          buyPriceLow: '0.00002',
+          buyPriceHigh: '0.00004',
+          buyBudget: '1',
+        },
+        '0.000025'
+      );
+      const updateArgs = apiMock.composer.updateStrategy.getCall(0).args;
+      expect(updateArgs[4][1].A.toString()).to.equal('521409697717');
+      expect(updateArgs[4][1].B.toString()).to.equal('1258794363780');
+      expect(updateArgs[4][1].y.toString()).to.equal('1000000000000000000');
+      expect(updateArgs[4][1].z.toString()).to.equal('3509273614829219271');
+
+      // order 0 is supposed to remain the same
+      expect(updateArgs[4][0].A.toString()).to.equal('100');
+      expect(updateArgs[4][0].B.toString()).to.equal('10000');
+      expect(updateArgs[4][0].y.toString()).to.equal('1');
+      expect(updateArgs[4][0].z.toString()).to.equal('1');
+    });
   });
 
   describe('overlappingStrategies', () => {
@@ -119,6 +307,7 @@ describe('Toolkit', () => {
       const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
       const result = await toolkit.calculateOverlappingStrategySellBudget(
         'baseToken',
+        'quoteToken',
         '1500',
         '2000',
         '1845',

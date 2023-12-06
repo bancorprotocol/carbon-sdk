@@ -720,7 +720,8 @@ export class Toolkit {
       new Decimal(buyPriceLow),
       new Decimal(sellPriceHigh),
       new Decimal(marketPrice),
-      new Decimal(spreadPercentage)
+      new Decimal(spreadPercentage),
+      quoteDecimals
     );
 
     const result = {
@@ -757,6 +758,7 @@ export class Toolkit {
    */
   public async calculateOverlappingStrategySellBudget(
     baseToken: string,
+    quoteToken: string,
     buyPriceLow: string,
     sellPriceHigh: string,
     marketPrice: string,
@@ -766,12 +768,14 @@ export class Toolkit {
     logger.debug('calculateOverlappingStrategySellBudget called', arguments);
     const decimals = this._decimals;
     const baseDecimals = await decimals.fetchDecimals(baseToken);
+    const quoteDecimals = await decimals.fetchDecimals(quoteToken);
     const budget = calculateOverlappingSellBudget(
       new Decimal(buyPriceLow),
       new Decimal(sellPriceHigh),
       new Decimal(marketPrice),
       new Decimal(spreadPercentage),
-      new Decimal(buyBudget)
+      new Decimal(buyBudget),
+      quoteDecimals
     );
 
     const result = trimDecimal(budget.toString(), baseDecimals);
@@ -811,7 +815,8 @@ export class Toolkit {
       new Decimal(sellPriceHigh),
       new Decimal(marketPrice),
       new Decimal(spreadPercentage),
-      new Decimal(sellBudget)
+      new Decimal(sellBudget),
+      quoteDecimals
     );
 
     const result = trimDecimal(budget.toString(), quoteDecimals);
@@ -962,19 +967,19 @@ export class Toolkit {
       baseDecimals,
       quoteDecimals,
       buyPriceLow ?? originalStrategy.buyPriceLow,
-      buyPriceMarginal &&
+      buyPriceMarginal !== undefined && // if we got marginal price use it - otherwise act as reset and use buy high
         buyPriceMarginal !== MarginalPriceOptions.reset &&
         buyPriceMarginal !== MarginalPriceOptions.maintain
         ? buyPriceMarginal
-        : originalStrategy.buyPriceMarginal,
+        : buyPriceHigh ?? originalStrategy.buyPriceHigh,
       buyPriceHigh ?? originalStrategy.buyPriceHigh,
       buyBudget ?? originalStrategy.buyBudget,
       sellPriceLow ?? originalStrategy.sellPriceLow,
-      sellPriceMarginal &&
+      sellPriceMarginal !== undefined && // if we got marginal price use it - otherwise act as reset and use sell low
         sellPriceMarginal !== MarginalPriceOptions.reset &&
         sellPriceMarginal !== MarginalPriceOptions.maintain
         ? sellPriceMarginal
-        : originalStrategy.sellPriceMarginal,
+        : sellPriceLow ?? originalStrategy.sellPriceLow,
       sellPriceHigh ?? originalStrategy.sellPriceHigh,
       sellBudget ?? originalStrategy.sellBudget
     );
@@ -983,8 +988,8 @@ export class Toolkit {
     // step 3: to avoid changes due to rounding errors, we will override the new encoded strategy with selected values from the old encoded strategy:
     // - if budget wasn't defined - we will use the old y
     // - if no price was defined - we will use the old A and B
-    // - if any price was defined - we will reset z to y
     // - if any budget was defined - will set z according to MarginalPriceOptions
+    // - if any price was defined - we will reset z to y
     // - if marginalPrice is a number - we will use it to calculate z
     const encodedBN = encodedStrategyStrToBN(encoded);
     if (buyBudget === undefined) {
@@ -1021,6 +1026,7 @@ export class Toolkit {
       }
     }
 
+    // if we have budget to set we handle reset (z <- y) and maintain (maintain y:z ratio). We don't handle marginal price value because it's expressed in z
     if (sellBudget !== undefined) {
       if (
         sellPriceMarginal === undefined ||
@@ -1038,10 +1044,19 @@ export class Toolkit {
       }
     }
 
-    if (buyPriceLow !== undefined || buyPriceHigh !== undefined) {
+    if (
+      (buyPriceLow !== undefined || buyPriceHigh !== undefined) &&
+      (buyPriceMarginal === MarginalPriceOptions.reset ||
+        buyPriceMarginal === undefined)
+    ) {
       newEncodedStrategy.order1.z = newEncodedStrategy.order1.y;
     }
-    if (sellPriceLow !== undefined || sellPriceHigh !== undefined) {
+
+    if (
+      (sellPriceLow !== undefined || sellPriceHigh !== undefined) &&
+      (sellPriceMarginal === MarginalPriceOptions.reset ||
+        sellPriceMarginal === undefined)
+    ) {
       newEncodedStrategy.order0.z = newEncodedStrategy.order0.y;
     }
 
