@@ -95,10 +95,132 @@ describe('Toolkit', () => {
       },
       composer: {
         updateStrategy: sinon.stub(),
+        createStrategy: sinon.stub(),
       },
     };
     cacheMock = sinon.createStubInstance(ChainCache);
     decimalFetcher = () => 18;
+  });
+
+  describe('createBuySellStrategy', () => {
+    it('should create the correct strategy', async () => {
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.createBuySellStrategy(
+        expectedStrategies[1].baseToken,
+        expectedStrategies[1].quoteToken,
+        expectedStrategies[1].buyPriceLow,
+        expectedStrategies[1].buyPriceMarginal,
+        expectedStrategies[1].buyPriceHigh,
+        expectedStrategies[1].buyBudget,
+        expectedStrategies[1].sellPriceLow,
+        expectedStrategies[1].sellPriceMarginal,
+        expectedStrategies[1].sellPriceHigh,
+        expectedStrategies[1].sellBudget
+      );
+
+      const createArgs = apiMock.composer.createStrategy.getCall(0).args;
+      expect(createArgs[2].A.toString()).to.equal(
+        encodedStrategies[1].order0.A.toString()
+      );
+      expect(createArgs[2].B.toString()).to.equal(
+        encodedStrategies[1].order0.B.toString()
+      );
+      expect(createArgs[2].y.toString()).to.equal(
+        encodedStrategies[1].order0.y.toString()
+      );
+      expect(createArgs[2].z.toString()).to.equal(
+        encodedStrategies[1].order0.z.toString()
+      );
+      expect(createArgs[3].A.toString()).to.equal(
+        encodedStrategies[1].order1.A.toString()
+      );
+      expect(createArgs[3].B.toString()).to.equal(
+        encodedStrategies[1].order1.B.toString()
+      );
+      expect(createArgs[3].y.toString()).to.equal(
+        encodedStrategies[1].order1.y.toString()
+      );
+      expect(createArgs[3].z.toString()).to.equal(
+        encodedStrategies[1].order1.z.toString()
+      );
+    });
+
+    it('should create the correct strategy when budget is 0', async () => {
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.createBuySellStrategy(
+        expectedStrategies[1].baseToken,
+        expectedStrategies[1].quoteToken,
+        expectedStrategies[1].buyPriceLow,
+        expectedStrategies[1].buyPriceMarginal,
+        expectedStrategies[1].buyPriceHigh,
+        '0',
+        expectedStrategies[1].sellPriceLow,
+        expectedStrategies[1].sellPriceMarginal,
+        expectedStrategies[1].sellPriceHigh,
+        expectedStrategies[1].sellBudget
+      );
+
+      const createArgs = apiMock.composer.createStrategy.getCall(0).args;
+      expect(createArgs[2].A.toString()).to.equal(
+        encodedStrategies[1].order0.A.toString()
+      );
+      expect(createArgs[2].B.toString()).to.equal(
+        encodedStrategies[1].order0.B.toString()
+      );
+      expect(createArgs[2].y.toString()).to.equal(
+        encodedStrategies[1].order0.y.toString()
+      );
+      expect(createArgs[2].z.toString()).to.equal(
+        encodedStrategies[1].order0.z.toString()
+      );
+      expect(createArgs[3].A.toString()).to.equal(
+        encodedStrategies[1].order1.A.toString()
+      );
+      expect(createArgs[3].B.toString()).to.equal(
+        encodedStrategies[1].order1.B.toString()
+      );
+      expect(createArgs[3].y.toString()).to.equal('0');
+      expect(createArgs[3].z.toString()).to.equal('0');
+    });
+
+    it('should create the correct range strategy when marginal price is in between the range', async () => {
+      const strategy = {
+        id: '0',
+        baseToken: 'abc',
+        quoteToken: 'xyz',
+        buyPriceLow: '1500',
+        buyPriceMarginal: '1845',
+        buyPriceHigh: '1980',
+        buyBudget: '100',
+        sellPriceLow: '1550',
+        sellPriceMarginal: '1890',
+        sellPriceHigh: '2000',
+        sellBudget: '0',
+      };
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.createBuySellStrategy(
+        strategy.baseToken,
+        strategy.quoteToken,
+        strategy.buyPriceLow,
+        strategy.buyPriceMarginal,
+        strategy.buyPriceHigh,
+        strategy.buyBudget,
+        strategy.sellPriceLow,
+        strategy.sellPriceMarginal,
+        strategy.sellPriceHigh,
+        strategy.sellBudget
+      );
+
+      const createArgs = apiMock.composer.createStrategy.getCall(0).args;
+      expect(createArgs[2].A.toString()).to.equal('855499739024');
+      expect(createArgs[2].B.toString()).to.equal('6293971818901');
+      expect(createArgs[2].y.toString()).to.equal('0');
+      expect(createArgs[2].z.toString()).to.equal('0');
+      expect(createArgs[3].A.toString()).to.equal('1047345780991496');
+      expect(createArgs[3].B.toString()).to.equal('1859185469197450');
+      expect(createArgs[3].y.toString()).to.equal('100000000000000000000');
+      expect(createArgs[3].z.toString()).to.equal('136549788505388468681');
+    });
   });
 
   describe('updateStrategy', () => {
