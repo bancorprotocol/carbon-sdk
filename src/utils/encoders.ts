@@ -75,7 +75,7 @@ export const decodeOrder = (order: EncodedOrder): DecodedOrder => {
 export const calculateRequiredLiquidity = (
   decodedKnownOrder: DecodedOrder,
   decodedVagueOrder: DecodedOrder
-): String => {
+): string => {
   const capacity: Decimal = BnToDec(encodeOrder(decodedKnownOrder).z);
   const lowestRate: Decimal = new Decimal(decodedKnownOrder.lowestRate);
   const highestRate: Decimal = new Decimal(decodedKnownOrder.highestRate);
