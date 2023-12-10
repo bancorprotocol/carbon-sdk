@@ -73,18 +73,18 @@ export const decodeOrder = (order: EncodedOrder): DecodedOrder => {
 };
 
 export const calculateRequiredLiquidity = (
-  decodedKnownOrder: DecodedOrder,
-  decodedVagueOrder: DecodedOrder
+  knownOrder: DecodedOrder,
+  vagueOrder: DecodedOrder
 ): string => {
-  const capacity: Decimal = BnToDec(encodeOrder(decodedKnownOrder).z);
-  const lowestRate: Decimal = new Decimal(decodedKnownOrder.lowestRate);
-  const highestRate: Decimal = new Decimal(decodedKnownOrder.highestRate);
-  const geometricAverageRate: Decimal = lowestRate.mul(highestRate).sqrt();
+  const capacity: Decimal = BnToDec(encodeOrder(knownOrder).z);
+  const lowestRate: Decimal = new Decimal(knownOrder.lowestRate);
+  const highestRate: Decimal = new Decimal(knownOrder.highestRate);
+  const geoAverageRate: Decimal = lowestRate.mul(highestRate).sqrt();
 
-  const z: BigNumber = DecToBn(capacity.div(geometricAverageRate).floor());
-  const L: BigNumber = DecToBn(encodeRate(new Decimal(decodedVagueOrder.lowestRate)));
-  const H: BigNumber = DecToBn(encodeRate(new Decimal(decodedVagueOrder.highestRate)));
-  const M: BigNumber = DecToBn(encodeRate(new Decimal(decodedVagueOrder.marginalRate)));
+  const z: BigNumber = DecToBn(capacity.div(geoAverageRate).floor());
+  const L: BigNumber = DecToBn(encodeRate(new Decimal(vagueOrder.lowestRate)));
+  const H: BigNumber = DecToBn(encodeRate(new Decimal(vagueOrder.highestRate)));
+  const M: BigNumber = DecToBn(encodeRate(new Decimal(vagueOrder.marginalRate)));
 
   return z.mul(M.sub(L)).div(H.sub(L)).toString();
 };

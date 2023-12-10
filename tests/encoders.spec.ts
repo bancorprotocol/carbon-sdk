@@ -178,19 +178,19 @@ describe('encoders', () => {
 
   describe('calculateRequiredLiquidity', () => {
     it('should return the expected value', () => {
-      const decodedKnownOrder = {
+      const knownOrder = {
         "liquidity": "50000000000",
         "lowestRate": "0.000000000005", 
         "highestRate": "0.000000000007992007", 
         "marginalRate": "0.000000000006576712" 
       };
-      const decodedVagueOrder = {
+      const vagueOrder = {
         "liquidity": "?",
         "lowestRate": "125000000000", 
         "highestRate": "199800199800.1998001998001998001998001998001998001998001998001998001998001998001998001998001998001998",
         "marginalRate": "151899757097.0984260299069355758193207073242569177807627767822436475141832600695488227844774853420532"
       };
-      const requiredLiquidity = calculateRequiredLiquidity(decodedKnownOrder, decodedVagueOrder);
+      const requiredLiquidity = calculateRequiredLiquidity(knownOrder, vagueOrder);
       expect(requiredLiquidity).to.equal('5512064959222299682849');
     });
   });
