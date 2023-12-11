@@ -112,6 +112,26 @@ describe('utils', () => {
         ),
         sellBudget: new Decimal('0.024939801923642185'),
       },
+      {
+        baseTokenDecimals: 18,
+        quoteTokenDecimals: 6,
+        buyPriceLow: new Decimal('5'),
+        sellPriceHigh: new Decimal('8'),
+        marketPrice: new Decimal('6.58'),
+        spreadPercentage: new Decimal('0.1'),
+        buyBudget: new Decimal('50000'),
+        buyPriceHigh: new Decimal(
+          '7.992007992007992007992007992007992007992007992007992007992007992007992007992007992007992007992007992'
+        ),
+        sellPriceLow: new Decimal('5.005'),
+        buyPriceMarginal: new Decimal(
+          '6.576712465445547600936103429637085089831710694731424131317177577135565931870119917241379658190121977'
+        ),
+        sellPriceMarginal: new Decimal(
+          '6.5832891779109931485370395330667221749215424054261555554484947547127014978019900371586210378483121'
+        ),
+        sellBudget: new Decimal('7099.890981814631296192'),
+      },
     ];
 
     testCases.forEach(
