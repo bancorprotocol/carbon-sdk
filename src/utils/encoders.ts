@@ -71,3 +71,20 @@ export const decodeOrder = (order: EncodedOrder): DecodedOrder => {
     ).toString(),
   };
 };
+
+export const calculateRequiredLiquidity = (
+  knownOrder: DecodedOrder,
+  vagueOrder: DecodedOrder
+): string => {
+  const capacity: Decimal = BnToDec(encodeOrder(knownOrder).z);
+  const lowestRate: Decimal = new Decimal(knownOrder.lowestRate);
+  const highestRate: Decimal = new Decimal(knownOrder.highestRate);
+  const geoAverageRate: Decimal = lowestRate.mul(highestRate).sqrt();
+
+  const z: BigNumber = DecToBn(capacity.div(geoAverageRate).floor());
+  const L: BigNumber = DecToBn(encodeRate(new Decimal(vagueOrder.lowestRate)));
+  const H: BigNumber = DecToBn(encodeRate(new Decimal(vagueOrder.highestRate)));
+  const M: BigNumber = DecToBn(encodeRate(new Decimal(vagueOrder.marginalRate)));
+
+  return z.mul(M.sub(L)).div(H.sub(L)).toString();
+};
