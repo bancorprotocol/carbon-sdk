@@ -75,7 +75,7 @@ export const decodeOrder = (order: EncodedOrder): DecodedOrder => {
 export const calculateRequiredLiquidity = (
   knownOrder: DecodedOrder,
   vagueOrder: DecodedOrder
-): string => {
+): BigNumber => {
   const capacity: Decimal = BnToDec(encodeOrder(knownOrder).z);
   const lowestRate: Decimal = new Decimal(knownOrder.lowestRate);
   const highestRate: Decimal = new Decimal(knownOrder.highestRate);
@@ -86,5 +86,5 @@ export const calculateRequiredLiquidity = (
   const H: BigNumber = DecToBn(encodeRate(new Decimal(vagueOrder.highestRate)));
   const M: BigNumber = DecToBn(encodeRate(new Decimal(vagueOrder.marginalRate)));
 
-  return z.mul(M.sub(L)).div(H.sub(L)).toString();
+  return z.mul(M.sub(L)).div(H.sub(L));
 };

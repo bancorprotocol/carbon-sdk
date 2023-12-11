@@ -60,7 +60,7 @@ import {
 } from './utils';
 
 // Encoder utility
-import { decodeOrder } from '../utils/encoders';
+import { calculateRequiredLiquidity, decodeOrder } from '../utils/encoders';
 import {
   encodedStrategyStrToBN,
   matchActionBNToStr,
@@ -934,6 +934,22 @@ export class Toolkit {
       sellBudget
     );
     const encStrategy = encodeStrategy(strategy);
+
+    // if exactly one of the encStrategy orders has y value 0  we will set its z value using calculateRequiredLiquidity
+    if (encStrategy.order0.y.isZero() && !encStrategy.order1.y.isZero()) {
+      encStrategy.order0.z = calculateRequiredLiquidity(
+        strategy.order1,
+        strategy.order0
+      );
+    } else if (
+      !encStrategy.order0.y.isZero() &&
+      encStrategy.order1.y.isZero()
+    ) {
+      encStrategy.order1.z = calculateRequiredLiquidity(
+        strategy.order0,
+        strategy.order1
+      );
+    }
 
     logger.debug('createBuySellStrategy info:', { strategy, encStrategy });
 

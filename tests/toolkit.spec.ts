@@ -180,7 +180,7 @@ describe('Toolkit', () => {
         encodedStrategies[1].order1.B.toString()
       );
       expect(createArgs[3].y.toString()).to.equal('0');
-      expect(createArgs[3].z.toString()).to.equal('0');
+      expect(createArgs[3].z.toString()).to.equal('39614081257132168796771975168');
     });
 
     it('should create the correct range strategy when marginal price is in between the range', async () => {
@@ -215,7 +215,7 @@ describe('Toolkit', () => {
       expect(createArgs[2].A.toString()).to.equal('855499739024');
       expect(createArgs[2].B.toString()).to.equal('6293971818901');
       expect(createArgs[2].y.toString()).to.equal('0');
-      expect(createArgs[2].z.toString()).to.equal('0');
+      expect(createArgs[2].z.toString()).to.equal('16723729195523592');
       expect(createArgs[3].A.toString()).to.equal('1047345780991496');
       expect(createArgs[3].B.toString()).to.equal('1859185469197450');
       expect(createArgs[3].y.toString()).to.equal('100000000000000000000');

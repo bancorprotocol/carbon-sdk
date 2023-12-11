@@ -191,7 +191,7 @@ describe('encoders', () => {
         "marginalRate": "151899757097.0984260299069355758193207073242569177807627767822436475141832600695488227844774853420532"
       };
       const requiredLiquidity = calculateRequiredLiquidity(knownOrder, vagueOrder);
-      expect(requiredLiquidity).to.equal('5512064959222299682849');
+      expect(requiredLiquidity.toString()).to.equal('5512064959222299682849');
     });
   });
 
