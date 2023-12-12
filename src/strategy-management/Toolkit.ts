@@ -59,9 +59,8 @@ import {
   subtractFee,
 } from './utils';
 
-// Encoder utility
-import { calculateRequiredLiquidity, decodeOrder } from '../utils/encoders';
 import {
+  decodeOrder,
   encodedStrategyStrToBN,
   matchActionBNToStr,
   ordersMapBNToStr,
@@ -78,6 +77,17 @@ export enum MarginalPriceOptions {
 
   /** Indicates that the marginal price should be maintained at its current value. */
   maintain = 'MAINTAIN',
+}
+
+// Helper function to check whether an actual number was passed and not undefined or the reset/maintain options
+export function isMarginalPriceValue(
+  marginalPrice?: MarginalPriceOptions | string
+): boolean {
+  return (
+    marginalPrice !== undefined &&
+    marginalPrice !== MarginalPriceOptions.reset &&
+    marginalPrice !== MarginalPriceOptions.maintain
+  );
 }
 
 export class Toolkit {
@@ -738,26 +748,19 @@ export class Toolkit {
     const decimals = this._decimals;
     const quoteDecimals = await decimals.fetchDecimals(quoteToken);
     const prices = calculateOverlappingPriceRanges(
-      new Decimal(buyPriceLow),
-      new Decimal(sellPriceHigh),
-      new Decimal(marketPrice),
-      new Decimal(spreadPercentage),
-      quoteDecimals
+      buyPriceLow,
+      sellPriceHigh,
+      marketPrice,
+      spreadPercentage
     );
 
     const result = {
       buyPriceLow: trimDecimal(buyPriceLow, quoteDecimals),
-      buyPriceHigh: trimDecimal(prices.buyPriceHigh.toString(), quoteDecimals),
-      buyPriceMarginal: trimDecimal(
-        prices.buyPriceMarginal.toString(),
-        quoteDecimals
-      ),
-      sellPriceLow: trimDecimal(prices.sellPriceLow.toString(), quoteDecimals),
+      buyPriceHigh: trimDecimal(prices.buyPriceHigh, quoteDecimals),
+      buyPriceMarginal: trimDecimal(prices.buyPriceMarginal, quoteDecimals),
+      sellPriceLow: trimDecimal(prices.sellPriceLow, quoteDecimals),
       sellPriceHigh: trimDecimal(sellPriceHigh, quoteDecimals),
-      sellPriceMarginal: trimDecimal(
-        prices.sellPriceMarginal.toString(),
-        quoteDecimals
-      ),
+      sellPriceMarginal: trimDecimal(prices.sellPriceMarginal, quoteDecimals),
       marketPrice: trimDecimal(marketPrice, quoteDecimals),
     };
 
@@ -794,22 +797,21 @@ export class Toolkit {
     const baseDecimals = await decimals.fetchDecimals(baseToken);
     const quoteDecimals = await decimals.fetchDecimals(quoteToken);
     const budget = calculateOverlappingSellBudget(
-      new Decimal(buyPriceLow),
-      new Decimal(sellPriceHigh),
-      new Decimal(marketPrice),
-      new Decimal(spreadPercentage),
-      new Decimal(buyBudget),
-      quoteDecimals
+      baseDecimals,
+      quoteDecimals,
+      buyPriceLow,
+      sellPriceHigh,
+      marketPrice,
+      spreadPercentage,
+      buyBudget
     );
-
-    const result = trimDecimal(budget.toString(), baseDecimals);
 
     logger.debug('calculateOverlappingStrategySellBudget info:', {
       baseDecimals,
-      result,
+      budget,
     });
 
-    return result;
+    return budget;
   }
 
   /**
@@ -824,6 +826,7 @@ export class Toolkit {
    * @return {Promise<string>} The result of the calculation - the buy budget in token res in quote token.
    */
   public async calculateOverlappingStrategyBuyBudget(
+    baseToken: string,
     quoteToken: string,
     buyPriceLow: string,
     sellPriceHigh: string,
@@ -833,24 +836,24 @@ export class Toolkit {
   ): Promise<string> {
     logger.debug('calculateOverlappingStrategyBuyBudget called', arguments);
     const decimals = this._decimals;
+    const baseDecimals = await decimals.fetchDecimals(baseToken);
     const quoteDecimals = await decimals.fetchDecimals(quoteToken);
     const budget = calculateOverlappingBuyBudget(
-      new Decimal(buyPriceLow),
-      new Decimal(sellPriceHigh),
-      new Decimal(marketPrice),
-      new Decimal(spreadPercentage),
-      new Decimal(sellBudget),
-      quoteDecimals
+      baseDecimals,
+      quoteDecimals,
+      buyPriceLow,
+      sellPriceHigh,
+      marketPrice,
+      spreadPercentage,
+      sellBudget
     );
-
-    const result = trimDecimal(budget.toString(), quoteDecimals);
 
     logger.debug('calculateOverlappingStrategyBuyBudget info:', {
       quoteDecimals,
-      result,
+      budget,
     });
 
-    return result;
+    return budget;
   }
 
   /**
@@ -935,22 +938,6 @@ export class Toolkit {
     );
     const encStrategy = encodeStrategy(strategy);
 
-    // if exactly one of the encStrategy orders has y value 0  we will set its z value using calculateRequiredLiquidity
-    if (encStrategy.order0.y.isZero() && !encStrategy.order1.y.isZero()) {
-      encStrategy.order0.z = calculateRequiredLiquidity(
-        strategy.order1,
-        strategy.order0
-      );
-    } else if (
-      !encStrategy.order0.y.isZero() &&
-      encStrategy.order1.y.isZero()
-    ) {
-      encStrategy.order1.z = calculateRequiredLiquidity(
-        strategy.order0,
-        strategy.order1
-      );
-    }
-
     logger.debug('createBuySellStrategy info:', { strategy, encStrategy });
 
     return this._api.composer.createStrategy(
@@ -1014,18 +1001,14 @@ export class Toolkit {
       baseDecimals,
       quoteDecimals,
       buyPriceLow ?? originalStrategy.buyPriceLow,
-      buyPriceMarginal !== undefined && // if we got marginal price use it - otherwise act as reset and use buy high
-        buyPriceMarginal !== MarginalPriceOptions.reset &&
-        buyPriceMarginal !== MarginalPriceOptions.maintain
-        ? buyPriceMarginal
+      isMarginalPriceValue(buyPriceMarginal) // if we got marginal price use it - otherwise act as reset and use buy high
+        ? buyPriceMarginal!
         : buyPriceHigh ?? originalStrategy.buyPriceHigh,
       buyPriceHigh ?? originalStrategy.buyPriceHigh,
       buyBudget ?? originalStrategy.buyBudget,
       sellPriceLow ?? originalStrategy.sellPriceLow,
-      sellPriceMarginal !== undefined && // if we got marginal price use it - otherwise act as reset and use sell low
-        sellPriceMarginal !== MarginalPriceOptions.reset &&
-        sellPriceMarginal !== MarginalPriceOptions.maintain
-        ? sellPriceMarginal
+      isMarginalPriceValue(sellPriceMarginal) // if we got marginal price use it - otherwise act as reset and use sell low
+        ? sellPriceMarginal!
         : sellPriceLow ?? originalStrategy.sellPriceLow,
       sellPriceHigh ?? originalStrategy.sellPriceHigh,
       sellBudget ?? originalStrategy.sellBudget
@@ -1057,7 +1040,9 @@ export class Toolkit {
     }
 
     if (buyBudget !== undefined) {
-      if (
+      if (isMarginalPriceValue(buyPriceMarginal)) {
+        // do nothing - z was already set
+      } else if (
         buyPriceMarginal === undefined ||
         buyPriceMarginal === MarginalPriceOptions.reset ||
         encodedBN.order1.y.isZero()
@@ -1075,7 +1060,9 @@ export class Toolkit {
 
     // if we have budget to set we handle reset (z <- y) and maintain (maintain y:z ratio). We don't handle marginal price value because it's expressed in z
     if (sellBudget !== undefined) {
-      if (
+      if (isMarginalPriceValue(sellPriceMarginal)) {
+        // do nothing - z was already set
+      } else if (
         sellPriceMarginal === undefined ||
         sellPriceMarginal === MarginalPriceOptions.reset ||
         encodedBN.order0.y.isZero()

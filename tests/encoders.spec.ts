@@ -34,6 +34,34 @@ describe('encoders', () => {
       expect(encodedOrder.B.toString()).to.equal('199032864766430');
     });
 
+    it('should use z override', () => {
+      const order = {
+        liquidity: '100',
+        lowestRate: '0.5',
+        highestRate: '1',
+        marginalRate: '1',
+      };
+      const encodedOrder = encodeOrder(order, BigNumber.from('200'));
+      expect(encodedOrder.y.toString()).to.equal('100');
+      expect(encodedOrder.z.toString()).to.equal('200');
+      expect(encodedOrder.A.toString()).to.equal('82442111944226');
+      expect(encodedOrder.B.toString()).to.equal('199032864766430');
+    });
+
+    it('should not throw an exception when marginal equals low AND liquidity equals 0', () => {
+      const order = {
+        liquidity: '0',
+        lowestRate: '0.5',
+        highestRate: '1',
+        marginalRate: '0.5',
+      };
+      const encodedOrder = encodeOrder(order);
+      expect(encodedOrder.y.toString()).to.equal('0');
+      expect(encodedOrder.z.toString()).to.equal('0');
+      expect(encodedOrder.A.toString()).to.equal('82442111944226');
+      expect(encodedOrder.B.toString()).to.equal('199032864766430');
+    });
+
     it('should return the expected value when all rates are the same', () => {
       const order = {
         liquidity: '100',
@@ -61,6 +89,7 @@ describe('encoders', () => {
         'Either one of the following must hold:\n' +
           '- highestRate >= marginalRate > lowestRate\n' +
           '- highestRate == marginalRate == lowestRate\n' +
+          '- (highestRate > marginalRate == lowestRate) AND liquidity == 0\n' +
           `(highestRate = ${order.highestRate}, marginalRate = ${order.marginalRate}, lowestRate = ${order.lowestRate})`
       );
     });

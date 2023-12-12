@@ -215,7 +215,7 @@ describe('Toolkit', () => {
       expect(createArgs[2].A.toString()).to.equal('855499739024');
       expect(createArgs[2].B.toString()).to.equal('6293971818901');
       expect(createArgs[2].y.toString()).to.equal('0');
-      expect(createArgs[2].z.toString()).to.equal('16723729195523592');
+      expect(createArgs[2].z.toString()).to.equal('79234223680881057');
       expect(createArgs[3].A.toString()).to.equal('1047345780991496');
       expect(createArgs[3].B.toString()).to.equal('1859185469197450');
       expect(createArgs[3].y.toString()).to.equal('100000000000000000000');
@@ -439,19 +439,20 @@ describe('Toolkit', () => {
         '1',
         '100'
       );
-      expect(result).to.equal('0.024939801923642185');
+      expect(result).to.equal('0.021054379766414182');
     });
     it('should calculate strategy buy budget', async () => {
       const toolkit = new Toolkit(apiMock, cacheMock, () => 6);
       const result = await toolkit.calculateOverlappingStrategyBuyBudget(
+        'baseToken',
         'quoteToken',
         '1500',
         '2000',
         '1845',
         '1',
-        '0.024939801923642185'
+        '0.021054379766414182'
       );
-      expect(result).to.equal('100.999999');
+      expect(result).to.equal('100.99701');
     });
   });
 
