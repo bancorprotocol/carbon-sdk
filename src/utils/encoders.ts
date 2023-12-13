@@ -32,16 +32,30 @@ export const encodeOrders = ([order0, order1]: [DecodedOrder, DecodedOrder]): [
   EncodedOrder
 ] => {
   const liquidity0 = new Decimal(order0.liquidity);
+  const lowestRate0 = new Decimal(order0.lowestRate);
+  const highestRate0 = new Decimal(order0.highestRate);
   const liquidity1 = new Decimal(order1.liquidity);
+  const lowestRate1 = new Decimal(order1.lowestRate);
+  const highestRate1 = new Decimal(order1.highestRate);
 
   // if one order has 0 liquidity and the other has > 0 liquidity - use it to calculate z.
-  if (liquidity0.eq(0) && liquidity1.gt(0)) {
+  if (
+    liquidity0.eq(0) &&
+    liquidity1.gt(0) &&
+    lowestRate1.gt(0) &&
+    highestRate1.gt(0)
+  ) {
     return [
       encodeOrder(order0, calculateCorrelatedZ(order1)),
       encodeOrder(order1),
     ];
   }
-  if (liquidity1.eq(0) && liquidity0.gt(0)) {
+  if (
+    liquidity1.eq(0) &&
+    liquidity0.gt(0) &&
+    lowestRate0.gt(0) &&
+    highestRate0.gt(0)
+  ) {
     return [
       encodeOrder(order0),
       encodeOrder(order1, calculateCorrelatedZ(order0)),

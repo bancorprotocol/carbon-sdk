@@ -1,5 +1,10 @@
 import { expect } from 'chai';
-import { encodeOrder, decodeOrder, calculateRequiredLiquidity } from '../src/utils/encoders';
+import {
+  encodeOrder,
+  decodeOrder,
+  calculateRequiredLiquidity,
+  calculateCorrelatedZ,
+} from '../src/utils/encoders';
 import {
   buildStrategyObject,
   encodeStrategy,
@@ -208,19 +213,50 @@ describe('encoders', () => {
   describe('calculateRequiredLiquidity', () => {
     it('should return the expected value', () => {
       const knownOrder = {
-        "liquidity": "50000000000",
-        "lowestRate": "0.000000000005",
-        "highestRate": "0.000000000007992007",
-        "marginalRate": "0.000000000006576712"
+        liquidity: '50000000000',
+        lowestRate: '0.000000000005',
+        highestRate: '0.000000000007992007',
+        marginalRate: '0.000000000006576712',
       };
       const vagueOrder = {
-        "liquidity": "?",
-        "lowestRate": "125000000000",
-        "highestRate": "199800199800.1998001998001998001998001998001998001998001998001998001998001998001998001998001998001998",
-        "marginalRate": "151899757097.0984260299069355758193207073242569177807627767822436475141832600695488227844774853420532"
+        liquidity: '?',
+        lowestRate: '125000000000',
+        highestRate:
+          '199800199800.1998001998001998001998001998001998001998001998001998001998001998001998001998001998001998',
+        marginalRate:
+          '151899757097.0984260299069355758193207073242569177807627767822436475141832600695488227844774853420532',
       };
-      const requiredLiquidity = calculateRequiredLiquidity(knownOrder, vagueOrder);
-      expect(requiredLiquidity.toString()).to.equal('5512064959222299682849');
+      const requiredLiquidity = calculateRequiredLiquidity(
+        knownOrder,
+        vagueOrder
+      );
+      expect(requiredLiquidity).to.equal('5512064959222299682849');
+    });
+  });
+
+  describe('calculateCorrelatedZ', () => {
+    it('should return the expected value', () => {
+      const order = {
+        liquidity: '50000000000',
+        lowestRate: '0.000000000005',
+        highestRate: '0.000000000007992007',
+        marginalRate: '0.000000000006576712',
+      };
+      const z = calculateCorrelatedZ(order);
+      expect(z.toString()).to.equal('14231343545390424616539');
+    });
+
+    it('should not crush over precision', () => {
+      const order = {
+        liquidity: '50000000000',
+        lowestRate:
+          '0.000000001999999999744536705436732979947747767290977907207738528683194090262986719608306884765625',
+        highestRate:
+          '0.0000000020999999999592552453067291726033776104597843893684316896042219013907015323638916015625',
+        marginalRate: "0.0000000020999999999592552453067291726033776104597843893684316896042219013907015323638916015625",
+      };
+      const z = calculateCorrelatedZ(order);
+      expect(z.toString()).to.equal('24397501825508179420');
     });
   });
 
