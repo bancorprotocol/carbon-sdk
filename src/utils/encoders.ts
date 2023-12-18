@@ -87,7 +87,7 @@ export const encodeOrder = (
         '- highestRate >= marginalRate > lowestRate\n' +
         '- highestRate == marginalRate == lowestRate\n' +
         '- (highestRate > marginalRate == lowestRate) AND liquidity == 0\n' +
-        `(highestRate = ${highestRate}, marginalRate = ${marginalRate}, lowestRate = ${lowestRate})`
+        `(highestRate = ${highestRate}, marginalRate = ${marginalRate}, lowestRate = ${lowestRate}), liquidity = ${liquidity}`
     );
 
   const y = DecToBn(liquidity);

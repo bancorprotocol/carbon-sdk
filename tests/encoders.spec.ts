@@ -95,7 +95,7 @@ describe('encoders', () => {
           '- highestRate >= marginalRate > lowestRate\n' +
           '- highestRate == marginalRate == lowestRate\n' +
           '- (highestRate > marginalRate == lowestRate) AND liquidity == 0\n' +
-          `(highestRate = ${order.highestRate}, marginalRate = ${order.marginalRate}, lowestRate = ${order.lowestRate})`
+          `(highestRate = ${order.highestRate}, marginalRate = ${order.marginalRate}, lowestRate = ${order.lowestRate}), liquidity = ${order.liquidity}`
       );
     });
 
@@ -253,7 +253,8 @@ describe('encoders', () => {
           '0.000000001999999999744536705436732979947747767290977907207738528683194090262986719608306884765625',
         highestRate:
           '0.0000000020999999999592552453067291726033776104597843893684316896042219013907015323638916015625',
-        marginalRate: "0.0000000020999999999592552453067291726033776104597843893684316896042219013907015323638916015625",
+        marginalRate:
+          '0.0000000020999999999592552453067291726033776104597843893684316896042219013907015323638916015625',
       };
       const z = calculateCorrelatedZ(order);
       expect(z.toString()).to.equal('24397501825508179420');
