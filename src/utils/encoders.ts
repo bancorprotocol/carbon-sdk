@@ -145,8 +145,7 @@ export const calculateRequiredLiquidity = (
 /**
  * Use the ratio between the z and the price geometric average to calculate what z
  * value should be used for the other order in order to preserve correlation between
- * the two orders. This should be used when the other order has 0 liquidity - as z can't
- * be determined otherwise.
+ * the two orders. This function assumes that the other order has 0 liquidity.
  */
 export const calculateCorrelatedZ = (order: DecodedOrder): BigNumber => {
   const capacity: Decimal = BnToDec(encodeOrder(order).z);
