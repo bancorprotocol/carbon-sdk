@@ -124,9 +124,10 @@ export const decodeOrder = (order: EncodedOrder): DecodedOrder => {
 };
 
 /**
- * Use the ratio between the z and the price geometric average to calculate what z
- * value should be used for the other order in order to preserve correlation between
- * the two orders - and provide the liquidity that should be used to achieve that.
+ * Use the capacity of the other order along with the prices of this order,
+ * in order to calculate the capacity that this order needs to have in order for its
+ * marginal price to be set according to the given input - and provide the
+ * liquidity that should be used to achieve that.
  */
 export const calculateRequiredLiquidity = (
   knownOrder: DecodedOrder,
@@ -143,9 +144,10 @@ export const calculateRequiredLiquidity = (
 };
 
 /**
- * Use the ratio between the z and the price geometric average to calculate what z
- * value should be used for the other order in order to preserve correlation between
- * the two orders. This function assumes that the other order has 0 liquidity.
+ * Use the capacity of the other order along with the prices of this order,
+ * in order to calculate the capacity that this order needs to have in order for its
+ * marginal price to be set according to the given input - and provide the
+ * liquidity that should be used to achieve that. This function assumes that the other order has 0 liquidity.
  */
 export const calculateCorrelatedZ = (order: DecodedOrder): BigNumber => {
   const capacity: Decimal = BnToDec(encodeOrder(order).z);
