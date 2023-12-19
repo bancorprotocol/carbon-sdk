@@ -13,7 +13,11 @@ import {
   Strategy,
 } from '../common/types';
 import { Logger } from '../common/logger';
-import { decodeOrder, encodeOrder } from '../utils/encoders';
+import {
+  calculateRequiredLiquidity,
+  decodeOrder,
+  encodeOrders,
+} from '../utils/encoders';
 import { Decimals } from '../utils/decimals';
 import { encodedStrategyBNToStr } from '../utils';
 
@@ -45,11 +49,12 @@ export function normalizeInvertedRate(
 export const encodeStrategy = (
   strategy: DecodedStrategy
 ): Omit<EncodedStrategy, 'id'> => {
+  const [order0, order1] = encodeOrders([strategy.order0, strategy.order1]);
   return {
     token0: strategy.token0,
     token1: strategy.token1,
-    order0: encodeOrder(strategy.order0),
-    order1: encodeOrder(strategy.order1),
+    order0,
+    order1,
   };
 };
 
@@ -217,6 +222,92 @@ export function buildStrategyObject(
   };
 }
 
+export function createFromBuyOrder(
+  baseTokenDecimals: number,
+  quoteTokenDecimals: number,
+  buyPriceLow: string,
+  buyPriceMarginal: string,
+  buyPriceHigh: string,
+  buyBudget: string
+): DecodedOrder {
+  logger.debug('createFromBuyOrder called', arguments);
+
+  // convert quote token liquidity (budget) to wei
+  const liquidity = parseUnits(buyBudget, quoteTokenDecimals);
+
+  /* this order sells quote token so the rates are quote token per 1 base token.
+  Converting to wei in order to factor out different decimals */
+  const lowestRate = normalizeRate(
+    buyPriceLow,
+    quoteTokenDecimals,
+    baseTokenDecimals
+  );
+  const marginalRate = normalizeRate(
+    buyPriceMarginal,
+    quoteTokenDecimals,
+    baseTokenDecimals
+  );
+  const highestRate = normalizeRate(
+    buyPriceHigh,
+    quoteTokenDecimals,
+    baseTokenDecimals
+  );
+
+  const order: DecodedOrder = {
+    liquidity: liquidity.toString(),
+    lowestRate: lowestRate,
+    highestRate: highestRate,
+    marginalRate: marginalRate,
+  };
+  logger.debug('createFromBuyOrder info:', { order });
+  return order;
+}
+
+export function createFromSellOrder(
+  baseTokenDecimals: number,
+  quoteTokenDecimals: number,
+  sellPriceLow: string,
+  sellPriceMarginal: string,
+  sellPriceHigh: string,
+  sellBudget: string
+): DecodedOrder {
+  logger.debug('createFromSellOrder called', arguments);
+  // order 0 is selling the base token
+  // convert base token liquidity (budget) to wei
+  const liquidity = parseUnits(sellBudget, baseTokenDecimals);
+
+  /* this order sells base token so the rates are base token per 1 quote token,
+  meaning we need to do 1 over - and then low rate is 1/high price.
+  Converting to wei in order to factor out different decimals */
+  const lowestRate = normalizeInvertedRate(
+    sellPriceHigh,
+    quoteTokenDecimals,
+    baseTokenDecimals
+  );
+
+  const marginalRate = normalizeInvertedRate(
+    sellPriceMarginal,
+    quoteTokenDecimals,
+    baseTokenDecimals
+  );
+
+  const highestRate = normalizeInvertedRate(
+    sellPriceLow,
+    quoteTokenDecimals,
+    baseTokenDecimals
+  );
+
+  const order: DecodedOrder = {
+    liquidity: liquidity.toString(),
+    lowestRate: lowestRate,
+    highestRate: highestRate,
+    marginalRate: marginalRate,
+  };
+
+  logger.debug('createFromSellOrder info:', { order });
+  return order;
+}
+
 export function createOrders(
   baseTokenDecimals: number,
   quoteTokenDecimals: number,
@@ -230,66 +321,22 @@ export function createOrders(
   sellBudget: string
 ): { order0: DecodedOrder; order1: DecodedOrder } {
   logger.debug('createOrders called', arguments);
-  // order 0 is selling the base token
-  // convert base token liquidity (budget) to wei
-  const liquidity0 = parseUnits(sellBudget, baseTokenDecimals);
-
-  /* this order sells base token so the rates are base token per 1 quote token,
-  meaning we need to do 1 over - and then low rate is 1/high price.
-  Converting to wei in order to factor out different decimals */
-  const lowestRate0 = normalizeInvertedRate(
-    sellPriceHigh,
+  const order0 = createFromSellOrder(
+    baseTokenDecimals,
     quoteTokenDecimals,
-    baseTokenDecimals
-  );
-
-  const marginalRate0 = normalizeInvertedRate(
-    sellPriceMarginal,
-    quoteTokenDecimals,
-    baseTokenDecimals
-  );
-
-  const highestRate0 = normalizeInvertedRate(
     sellPriceLow,
-    quoteTokenDecimals,
-    baseTokenDecimals
+    sellPriceMarginal,
+    sellPriceHigh,
+    sellBudget
   );
-
-  // order 1 is selling the quote token
-  // convert quote token liquidity (budget) to wei
-  const liquidity1 = parseUnits(buyBudget, quoteTokenDecimals);
-
-  /* this order sells quote token so the rates are quote token per 1 base token.
-  Converting to wei in order to factor out different decimals */
-  const lowestRate1 = normalizeRate(
+  const order1 = createFromBuyOrder(
+    baseTokenDecimals,
+    quoteTokenDecimals,
     buyPriceLow,
-    quoteTokenDecimals,
-    baseTokenDecimals
-  );
-  const marginalRate1 = normalizeRate(
     buyPriceMarginal,
-    quoteTokenDecimals,
-    baseTokenDecimals
-  );
-  const highestRate1 = normalizeRate(
     buyPriceHigh,
-    quoteTokenDecimals,
-    baseTokenDecimals
+    buyBudget
   );
-
-  const order0: DecodedOrder = {
-    liquidity: liquidity0.toString(),
-    lowestRate: lowestRate0,
-    highestRate: highestRate0,
-    marginalRate: marginalRate0,
-  };
-
-  const order1: DecodedOrder = {
-    liquidity: liquidity1.toString(),
-    lowestRate: lowestRate1,
-    highestRate: highestRate1,
-    marginalRate: marginalRate1,
-  };
   logger.debug('createOrders info:', { order0, order1 });
   return { order0, order1 };
 }
@@ -316,144 +363,164 @@ export function subtractFee(
 export function enforcePriceRange(
   minPrice: Decimal,
   maxPrice: Decimal,
-  marginalPrice: Decimal,
-  tokenDecimals: number,
-  canEqualMin: boolean,
-  canEqualMax: boolean
+  marginalPrice: Decimal
 ) {
-  const oneWei = new Decimal(1).div(new Decimal(10).pow(tokenDecimals));
-  if (marginalPrice.lte(minPrice))
-    return canEqualMin ? minPrice : minPrice.plus(oneWei);
+  if (marginalPrice.lte(minPrice)) return minPrice;
 
-  if (marginalPrice.gte(maxPrice))
-    return canEqualMax ? maxPrice : maxPrice.minus(oneWei);
+  if (marginalPrice.gte(maxPrice)) return maxPrice;
 
   return marginalPrice;
 }
 
 export function calculateOverlappingPriceRanges(
-  buyPriceLow: Decimal, // in quote tkn per 1 base tkn
-  sellPriceHigh: Decimal, // in quote tkn per 1 base tkn
-  marketPrice: Decimal, // in quote tkn per 1 base tkn
-  spreadPercentage: Decimal, // e.g. for 0.1% pass '0.1'
-  tokenDecimals: number
+  buyPriceLow: string, // in quote tkn per 1 base tkn
+  sellPriceHigh: string, // in quote tkn per 1 base tkn
+  marketPrice: string, // in quote tkn per 1 base tkn
+  spreadPercentage: string // e.g. for 0.1% pass '0.1'
 ): {
-  buyPriceHigh: Decimal;
-  buyPriceMarginal: Decimal;
-  sellPriceLow: Decimal;
-  sellPriceMarginal: Decimal;
+  buyPriceHigh: string;
+  buyPriceMarginal: string;
+  sellPriceLow: string;
+  sellPriceMarginal: string;
 } {
-  const spreadFactor = spreadPercentage.div(100).plus(1);
-  const buyPriceHigh = sellPriceHigh.div(spreadFactor);
-  const sellPriceLow = buyPriceLow.mul(spreadFactor);
+  const spreadFactor = new Decimal(spreadPercentage).div(100).plus(1);
+  const buyPriceHigh = new Decimal(sellPriceHigh).div(spreadFactor);
+  const sellPriceLow = new Decimal(buyPriceLow).mul(spreadFactor);
 
-  // buy marginal price is derived from the market price. But must be LTE buyPriceHigh and GT buyPriceLow
+  // buy marginal price is derived from the market price. But must be LTE buyPriceHigh and GTE buyPriceLow
   const buyPriceMarginal = enforcePriceRange(
-    buyPriceLow,
+    new Decimal(buyPriceLow),
     buyPriceHigh,
-    marketPrice.div(spreadFactor.sqrt()),
-    tokenDecimals,
-    false,
-    true
+    new Decimal(marketPrice).div(spreadFactor.sqrt())
   );
 
-  // sell marginal price is derived from the market price. But must be GTE sellPriceLow and LT sellPriceHigh
+  // sell marginal price is derived from the market price. But must be GTE sellPriceLow and LTE sellPriceHigh
   const sellPriceMarginal = enforcePriceRange(
     sellPriceLow,
-    sellPriceHigh,
-    marketPrice.mul(spreadFactor.sqrt()),
-    tokenDecimals,
-    true,
-    false
+    new Decimal(sellPriceHigh),
+    new Decimal(marketPrice).mul(spreadFactor.sqrt())
   );
 
   return {
-    buyPriceHigh,
-    buyPriceMarginal,
-    sellPriceLow,
-    sellPriceMarginal,
+    buyPriceHigh: buyPriceHigh.toString(),
+    buyPriceMarginal: buyPriceMarginal.toString(),
+    sellPriceLow: sellPriceLow.toString(),
+    sellPriceMarginal: sellPriceMarginal.toString(),
   };
 }
 
 export function calculateOverlappingSellBudget(
-  buyPriceLow: Decimal, // in quote tkn per 1 base tkn
-  sellPriceHigh: Decimal, // in quote tkn per 1 base tkn
-  marketPrice: Decimal, // in quote tkn per 1 base tkn
-  spreadPercentage: Decimal, // e.g. for 0.1% pass '0.1'
-  buyBudget: Decimal, // in quote tkn
-  quoteTokenDecimals: number
-): Decimal {
+  baseTokenDecimals: number,
+  quoteTokenDecimals: number,
+  buyPriceLow: string, // in quote tkn per 1 base tkn
+  sellPriceHigh: string, // in quote tkn per 1 base tkn
+  marketPrice: string, // in quote tkn per 1 base tkn
+  spreadPercentage: string, // e.g. for 0.1% pass '0.1'
+  buyBudget: string // in quote tkn
+): string {
   // zero buy budget means zero sell budget
-  if (buyBudget.isZero()) return new Decimal(0);
+  if (buyBudget === '0') return '0';
 
-  const { buyPriceHigh, sellPriceMarginal, buyPriceMarginal } =
+  const { buyPriceHigh, sellPriceLow, sellPriceMarginal, buyPriceMarginal } =
     calculateOverlappingPriceRanges(
       buyPriceLow,
       sellPriceHigh,
       marketPrice,
-      spreadPercentage,
-      quoteTokenDecimals
+      spreadPercentage
     );
 
   // if buy range takes the entire range then there's zero sell budget
-  if (sellPriceMarginal.gte(sellPriceHigh)) return new Decimal(0);
+  if (new Decimal(sellPriceMarginal).gte(sellPriceHigh)) return '0';
 
   // if buy range is zero there's no point to this call
-  if (buyPriceMarginal.lte(buyPriceLow)) {
+  if (new Decimal(buyPriceMarginal).lte(buyPriceLow)) {
     throw new Error(
       'calculateOverlappingSellBudget called with zero buy range and non zero buy budget'
     );
   }
 
-  const buyPriceRange = buyPriceHigh.minus(buyPriceLow);
-  const buyLowRange = buyPriceMarginal.minus(buyPriceLow);
-  const buyLowBudgetRatio = buyLowRange.div(buyPriceRange);
-  const buyOrderYint = new Decimal(buyBudget).div(buyLowBudgetRatio);
-  const geoMeanOfBuyRange = buyPriceLow.mul(buyPriceHigh).sqrt();
-  const sellOrderYint = buyOrderYint.div(geoMeanOfBuyRange);
-  const sellHighBudgetRatio = new Decimal(1).minus(buyLowBudgetRatio);
-  const sellBudget = sellOrderYint.mul(sellHighBudgetRatio);
+  const decodedBuyOrder = createFromBuyOrder(
+    baseTokenDecimals,
+    quoteTokenDecimals,
+    buyPriceLow,
+    buyPriceMarginal,
+    buyPriceHigh,
+    buyBudget
+  );
+
+  const decodedSellOrder = createFromSellOrder(
+    baseTokenDecimals,
+    quoteTokenDecimals,
+    sellPriceLow,
+    sellPriceMarginal,
+    sellPriceHigh,
+    '0'
+  );
+
+  const sellLiquidity = calculateRequiredLiquidity(
+    decodedBuyOrder,
+    decodedSellOrder
+  );
+
+  const sellBudget = formatUnits(sellLiquidity, baseTokenDecimals);
 
   return sellBudget;
 }
 
 export function calculateOverlappingBuyBudget(
-  buyPriceLow: Decimal, // in quote tkn per 1 base tkn
-  sellPriceHigh: Decimal, // in quote tkn per 1 base tkn
-  marketPrice: Decimal, // in quote tkn per 1 base tkn
-  spreadPercentage: Decimal, // e.g. for 0.1% pass '0.1'
-  sellBudget: Decimal, // in quote tkn
-  quoteTokenDecimals: number
-): Decimal {
+  baseTokenDecimals: number,
+  quoteTokenDecimals: number,
+  buyPriceLow: string, // in quote tkn per 1 base tkn
+  sellPriceHigh: string, // in quote tkn per 1 base tkn
+  marketPrice: string, // in quote tkn per 1 base tkn
+  spreadPercentage: string, // e.g. for 0.1% pass '0.1'
+  sellBudget: string // in base tkn
+): string {
   // zero sell budget means zero buy budget
-  if (sellBudget.isZero()) return new Decimal(0);
+  if (sellBudget === '0') return '0';
 
-  const { sellPriceLow, sellPriceMarginal, buyPriceMarginal } =
+  const { sellPriceLow, buyPriceHigh, sellPriceMarginal, buyPriceMarginal } =
     calculateOverlappingPriceRanges(
       buyPriceLow,
       sellPriceHigh,
       marketPrice,
-      spreadPercentage,
-      quoteTokenDecimals
+      spreadPercentage
     );
 
   // if sell range takes the entire range then there's zero buy budget
-  if (buyPriceMarginal.lte(buyPriceLow)) return new Decimal(0);
+  if (new Decimal(buyPriceMarginal).lte(buyPriceLow)) return '0';
 
   // if sell range is zero there's no point to this call
-  if (sellPriceMarginal.gte(sellPriceHigh)) {
+  if (new Decimal(sellPriceMarginal).gte(sellPriceHigh)) {
     throw new Error(
       'calculateOverlappingBuyBudget called with zero sell range and non zero sell budget'
     );
   }
 
-  const sellPriceRange = sellPriceHigh.minus(sellPriceLow);
-  const sellHighRange = sellPriceHigh.minus(sellPriceMarginal);
-  const sellHighBudgetRatio = sellHighRange.div(sellPriceRange);
-  const sellOrderYint = new Decimal(sellBudget).div(sellHighBudgetRatio);
-  const geoMeanOfSellRange = sellPriceHigh.mul(sellPriceLow).sqrt();
-  const buyOrderYint = sellOrderYint.mul(geoMeanOfSellRange);
-  const buyLowBudgetRatio = new Decimal(1).minus(sellHighBudgetRatio);
-  const buyBudget = buyOrderYint.mul(buyLowBudgetRatio);
+  const decodedBuyOrder = createFromBuyOrder(
+    baseTokenDecimals,
+    quoteTokenDecimals,
+    buyPriceLow,
+    buyPriceMarginal,
+    buyPriceHigh,
+    '0'
+  );
+
+  const decodedSellOrder = createFromSellOrder(
+    baseTokenDecimals,
+    quoteTokenDecimals,
+    sellPriceLow,
+    sellPriceMarginal,
+    sellPriceHigh,
+    sellBudget
+  );
+
+  const buyLiquidity = calculateRequiredLiquidity(
+    decodedSellOrder,
+    decodedBuyOrder
+  );
+
+  const buyBudget = formatUnits(buyLiquidity, quoteTokenDecimals);
+
   return buyBudget;
 }

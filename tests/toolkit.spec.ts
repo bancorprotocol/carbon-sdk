@@ -95,10 +95,134 @@ describe('Toolkit', () => {
       },
       composer: {
         updateStrategy: sinon.stub(),
+        createStrategy: sinon.stub(),
       },
     };
     cacheMock = sinon.createStubInstance(ChainCache);
     decimalFetcher = () => 18;
+  });
+
+  describe('createBuySellStrategy', () => {
+    it('should create the correct strategy', async () => {
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.createBuySellStrategy(
+        expectedStrategies[1].baseToken,
+        expectedStrategies[1].quoteToken,
+        expectedStrategies[1].buyPriceLow,
+        expectedStrategies[1].buyPriceMarginal,
+        expectedStrategies[1].buyPriceHigh,
+        expectedStrategies[1].buyBudget,
+        expectedStrategies[1].sellPriceLow,
+        expectedStrategies[1].sellPriceMarginal,
+        expectedStrategies[1].sellPriceHigh,
+        expectedStrategies[1].sellBudget
+      );
+
+      const createArgs = apiMock.composer.createStrategy.getCall(0).args;
+      expect(createArgs[2].A.toString()).to.equal(
+        encodedStrategies[1].order0.A.toString()
+      );
+      expect(createArgs[2].B.toString()).to.equal(
+        encodedStrategies[1].order0.B.toString()
+      );
+      expect(createArgs[2].y.toString()).to.equal(
+        encodedStrategies[1].order0.y.toString()
+      );
+      expect(createArgs[2].z.toString()).to.equal(
+        encodedStrategies[1].order0.z.toString()
+      );
+      expect(createArgs[3].A.toString()).to.equal(
+        encodedStrategies[1].order1.A.toString()
+      );
+      expect(createArgs[3].B.toString()).to.equal(
+        encodedStrategies[1].order1.B.toString()
+      );
+      expect(createArgs[3].y.toString()).to.equal(
+        encodedStrategies[1].order1.y.toString()
+      );
+      expect(createArgs[3].z.toString()).to.equal(
+        encodedStrategies[1].order1.z.toString()
+      );
+    });
+
+    it('should create the correct strategy when budget is 0', async () => {
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.createBuySellStrategy(
+        expectedStrategies[1].baseToken,
+        expectedStrategies[1].quoteToken,
+        expectedStrategies[1].buyPriceLow,
+        expectedStrategies[1].buyPriceMarginal,
+        expectedStrategies[1].buyPriceHigh,
+        '0',
+        expectedStrategies[1].sellPriceLow,
+        expectedStrategies[1].sellPriceMarginal,
+        expectedStrategies[1].sellPriceHigh,
+        expectedStrategies[1].sellBudget
+      );
+
+      const createArgs = apiMock.composer.createStrategy.getCall(0).args;
+      expect(createArgs[2].A.toString()).to.equal(
+        encodedStrategies[1].order0.A.toString()
+      );
+      expect(createArgs[2].B.toString()).to.equal(
+        encodedStrategies[1].order0.B.toString()
+      );
+      expect(createArgs[2].y.toString()).to.equal(
+        encodedStrategies[1].order0.y.toString()
+      );
+      expect(createArgs[2].z.toString()).to.equal(
+        encodedStrategies[1].order0.z.toString()
+      );
+      expect(createArgs[3].A.toString()).to.equal(
+        encodedStrategies[1].order1.A.toString()
+      );
+      expect(createArgs[3].B.toString()).to.equal(
+        encodedStrategies[1].order1.B.toString()
+      );
+      expect(createArgs[3].y.toString()).to.equal('0');
+      expect(createArgs[3].z.toString()).to.equal(
+        '39614081257132168796771975168'
+      );
+    });
+
+    it('should create the correct range strategy when marginal price is in between the range', async () => {
+      const strategy = {
+        id: '0',
+        baseToken: 'abc',
+        quoteToken: 'xyz',
+        buyPriceLow: '1500',
+        buyPriceMarginal: '1845',
+        buyPriceHigh: '1980',
+        buyBudget: '100',
+        sellPriceLow: '1550',
+        sellPriceMarginal: '1890',
+        sellPriceHigh: '2000',
+        sellBudget: '0',
+      };
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.createBuySellStrategy(
+        strategy.baseToken,
+        strategy.quoteToken,
+        strategy.buyPriceLow,
+        strategy.buyPriceMarginal,
+        strategy.buyPriceHigh,
+        strategy.buyBudget,
+        strategy.sellPriceLow,
+        strategy.sellPriceMarginal,
+        strategy.sellPriceHigh,
+        strategy.sellBudget
+      );
+
+      const createArgs = apiMock.composer.createStrategy.getCall(0).args;
+      expect(createArgs[2].A.toString()).to.equal('855499739024');
+      expect(createArgs[2].B.toString()).to.equal('6293971818901');
+      expect(createArgs[2].y.toString()).to.equal('0');
+      expect(createArgs[2].z.toString()).to.equal('79234223680881057');
+      expect(createArgs[3].A.toString()).to.equal('1047345780991496');
+      expect(createArgs[3].B.toString()).to.equal('1859185469197450');
+      expect(createArgs[3].y.toString()).to.equal('100000000000000000000');
+      expect(createArgs[3].z.toString()).to.equal('136549788505388468681');
+    });
   });
 
   describe('updateStrategy', () => {
@@ -284,6 +408,86 @@ describe('Toolkit', () => {
       expect(updateArgs[4][0].y.toString()).to.equal('1');
       expect(updateArgs[4][0].z.toString()).to.equal('1');
     });
+
+    it('should properly handle setting budget to an order with no budget - keeping A, B and z when passed MarginalPriceOptions.maintain', async () => {
+      const encodedEmptyStrategy = {
+        id: '1',
+        token0: 'xyz',
+        token1: 'abc',
+        order0: {
+          y: '1',
+          z: '1',
+          A: '100',
+          B: '10000',
+        },
+        order1: {
+          y: '0',
+          z: '2000000000000000000',
+          A: '100',
+          B: '10000',
+        },
+      };
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.updateStrategy(
+        encodedEmptyStrategy.id.toString(),
+        encodedEmptyStrategy,
+        {
+          buyBudget: '1',
+        },
+        MarginalPriceOptions.maintain
+      );
+      const updateArgs = apiMock.composer.updateStrategy.getCall(0).args;
+      expect(updateArgs[4][1].A.toString()).to.equal('100');
+      expect(updateArgs[4][1].B.toString()).to.equal('10000');
+      expect(updateArgs[4][1].y.toString()).to.equal('1000000000000000000');
+      expect(updateArgs[4][1].z.toString()).to.equal('2000000000000000000');
+
+      // order 0 is supposed to remain the same
+      expect(updateArgs[4][0].A.toString()).to.equal('100');
+      expect(updateArgs[4][0].B.toString()).to.equal('10000');
+      expect(updateArgs[4][0].y.toString()).to.equal('1');
+      expect(updateArgs[4][0].z.toString()).to.equal('1');
+    });
+
+    it('should properly handle setting budget to an order with no budget - keeping A, B but setting z to the now bigger y when passed MarginalPriceOptions.maintain', async () => {
+      const encodedEmptyStrategy = {
+        id: '1',
+        token0: 'xyz',
+        token1: 'abc',
+        order0: {
+          y: '1',
+          z: '1',
+          A: '100',
+          B: '10000',
+        },
+        order1: {
+          y: '0',
+          z: '2000000000000000000',
+          A: '100',
+          B: '10000',
+        },
+      };
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.updateStrategy(
+        encodedEmptyStrategy.id.toString(),
+        encodedEmptyStrategy,
+        {
+          buyBudget: '3',
+        },
+        MarginalPriceOptions.maintain
+      );
+      const updateArgs = apiMock.composer.updateStrategy.getCall(0).args;
+      expect(updateArgs[4][1].A.toString()).to.equal('100');
+      expect(updateArgs[4][1].B.toString()).to.equal('10000');
+      expect(updateArgs[4][1].y.toString()).to.equal('3000000000000000000');
+      expect(updateArgs[4][1].z.toString()).to.equal('3000000000000000000');
+
+      // order 0 is supposed to remain the same
+      expect(updateArgs[4][0].A.toString()).to.equal('100');
+      expect(updateArgs[4][0].B.toString()).to.equal('10000');
+      expect(updateArgs[4][0].y.toString()).to.equal('1');
+      expect(updateArgs[4][0].z.toString()).to.equal('1');
+    });
   });
 
   describe('overlappingStrategies', () => {
@@ -317,19 +521,20 @@ describe('Toolkit', () => {
         '1',
         '100'
       );
-      expect(result).to.equal('0.024939801923642185');
+      expect(result).to.equal('0.021054379766414182');
     });
     it('should calculate strategy buy budget', async () => {
       const toolkit = new Toolkit(apiMock, cacheMock, () => 6);
       const result = await toolkit.calculateOverlappingStrategyBuyBudget(
+        'baseToken',
         'quoteToken',
         '1500',
         '2000',
         '1845',
         '1',
-        '0.024939801923642185'
+        '0.021054379766414182'
       );
-      expect(result).to.equal('100.999999');
+      expect(result).to.equal('100.99701');
     });
   });
 

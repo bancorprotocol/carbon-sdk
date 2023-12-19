@@ -1,5 +1,10 @@
 import { expect } from 'chai';
-import { encodeOrder, decodeOrder } from '../src/utils/encoders';
+import {
+  encodeOrder,
+  decodeOrder,
+  calculateRequiredLiquidity,
+  calculateCorrelatedZ,
+} from '../src/utils/encoders';
 import {
   buildStrategyObject,
   encodeStrategy,
@@ -34,6 +39,34 @@ describe('encoders', () => {
       expect(encodedOrder.B.toString()).to.equal('199032864766430');
     });
 
+    it('should use z override', () => {
+      const order = {
+        liquidity: '100',
+        lowestRate: '0.5',
+        highestRate: '1',
+        marginalRate: '1',
+      };
+      const encodedOrder = encodeOrder(order, BigNumber.from('200'));
+      expect(encodedOrder.y.toString()).to.equal('100');
+      expect(encodedOrder.z.toString()).to.equal('200');
+      expect(encodedOrder.A.toString()).to.equal('82442111944226');
+      expect(encodedOrder.B.toString()).to.equal('199032864766430');
+    });
+
+    it('should not throw an exception when marginal equals low AND liquidity equals 0', () => {
+      const order = {
+        liquidity: '0',
+        lowestRate: '0.5',
+        highestRate: '1',
+        marginalRate: '0.5',
+      };
+      const encodedOrder = encodeOrder(order);
+      expect(encodedOrder.y.toString()).to.equal('0');
+      expect(encodedOrder.z.toString()).to.equal('0');
+      expect(encodedOrder.A.toString()).to.equal('82442111944226');
+      expect(encodedOrder.B.toString()).to.equal('199032864766430');
+    });
+
     it('should return the expected value when all rates are the same', () => {
       const order = {
         liquidity: '100',
@@ -61,7 +94,8 @@ describe('encoders', () => {
         'Either one of the following must hold:\n' +
           '- highestRate >= marginalRate > lowestRate\n' +
           '- highestRate == marginalRate == lowestRate\n' +
-          `(highestRate = ${order.highestRate}, marginalRate = ${order.marginalRate}, lowestRate = ${order.lowestRate})`
+          '- (highestRate > marginalRate == lowestRate) AND liquidity == 0\n' +
+          `(highestRate = ${order.highestRate}, marginalRate = ${order.marginalRate}, lowestRate = ${order.lowestRate}), liquidity = ${order.liquidity}`
       );
     });
 
@@ -175,6 +209,58 @@ describe('encoders', () => {
       expect(encodedStrategy.order1.B.toString()).to.equal('344735034');
     });
   });
+
+  describe('calculateRequiredLiquidity', () => {
+    it('should return the expected value', () => {
+      const knownOrder = {
+        liquidity: '50000000000',
+        lowestRate: '0.000000000005',
+        highestRate: '0.000000000007992007',
+        marginalRate: '0.000000000006576712',
+      };
+      const vagueOrder = {
+        liquidity: '?',
+        lowestRate: '125000000000',
+        highestRate:
+          '199800199800.1998001998001998001998001998001998001998001998001998001998001998001998001998001998001998',
+        marginalRate:
+          '151899757097.0984260299069355758193207073242569177807627767822436475141832600695488227844774853420532',
+      };
+      const requiredLiquidity = calculateRequiredLiquidity(
+        knownOrder,
+        vagueOrder
+      );
+      expect(requiredLiquidity).to.equal('5512064959222299682849');
+    });
+  });
+
+  describe('calculateCorrelatedZ', () => {
+    it('should return the expected value', () => {
+      const order = {
+        liquidity: '50000000000',
+        lowestRate: '0.000000000005',
+        highestRate: '0.000000000007992007',
+        marginalRate: '0.000000000006576712',
+      };
+      const z = calculateCorrelatedZ(order);
+      expect(z.toString()).to.equal('14231343545390424616539');
+    });
+
+    it('should not crush over precision', () => {
+      const order = {
+        liquidity: '50000000000',
+        lowestRate:
+          '0.000000001999999999744536705436732979947747767290977907207738528683194090262986719608306884765625',
+        highestRate:
+          '0.0000000020999999999592552453067291726033776104597843893684316896042219013907015323638916015625',
+        marginalRate:
+          '0.0000000020999999999592552453067291726033776104597843893684316896042219013907015323638916015625',
+      };
+      const z = calculateCorrelatedZ(order);
+      expect(z.toString()).to.equal('24397501825508179420');
+    });
+  });
+
   describe('createOrders', () => {
     it('should return the expected orders given valid input', () => {
       const baseTokenDecimals = 18;
