@@ -9,6 +9,7 @@ import {
   formatUnits,
   parseUnits,
   trimDecimal,
+  BigNumberMax,
 } from '../utils/numerics';
 
 // Internal modules
@@ -1041,40 +1042,50 @@ export class Toolkit {
 
     if (buyBudget !== undefined) {
       if (isMarginalPriceValue(buyPriceMarginal)) {
-        // do nothing - z was already set
-      } else if (
-        buyPriceMarginal === undefined ||
-        buyPriceMarginal === MarginalPriceOptions.reset ||
-        encodedBN.order1.y.isZero()
-      ) {
-        newEncodedStrategy.order1.z = newEncodedStrategy.order1.y;
+        // do nothing - z was already calculated and set
       } else if (buyPriceMarginal === MarginalPriceOptions.maintain) {
-        // maintain the current ratio of y/z
-        newEncodedStrategy.order1.z = mulDiv(
-          encodedBN.order1.z,
-          newEncodedStrategy.order1.y,
-          encodedBN.order1.y
-        );
+        if (encodedBN.order1.y.isZero()) {
+          // When depositing into an empty order and instructed to MAINTAIN - keep the old z, unless it's lower than the new y
+          newEncodedStrategy.order1.z = BigNumberMax(
+            encodedBN.order1.z,
+            newEncodedStrategy.order1.y
+          );
+        } else {
+          // maintain the current ratio of y/z
+          newEncodedStrategy.order1.z = mulDiv(
+            encodedBN.order1.z,
+            newEncodedStrategy.order1.y,
+            encodedBN.order1.y
+          );
+        }
+      } else {
+        // reset behavior is the default
+        newEncodedStrategy.order1.z = newEncodedStrategy.order1.y;
       }
     }
 
     // if we have budget to set we handle reset (z <- y) and maintain (maintain y:z ratio). We don't handle marginal price value because it's expressed in z
     if (sellBudget !== undefined) {
       if (isMarginalPriceValue(sellPriceMarginal)) {
-        // do nothing - z was already set
-      } else if (
-        sellPriceMarginal === undefined ||
-        sellPriceMarginal === MarginalPriceOptions.reset ||
-        encodedBN.order0.y.isZero()
-      ) {
-        newEncodedStrategy.order0.z = newEncodedStrategy.order0.y;
+        // do nothing - z was already calculated and set
       } else if (sellPriceMarginal === MarginalPriceOptions.maintain) {
-        // maintain the current ratio of y/z
-        newEncodedStrategy.order0.z = mulDiv(
-          encodedBN.order0.z,
-          newEncodedStrategy.order0.y,
-          encodedBN.order0.y
-        );
+        if (encodedBN.order0.y.isZero()) {
+          // When depositing into an empty order and instructed to MAINTAIN - keep the old z, unless it's lower than the new y
+          newEncodedStrategy.order0.z = BigNumberMax(
+            encodedBN.order0.z,
+            newEncodedStrategy.order0.y
+          );
+        } else {
+          // maintain the current ratio of y/z
+          newEncodedStrategy.order0.z = mulDiv(
+            encodedBN.order0.z,
+            newEncodedStrategy.order0.y,
+            encodedBN.order0.y
+          );
+        }
+      } else {
+        // reset behavior is the default
+        newEncodedStrategy.order0.z = newEncodedStrategy.order0.y;
       }
     }
 
