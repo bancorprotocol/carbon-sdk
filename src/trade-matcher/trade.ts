@@ -49,7 +49,10 @@ const getEncodedTradeBySourceAmount = (
 
   const temp4 = mulDivC(temp1, temp1, factor);
   const temp5 = mulDivC(temp3, A, factor);
-  return mulDivF(temp2, temp3.div(factor), add(temp4, temp5));
+  if (temp4.add(temp5).lte(MAX_UINT256)) {
+    return mulDivF(temp2, temp3.div(factor), temp4.add(temp5));
+  }
+  return temp2.div(add(A, mulDivC(temp1, temp1, temp3)));
 };
 
 //
