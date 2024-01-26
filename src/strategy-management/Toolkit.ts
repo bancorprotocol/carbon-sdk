@@ -8,7 +8,6 @@ import {
   tenPow,
   formatUnits,
   parseUnits,
-  trimDecimal,
   BigNumberMax,
 } from '../utils/numerics';
 
@@ -755,22 +754,12 @@ export class Toolkit {
       spreadPercentage
     );
 
-    const result = {
-      buyPriceLow: trimDecimal(buyPriceLow, quoteDecimals),
-      buyPriceHigh: trimDecimal(prices.buyPriceHigh, quoteDecimals),
-      buyPriceMarginal: trimDecimal(prices.buyPriceMarginal, quoteDecimals),
-      sellPriceLow: trimDecimal(prices.sellPriceLow, quoteDecimals),
-      sellPriceHigh: trimDecimal(sellPriceHigh, quoteDecimals),
-      sellPriceMarginal: trimDecimal(prices.sellPriceMarginal, quoteDecimals),
-      marketPrice: trimDecimal(marketPrice, quoteDecimals),
-    };
-
     logger.debug('calculateOverlappingStrategyPrices info:', {
       quoteDecimals,
-      result,
+      prices,
     });
 
-    return result;
+    return { buyPriceLow, marketPrice, sellPriceHigh, ...prices };
   }
 
   /**
