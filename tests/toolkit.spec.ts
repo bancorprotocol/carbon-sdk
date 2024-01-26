@@ -494,7 +494,6 @@ describe('Toolkit', () => {
     it('should calculate strategy prices', async () => {
       const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
       const result = await toolkit.calculateOverlappingStrategyPrices(
-        'quoteToken',
         '1500.0000000000000000001',
         '2000',
         '1845',
