@@ -8,7 +8,6 @@ import {
   tenPow,
   formatUnits,
   parseUnits,
-  trimDecimal,
   BigNumberMax,
 } from '../utils/numerics';
 
@@ -714,7 +713,6 @@ export class Toolkit {
   /**
    * Calculate the overlapping strategy prices. Returns it with correct decimals
    *
-   * @param {string} quoteToken - The address of the quote token.
    * @param {string} buyPriceLow - The minimum buy price for the strategy, in in `quoteToken` per 1 `baseToken`, as a string.
    * @param {string} sellPriceHigh - The maximum sell price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
    * @param {string} marketPrice - The market price, in `quoteToken` per 1 `baseToken`, as a string.
@@ -730,7 +728,6 @@ export class Toolkit {
    * }>} The calculated overlapping strategy prices.
    */
   public async calculateOverlappingStrategyPrices(
-    quoteToken: string,
     buyPriceLow: string,
     sellPriceHigh: string,
     marketPrice: string,
@@ -746,8 +743,6 @@ export class Toolkit {
   }> {
     logger.debug('calculateOverlappingStrategyPrices called', arguments);
 
-    const decimals = this._decimals;
-    const quoteDecimals = await decimals.fetchDecimals(quoteToken);
     const prices = calculateOverlappingPriceRanges(
       buyPriceLow,
       sellPriceHigh,
@@ -755,22 +750,11 @@ export class Toolkit {
       spreadPercentage
     );
 
-    const result = {
-      buyPriceLow: trimDecimal(buyPriceLow, quoteDecimals),
-      buyPriceHigh: trimDecimal(prices.buyPriceHigh, quoteDecimals),
-      buyPriceMarginal: trimDecimal(prices.buyPriceMarginal, quoteDecimals),
-      sellPriceLow: trimDecimal(prices.sellPriceLow, quoteDecimals),
-      sellPriceHigh: trimDecimal(sellPriceHigh, quoteDecimals),
-      sellPriceMarginal: trimDecimal(prices.sellPriceMarginal, quoteDecimals),
-      marketPrice: trimDecimal(marketPrice, quoteDecimals),
-    };
-
     logger.debug('calculateOverlappingStrategyPrices info:', {
-      quoteDecimals,
-      result,
+      prices,
     });
 
-    return result;
+    return { buyPriceLow, marketPrice, sellPriceHigh, ...prices };
   }
 
   /**
