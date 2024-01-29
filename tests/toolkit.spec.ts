@@ -491,27 +491,6 @@ describe('Toolkit', () => {
   });
 
   describe('overlappingStrategies', () => {
-    it('should calculate strategy prices', async () => {
-      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
-      const result = await toolkit.calculateOverlappingStrategyPrices(
-        '1500.0000000000000000001',
-        '2000',
-        '1845',
-        '1'
-      );
-      expect(result).to.deep.equal({
-        buyPriceLow: '1500.0000000000000000001',
-        buyPriceHigh:
-          '1980.19801980198019801980198019801980198019801980198019801980198019801980198019801980198019801980198',
-        buyPriceMarginal:
-          '1835.843615937429955302430075647665154941937455663234267436323585007036269526077757760470083423519019',
-        sellPriceLow: '1515.000000000000000000101',
-        sellPriceHigh: '2000',
-        sellPriceMarginal:
-          '1854.202052096804254855454376404141806491356830219866610110686820857106632221338535338074784257754209',
-        marketPrice: '1845',
-      });
-    });
     it('should calculate strategy sell budget', async () => {
       const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
       const result = await toolkit.calculateOverlappingStrategySellBudget(

@@ -372,17 +372,39 @@ export function enforcePriceRange(
   return marginalPrice;
 }
 
-export function calculateOverlappingPriceRanges(
-  buyPriceLow: string, // in quote tkn per 1 base tkn
-  sellPriceHigh: string, // in quote tkn per 1 base tkn
-  marketPrice: string, // in quote tkn per 1 base tkn
-  spreadPercentage: string // e.g. for 0.1% pass '0.1'
+/**
+ * Calculate the overlapping strategy prices. Returns it with correct decimals
+ *
+ * @param {string} buyPriceLow - The minimum buy price for the strategy, in in `quoteToken` per 1 `baseToken`, as a string.
+ * @param {string} sellPriceHigh - The maximum sell price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
+ * @param {string} marketPrice - The market price, in `quoteToken` per 1 `baseToken`, as a string.
+ * @param {string} spreadPercentage - The spread percentage, e.g. for 10%, enter `10`.
+ * @return {{
+ *   buyPriceLow: string;
+ *   buyPriceHigh: string;
+ *   buyPriceMarginal: string;
+ *   sellPriceLow: string;
+ *   sellPriceHigh: string;
+ *   sellPriceMarginal: string;
+ *   marketPrice: string;
+ * }} The calculated overlapping strategy prices.
+ */
+export function calculateOverlappingPrices(
+  buyPriceLow: string,
+  sellPriceHigh: string,
+  marketPrice: string,
+  spreadPercentage: string
 ): {
+  buyPriceLow: string;
   buyPriceHigh: string;
   buyPriceMarginal: string;
   sellPriceLow: string;
+  sellPriceHigh: string;
   sellPriceMarginal: string;
+  marketPrice: string;
 } {
+  logger.debug('calculateOverlappingPrices called', arguments);
+
   const spreadFactor = new Decimal(spreadPercentage).div(100).plus(1);
   const buyPriceHigh = new Decimal(sellPriceHigh).div(spreadFactor);
   const sellPriceLow = new Decimal(buyPriceLow).mul(spreadFactor);
@@ -401,12 +423,21 @@ export function calculateOverlappingPriceRanges(
     new Decimal(marketPrice).mul(spreadFactor.sqrt())
   );
 
-  return {
+  const prices = {
     buyPriceHigh: buyPriceHigh.toString(),
     buyPriceMarginal: buyPriceMarginal.toString(),
     sellPriceLow: sellPriceLow.toString(),
     sellPriceMarginal: sellPriceMarginal.toString(),
+    buyPriceLow,
+    sellPriceHigh,
+    marketPrice,
   };
+
+  logger.debug('calculateOverlappingPrices info:', {
+    prices,
+  });
+
+  return prices;
 }
 
 export function calculateOverlappingSellBudget(
@@ -418,11 +449,12 @@ export function calculateOverlappingSellBudget(
   spreadPercentage: string, // e.g. for 0.1% pass '0.1'
   buyBudget: string // in quote tkn
 ): string {
+  logger.debug('calculateOverlappingSellBudget called', arguments);
   // zero buy budget means zero sell budget
   if (buyBudget === '0') return '0';
 
   const { buyPriceHigh, sellPriceLow, sellPriceMarginal, buyPriceMarginal } =
-    calculateOverlappingPriceRanges(
+    calculateOverlappingPrices(
       buyPriceLow,
       sellPriceHigh,
       marketPrice,
@@ -464,6 +496,10 @@ export function calculateOverlappingSellBudget(
 
   const sellBudget = formatUnits(sellLiquidity, baseTokenDecimals);
 
+  logger.debug('calculateOverlappingSellBudget info:', {
+    sellBudget,
+  });
+
   return sellBudget;
 }
 
@@ -476,11 +512,12 @@ export function calculateOverlappingBuyBudget(
   spreadPercentage: string, // e.g. for 0.1% pass '0.1'
   sellBudget: string // in base tkn
 ): string {
+  logger.debug('calculateOverlappingBuyBudget called', arguments);
   // zero sell budget means zero buy budget
   if (sellBudget === '0') return '0';
 
   const { sellPriceLow, buyPriceHigh, sellPriceMarginal, buyPriceMarginal } =
-    calculateOverlappingPriceRanges(
+    calculateOverlappingPrices(
       buyPriceLow,
       sellPriceHigh,
       marketPrice,
@@ -521,6 +558,10 @@ export function calculateOverlappingBuyBudget(
   );
 
   const buyBudget = formatUnits(buyLiquidity, quoteTokenDecimals);
+
+  logger.debug('calculateOverlappingBuyBudget info:', {
+    buyBudget,
+  });
 
   return buyBudget;
 }

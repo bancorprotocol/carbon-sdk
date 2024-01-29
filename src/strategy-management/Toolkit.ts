@@ -50,7 +50,6 @@ import {
   addFee,
   buildStrategyObject,
   calculateOverlappingBuyBudget,
-  calculateOverlappingPriceRanges,
   calculateOverlappingSellBudget,
   decodeStrategy,
   encodeStrategy,
@@ -708,53 +707,6 @@ export class Toolkit {
       parseUnits(minReturn, targetDecimals),
       overrides
     );
-  }
-
-  /**
-   * Calculate the overlapping strategy prices. Returns it with correct decimals
-   *
-   * @param {string} buyPriceLow - The minimum buy price for the strategy, in in `quoteToken` per 1 `baseToken`, as a string.
-   * @param {string} sellPriceHigh - The maximum sell price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
-   * @param {string} marketPrice - The market price, in `quoteToken` per 1 `baseToken`, as a string.
-   * @param {string} spreadPercentage - The spread percentage, e.g. for 10%, enter `10`.
-   * @return {Promise<{
-   *   buyPriceLow: string;
-   *   buyPriceHigh: string;
-   *   buyPriceMarginal: string;
-   *   sellPriceLow: string;
-   *   sellPriceHigh: string;
-   *   sellPriceMarginal: string;
-   *   marketPrice: string;
-   * }>} The calculated overlapping strategy prices.
-   */
-  public async calculateOverlappingStrategyPrices(
-    buyPriceLow: string,
-    sellPriceHigh: string,
-    marketPrice: string,
-    spreadPercentage: string
-  ): Promise<{
-    buyPriceLow: string;
-    buyPriceHigh: string;
-    buyPriceMarginal: string;
-    sellPriceLow: string;
-    sellPriceHigh: string;
-    sellPriceMarginal: string;
-    marketPrice: string;
-  }> {
-    logger.debug('calculateOverlappingStrategyPrices called', arguments);
-
-    const prices = calculateOverlappingPriceRanges(
-      buyPriceLow,
-      sellPriceHigh,
-      marketPrice,
-      spreadPercentage
-    );
-
-    logger.debug('calculateOverlappingStrategyPrices info:', {
-      prices,
-    });
-
-    return { buyPriceLow, marketPrice, sellPriceHigh, ...prices };
   }
 
   /**

@@ -12,7 +12,7 @@ import {
   addFee,
   calculateOverlappingBuyBudget,
   calculateOverlappingSellBudget,
-  calculateOverlappingPriceRanges,
+  calculateOverlappingPrices,
   enforcePriceRange,
 } from '../src/strategy-management';
 import { isAlmostEqual } from './test-utils';
@@ -64,6 +64,23 @@ describe('utils', () => {
       {
         baseTokenDecimals: 18,
         quoteTokenDecimals: 6,
+        buyPriceLow: '1500.0000000000000000001',
+        sellPriceHigh: '2000',
+        marketPrice: '1845',
+        spreadPercentage: '1',
+        buyBudget: '100',
+        buyPriceHigh:
+          '1980.19801980198019801980198019801980198019801980198019801980198019801980198019801980198019801980198',
+        sellPriceLow: '1515.000000000000000000101',
+        buyPriceMarginal:
+          '1835.843615937429955302430075647665154941937455663234267436323585007036269526077757760470083423519019',
+        sellPriceMarginal:
+          '1854.202052096804254855454376404141806491356830219866610110686820857106632221338535338074784257754209',
+        sellBudget: '0.021054379648026716',
+      },
+      {
+        baseTokenDecimals: 18,
+        quoteTokenDecimals: 6,
         buyPriceLow: '5',
         sellPriceHigh: '8',
         marketPrice: '6.58',
@@ -100,7 +117,7 @@ describe('utils', () => {
             buyPriceLow: ${buyPriceLow}, sellPriceHigh: ${sellPriceHigh}, 
             marketPrice: ${marketPrice}, spreadPercentage: ${spreadPercentage}, 
             buyBudget: ${buyBudget}`, () => {
-          const prices = calculateOverlappingPriceRanges(
+          const prices = calculateOverlappingPrices(
             buyPriceLow,
             sellPriceHigh,
             marketPrice,
