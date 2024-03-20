@@ -241,6 +241,43 @@ export class Toolkit {
   }
 
   /**
+   * Gets the strategy by its id
+   *
+   * If the cache is synced, it will return the strategy from the cache.
+   * Otherwise, it will fetch the strategy from the chain.
+   *
+   * @param {string} id - ID of the strategy to fetch.
+   */
+  public async getStrategyById(id: string): Promise<Strategy> {
+    logger.debug('getStrategyById called', arguments);
+
+    let encodedStrategy: EncodedStrategy | undefined;
+
+    if (this._cache) {
+      encodedStrategy = await this._cache.getStrategyById(id);
+    }
+
+    if (encodedStrategy) {
+      logger.debug('getStrategyById fetched from cache');
+    } else {
+      logger.debug('getStrategyById fetching from chain');
+      encodedStrategy = await this._api.reader.strategy(BigNumber.from(id));
+    }
+    const decodedStrategy = decodeStrategy(encodedStrategy);
+
+    const strategy = await parseStrategy(decodedStrategy, this._decimals);
+
+    logger.debug('getStrategyById info:', {
+      id,
+      encodedStrategy,
+      decodedStrategy,
+      strategy,
+    });
+
+    return strategy;
+  }
+
+  /**
    * Gets all the strategies that belong to the given pair
    *
    * If the cache is synced, it will return the strategies from the cache.

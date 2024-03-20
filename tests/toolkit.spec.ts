@@ -92,6 +92,7 @@ describe('Toolkit', () => {
       reader: {
         getDecimalsByAddress: sinon.stub(),
         strategiesByPair: sinon.stub(),
+        strategy: sinon.stub(),
       },
       composer: {
         updateStrategy: sinon.stub(),
@@ -578,6 +579,30 @@ describe('Toolkit', () => {
       expect(cacheMock.getOrdersByPair.calledWith('sourceToken', 'targetToken'))
         .to.be.true;
       expect(liquidity).to.equal('0');
+    });
+  });
+
+  describe('getStrategyById', () => {
+    it('should fetch strategies from cache if available', async () => {
+      cacheMock.getStrategyById.resolves(encodedStrategies[0]);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      const strategy = await toolkit.getStrategyById('0');
+
+      expect(cacheMock.getStrategyById.calledWith('0')).to.be.true;
+      expect(strategy).to.deep.equal(expectedStrategies[0]);
+    });
+
+    it('should fetch strategies from the chain if not available in cache', async () => {
+      cacheMock.getStrategyById.resolves(undefined);
+
+      apiMock.reader.strategy.resolves(encodedStrategies[0]);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      const strategies = await toolkit.getStrategyById('0');
+
+      expect(apiMock.reader.strategy.calledWith(BigNumber.from('0'))).to.be.true;
+      expect(strategies).to.deep.equal(expectedStrategies[0]);
     });
   });
 
