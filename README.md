@@ -79,7 +79,7 @@ const init = async (
 
 ## Notes
 
-- The SDK Logger supports 3 verbosity levels:
+### 1. The SDK Logger supports 3 verbosity levels:
   - `0` (default) only prints errors and important logs.
   - `1` (debug) prints highly verbose logs.
   - `2` (debug readable) is same as `1` but also converts any BigNumber to an easy to read string (impacting performance).
@@ -89,6 +89,12 @@ const init = async (
 
   ```js
   window.CARBON_DEFI_SDK_VERBOSITY = 2;
+  ```
+
+### 2. For usage with contracts version < 5, without the enhanced range for trade by source:
+
+  ```js
+  window.LEGACY_TRADE_BY_SOURCE_RANGE = true;
   ```
 
 ## Authors

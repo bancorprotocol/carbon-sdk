@@ -1,27 +1,7 @@
 import { BigNumber } from '../utils/numerics';
+import { getRuntimeConfig } from '../runtime-config';
 
-const globalObject = (() => {
-  try {
-    return self;
-  } catch (e) {
-    try {
-      return window;
-    } catch (e) {
-      return global;
-    }
-  }
-})();
-
-function getVerbosityLevel(): number {
-  if (globalObject !== undefined) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return Number((globalObject as any).CARBON_DEFI_SDK_VERBOSITY) || 0;
-  }
-
-  return 0;
-}
-
-const verbosity = getVerbosityLevel();
+const verbosity = getRuntimeConfig().logVerbosityLevel;
 
 function isVerbose(): boolean {
   return verbosity >= 1;
