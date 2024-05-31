@@ -174,7 +174,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     logger.debug('Cache miss for pair', token0, token1, 'resolved');
   }
 
-  public clear(): void {
+  public clear(silent: boolean = false): void {
     const pairs = Object.keys(this._strategiesByPair).map(fromPairKey);
     this._strategiesByPair = {};
     this._strategiesById = {};
@@ -183,7 +183,9 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     this._latestTradesByPair = {};
     this._latestTradesByDirectedPair = {};
     this._blocksMetadata = [];
-    this.emit('onPairDataChanged', pairs);
+    if (!silent) {
+      this.emit('onPairDataChanged', pairs);
+    }
   }
 
   //#region public getters

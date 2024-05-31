@@ -19,7 +19,8 @@ export * from './types';
  */
 export const initSyncedCache = (
   fetcher: Fetcher,
-  cachedData?: string
+  cachedData?: string,
+  maxBlockAge?: number
 ): { cache: ChainCache; startDataSync: () => Promise<void> } => {
   let cache: ChainCache | undefined;
   if (cachedData) {
@@ -30,7 +31,7 @@ export const initSyncedCache = (
     cache = new ChainCache();
   }
 
-  const syncer = new ChainSync(fetcher, cache);
+  const syncer = new ChainSync(fetcher, cache, maxBlockAge);
   cache.setCacheMissHandler(syncer.syncPairData.bind(syncer));
   return { cache, startDataSync: syncer.startDataSync.bind(syncer) };
 };

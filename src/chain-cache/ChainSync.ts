@@ -22,10 +22,12 @@ export class ChainSync {
   // keep the time stamp of last fetch
   private _lastFetch: number = Date.now();
   private _initialSyncDone: boolean = false;
+  private _maxBlockAge?: number;
 
-  constructor(fetcher: Fetcher, chainCache: ChainCache) {
+  constructor(fetcher: Fetcher, chainCache: ChainCache, maxBlockAge?: number) {
     this._fetcher = fetcher;
     this._chainCache = chainCache;
+    this._maxBlockAge = maxBlockAge;
   }
 
   public async startDataSync(): Promise<void> {
@@ -35,9 +37,22 @@ export class ChainSync {
     }
     this._syncCalled = true;
     const blockNumber = await this._fetcher.getBlockNumber();
-    if (this._chainCache.getLatestBlockNumber() === 0) {
+    const latestBlockInCache = this._chainCache.getLatestBlockNumber();
+
+    if (latestBlockInCache === 0) {
       logger.debug('startDataSync - cache is new', arguments);
       // cache starts from scratch so we want to avoid getting events from the beginning of time
+      this._chainCache.applyBatchedUpdates(blockNumber, [], [], [], [], []);
+    } else if (
+      this._maxBlockAge !== undefined &&
+      blockNumber - latestBlockInCache > this._maxBlockAge
+    ) {
+      logger.debug(
+        `startDataSync - cache is too old: current block ${blockNumber}, cache block ${latestBlockInCache}`,
+        arguments
+      );
+      // cache is too old so we want to clear it and avoid getting events from the beginning of time
+      this._chainCache.clear(true);
       this._chainCache.applyBatchedUpdates(blockNumber, [], [], [], [], []);
     }
 
