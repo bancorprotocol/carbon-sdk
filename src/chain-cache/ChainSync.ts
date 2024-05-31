@@ -51,7 +51,8 @@ export class ChainSync {
         `startDataSync - cache is too old: current block ${blockNumber}, cache block ${latestBlockInCache}`,
         arguments
       );
-      // cache starts from scratch so we want to avoid getting events from the beginning of time
+      // cache is too old so we want to clear it and avoid getting events from the beginning of time
+      this._chainCache.clear(true);
       this._chainCache.applyBatchedUpdates(blockNumber, [], [], [], [], []);
     }
 
