@@ -79,7 +79,7 @@ export const isOrderEncodable = (order: DecodedOrder) => {
  * @param {string} y - the second rate
  * @returns {boolean} - true if the rates are equal after scaling, false otherwise
  */
-export const scaleRatesAndCheckIsEqual = (x: string, y: string) => {
+export const areScaledRatesEqual = (x: string, y: string): boolean => {
   const xDec = new Decimal(x);
   const yDec = new Decimal(y);
   const xScaled = DecToBn(encodeRate(xDec));

@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import {
   encodeOrder,
   isOrderEncodable,
-  scaleRatesAndCheckIsEqual,
+  areScaledRatesEqual,
   decodeOrder,
   calculateRequiredLiquidity,
   calculateCorrelatedZ,
@@ -191,23 +191,23 @@ describe('encoders', () => {
     });
   });
 
-  describe('scaleRatesAndCheckIsEqual', () => {
+  describe('areScaledRatesEqual', () => {
     it('should return true when the rates are equal', () => {
       const x = '0.5';
       const y = '0.5';
-      expect(scaleRatesAndCheckIsEqual(x, y)).to.be.true;
+      expect(areScaledRatesEqual(x, y)).to.be.true;
     });
     it('should return false when the rates are not equal', () => {
       const x = '0.5';
       const y = '0.6';
-      expect(scaleRatesAndCheckIsEqual(x, y)).to.be.false;
+      expect(areScaledRatesEqual(x, y)).to.be.false;
     });
     it('should return true when the rates are only equal afr scaling', () => {
       const x =
         '9.999999999999947841981611412981873775987881042119111152377541884561651386320590972900390625';
       const y =
         '9.999999999999973770354085873786350785392842669271401327708947225166629806745858567718077125618947319';
-      expect(scaleRatesAndCheckIsEqual(x, y)).to.be.true;
+      expect(areScaledRatesEqual(x, y)).to.be.true;
     });
   });
 
