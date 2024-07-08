@@ -1,6 +1,8 @@
 import { expect } from 'chai';
 import {
   encodeOrder,
+  isOrderEncodable,
+  scaleRatesAndCheckIsEqual,
   decodeOrder,
   calculateRequiredLiquidity,
   calculateCorrelatedZ,
@@ -99,6 +101,27 @@ describe('encoders', () => {
       );
     });
 
+    it('should throw an exception when high price is higher than mid which is too close to min - so scaled rates are equal', () => {
+      const order = {
+        liquidity: '30424317585815',
+        lowestRate:
+          '9.999999999999947841981611412981873775987881042119111152377541884561651386320590972900390625',
+        highestRate:
+          '99.90009990009982561394106455162611276581802969426471250358190445695072412490844726562500000000000002',
+        marginalRate:
+          '9.999999999999973770354085873786350785392842669271401327708947225166629806745858567718077125618947319',
+      };
+      expect(() => {
+        encodeOrder(order);
+      }).to.throw(
+        'Either one of the following must hold:\n' +
+          '- highestRate >= marginalRate > lowestRate\n' +
+          '- highestRate == marginalRate == lowestRate\n' +
+          '- (highestRate > marginalRate == lowestRate) AND liquidity == 0\n' +
+          `(highestRate = ${order.highestRate}, marginalRate = ${order.marginalRate}, lowestRate = ${order.lowestRate}), liquidity = ${order.liquidity}`
+      );
+    });
+
     it('should return the original order after computing and uncomputing, with tolerance', () => {
       const originalOrder = {
         liquidity: '100000000000000000000',
@@ -141,6 +164,50 @@ describe('encoders', () => {
           '0.000000000000002'
         )
       ).to.be.true;
+    });
+  });
+
+  describe('isOrderEncodable', () => {
+    it('should return false when high price is higher than mid which is too close to min - so scaled rates are equal', () => {
+      const order = {
+        liquidity: '30424317585815',
+        lowestRate:
+          '9.999999999999947841981611412981873775987881042119111152377541884561651386320590972900390625',
+        highestRate:
+          '99.90009990009982561394106455162611276581802969426471250358190445695072412490844726562500000000000002',
+        marginalRate:
+          '9.999999999999973770354085873786350785392842669271401327708947225166629806745858567718077125618947319',
+      };
+      expect(isOrderEncodable(order)).to.be.false;
+    });
+    it('should return true when the order is encodable', () => {
+      const order = {
+        liquidity: '100',
+        lowestRate: '0.5',
+        highestRate: '0.5',
+        marginalRate: '0.5',
+      };
+      expect(isOrderEncodable(order)).to.be.true;
+    });
+  });
+
+  describe('scaleRatesAndCheckIsEqual', () => {
+    it('should return true when the rates are equal', () => {
+      const x = '0.5';
+      const y = '0.5';
+      expect(scaleRatesAndCheckIsEqual(x, y)).to.be.true;
+    });
+    it('should return false when the rates are not equal', () => {
+      const x = '0.5';
+      const y = '0.6';
+      expect(scaleRatesAndCheckIsEqual(x, y)).to.be.false;
+    });
+    it('should return true when the rates are only equal afr scaling', () => {
+      const x =
+        '9.999999999999947841981611412981873775987881042119111152377541884561651386320590972900390625';
+      const y =
+        '9.999999999999973770354085873786350785392842669271401327708947225166629806745858567718077125618947319';
+      expect(scaleRatesAndCheckIsEqual(x, y)).to.be.true;
     });
   });
 
