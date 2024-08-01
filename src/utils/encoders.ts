@@ -10,7 +10,7 @@ function bitLength(value: BigNumber) {
 export const encodeRate = (value: Decimal) => {
   const data = DecToBn(value.sqrt().mul(ONE).floor());
   const length = bitLength(data.div(ONE));
-  return BnToDec(data.shr(length).shl(length));
+  return data.shr(length).shl(length);
 };
 
 export const decodeRate = (value: Decimal) => {
@@ -91,9 +91,9 @@ export const encodeOrder = (
     );
 
   const y = DecToBn(liquidity);
-  const L = DecToBn(encodeRate(lowestRate));
-  const H = DecToBn(encodeRate(highestRate));
-  const M = DecToBn(encodeRate(marginalRate));
+  const L = encodeRate(lowestRate);
+  const H = encodeRate(highestRate);
+  const M = encodeRate(marginalRate);
 
   return {
     y,
@@ -134,11 +134,9 @@ export const calculateRequiredLiquidity = (
   vagueOrder: DecodedOrder
 ): string => {
   const z: BigNumber = calculateCorrelatedZ(knownOrder);
-  const L: BigNumber = DecToBn(encodeRate(new Decimal(vagueOrder.lowestRate)));
-  const H: BigNumber = DecToBn(encodeRate(new Decimal(vagueOrder.highestRate)));
-  const M: BigNumber = DecToBn(
-    encodeRate(new Decimal(vagueOrder.marginalRate))
-  );
+  const L: BigNumber = encodeRate(new Decimal(vagueOrder.lowestRate));
+  const H: BigNumber = encodeRate(new Decimal(vagueOrder.highestRate));
+  const M: BigNumber = encodeRate(new Decimal(vagueOrder.marginalRate));
 
   return z.mul(M.sub(L)).div(H.sub(L)).toString();
 };
