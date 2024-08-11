@@ -29,37 +29,25 @@ const decodeFloat = (value: bigint, one: bigint) => {
   return value % one << BigInt(Number(value / one));
 };
 
-export const encodeScaleInitialRate = (value: Decimal) => {
-  return encodeScale(value.sqrt(), ONE_48);
-};
+export const encodeScaleInitialRate = (value: Decimal) =>
+  encodeScale(value.sqrt(), ONE_48);
+export const decodeScaleInitialRate = (value: Decimal) =>
+  decodeScale(value, ONE_48).pow(2);
 
-export const decodeScaleInitialRate = (value: Decimal) => {
-  return decodeScale(value, ONE_48).pow(2);
-};
+export const encodeScaleMultiFactor = (value: Decimal) =>
+  encodeScale(value.mul(new Decimal(ONE_24.toString())), ONE_24);
+export const decodeScaleMultiFactor = (value: Decimal) =>
+  decodeScale(value, ONE_24).div(new Decimal(ONE_24.toString()));
 
-export const encodeFloatInitialRate = (value: bigint) => {
-  return encodeFloat(value, ONE_48);
-};
+export const encodeFloatInitialRate = (value: bigint) =>
+  encodeFloat(value, ONE_48);
+export const decodeFloatInitialRate = (value: bigint) =>
+  decodeFloat(value, ONE_48);
 
-export const decodeFloatInitialRate = (value: bigint) => {
-  return decodeFloat(value, ONE_48);
-};
-
-export const encodeScaleMultiFactor = (value: Decimal) => {
-  return encodeScale(value.mul(new Decimal(ONE_24.toString())), ONE_24);
-};
-
-export const decodeScaleMultiFactor = (value: Decimal) => {
-  return decodeScale(value, ONE_24).div(new Decimal(ONE_24.toString()));
-};
-
-export const encodeFloatMultiFactor = (value: bigint) => {
-  return encodeFloat(value, ONE_24);
-};
-
-export const decodeFloatMultiFactor = (value: bigint) => {
-  return decodeFloat(value, ONE_24);
-};
+export const encodeFloatMultiFactor = (value: bigint) =>
+  encodeFloat(value, ONE_24);
+export const decodeFloatMultiFactor = (value: bigint) =>
+  decodeFloat(value, ONE_24);
 
 // The smallest rate that, once encoded, will not be zero.
 export const lowestPossibleRate = decodeScaleInitialRate(new Decimal(1));
@@ -194,7 +182,9 @@ export const calculateRequiredLiquidity = (
   const z: bigint = calculateCorrelatedZ(knownOrder);
   const L: bigint = encodeScaleInitialRate(new Decimal(vagueOrder.lowestRate));
   const H: bigint = encodeScaleInitialRate(new Decimal(vagueOrder.highestRate));
-  const M: bigint = encodeScaleInitialRate(new Decimal(vagueOrder.marginalRate));
+  const M: bigint = encodeScaleInitialRate(
+    new Decimal(vagueOrder.marginalRate)
+  );
 
   return ((z * (M - L)) / (H - L)).toString();
 };
@@ -213,4 +203,3 @@ export const calculateCorrelatedZ = (order: DecodedOrder): bigint => {
 
   return DecToBn(capacity.div(geoAverageRate).floor());
 };
-
