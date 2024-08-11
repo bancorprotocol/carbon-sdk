@@ -7,37 +7,37 @@ function bitLength(value: BigNumber) {
     : 0;
 }
 
-export const encodeScaleInitialRate = (value: Decimal) => {
-  return encodeScale(value.sqrt(), ONE_48);
-};
+function encodeScale(value: Decimal, one: number) {
+  const data = DecToBn(value.mul(one).floor());
+  const length = bitLength(data.div(one));
+  return data.shr(length).shl(length);
+}
 
-export const decodeScaleInitialRate = (value: Decimal) => {
-  return decodeScale(value, ONE_48).pow(2);
-};
+function decodeScale(value: Decimal, one: number) {
+  return value.div(one);
+}
 
-export const encodeFloatInitialRate = (value: BigNumber) => {
-  return encodeFloat(value, ONE_48);
-};
+function encodeFloat(value: BigNumber, one: number) {
+  const exponent = bitLength(value.div(one));
+  const mantissa = value.shr(exponent);
+  return BigNumber.from(one).mul(exponent).or(mantissa);
+}
 
-export const decodeFloatInitialRate = (value: BigNumber) => {
-  return decodeFloat(value, ONE_48);
-};
+function decodeFloat(value: BigNumber, one: number) {
+  return value.mod(one).shl(value.div(one).toNumber());
+}
 
-export const encodeScaleMultiFactor = (value: Decimal) => {
-  return encodeScale(value.mul(ONE_24), ONE_24);
-};
+export const encodeScaleInitialRate = (value: Decimal) => encodeScale(value.sqrt(), ONE_48);
+export const decodeScaleInitialRate = (value: Decimal) => decodeScale(value, ONE_48).pow(2);
 
-export const decodeScaleMultiFactor = (value: Decimal) => {
-  return decodeScale(value, ONE_24).div(ONE_24);
-};
+export const encodeScaleMultiFactor = (value: Decimal) => encodeScale(value.mul(ONE_24), ONE_24);
+export const decodeScaleMultiFactor = (value: Decimal) => decodeScale(value, ONE_24).div(ONE_24);
 
-export const encodeFloatMultiFactor = (value: BigNumber) => {
-  return encodeFloat(value, ONE_24);
-};
+export const encodeFloatInitialRate = (value: BigNumber) => encodeFloat(value, ONE_48);
+export const decodeFloatInitialRate = (value: BigNumber) => decodeFloat(value, ONE_48);
 
-export const decodeFloatMultiFactor = (value: BigNumber) => {
-  return decodeFloat(value, ONE_24);
-};
+export const encodeFloatMultiFactor = (value: BigNumber) => encodeFloat(value, ONE_24);
+export const decodeFloatMultiFactor = (value: BigNumber) => decodeFloat(value, ONE_24);
 
 export const encodeOrders = ([order0, order1]: [DecodedOrder, DecodedOrder]): [
   EncodedOrder,
@@ -166,24 +166,4 @@ export const calculateCorrelatedZ = (order: DecodedOrder): BigNumber => {
   const geoAverageRate: Decimal = lowestRate.mul(highestRate).sqrt();
 
   return DecToBn(capacity.div(geoAverageRate).floor());
-};
-
-const encodeScale = (value: Decimal, one: number) => {
-  const data = DecToBn(value.mul(one).floor());
-  const length = bitLength(data.div(one));
-  return data.shr(length).shl(length);
-};
-
-const decodeScale = (value: Decimal, one: number) => {
-  return value.div(one);
-};
-
-const encodeFloat = (value: BigNumber, one: number) => {
-  const exponent = bitLength(value.div(one));
-  const mantissa = value.shr(exponent);
-  return BigNumber.from(one).mul(exponent).or(mantissa);
-};
-
-const decodeFloat = (value: BigNumber, one: number) => {
-  return value.mod(one).shl(value.div(one).toNumber());
 };
