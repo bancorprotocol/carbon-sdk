@@ -2,6 +2,14 @@ import { expect } from 'chai';
 import {
   encodeOrder,
   decodeOrder,
+  encodeScaleInitialRate,
+  decodeScaleInitialRate,
+  encodeFloatInitialRate,
+  decodeFloatInitialRate,
+  encodeScaleMultiFactor,
+  decodeScaleMultiFactor,
+  encodeFloatMultiFactor,
+  decodeFloatMultiFactor,
   calculateRequiredLiquidity,
   calculateCorrelatedZ,
 } from '../src/utils/encoders';
@@ -13,7 +21,7 @@ import {
 } from '../src/strategy-management/';
 import { DecodedStrategy, EncodedStrategy } from '../src/common/types';
 import sinon, { SinonStubbedInstance } from 'sinon';
-import { BigNumber, Decimal } from '../src/utils/numerics';
+import { BigNumber, Decimal, BnToDec } from '../src/utils/numerics';
 import { Decimals } from '../src/utils/decimals';
 import { isAlmostEqual } from './test-utils';
 
@@ -745,5 +753,68 @@ describe('encoders', () => {
       ).to.be.true;
       expect(Strategy.sellBudget).to.equal(expectedStrategy.sellBudget);
     });
+  });
+
+  describe('assertAccuracy', () => {
+    let decimalsStub: SinonStubbedInstance<Decimals>;
+
+    beforeEach(() => {
+      decimalsStub = sinon.createStubInstance(Decimals);
+    });
+
+    afterEach(() => {
+      sinon.restore();
+    });
+
+    function assertAccuracy(
+      paramName: string,
+      expectedValue: Decimal,
+      calcActualValue: (value: Decimal) => Decimal,
+      maxAbsoluteError: string,
+      maxRelativeError: string
+    ) {
+      it(`${paramName}: ${expectedValue}`, async () => {
+        const actualValue = calcActualValue(expectedValue);
+        if (!actualValue.eq(expectedValue)) {
+              expect(actualValue.lt(expectedValue)).to.be.equal(
+                  true,
+                  `\n- expectedValue = ${expectedValue.toFixed()}` +
+                  `\n- actualValue   = ${actualValue.toFixed()}`
+              );
+              const absoluteError = actualValue.sub(expectedValue).abs();
+              const relativeError = actualValue.div(expectedValue).sub(1).abs();
+              expect(absoluteError.lte(maxAbsoluteError) || relativeError.lte(maxRelativeError)).to.be.equal(
+                  true,
+                  `\n- expectedValue = ${expectedValue.toFixed()}` +
+                  `\n- actualValue   = ${actualValue.toFixed()}` +
+                  `\n- absoluteError = ${absoluteError.toFixed()}` +
+                  `\n- relativeError = ${relativeError.toFixed()}`
+              );
+          }
+      });
+    }
+
+    const calcInitialRate = (x: Decimal) => decodeScaleInitialRate(BnToDec(decodeFloatInitialRate(encodeFloatInitialRate(encodeScaleInitialRate(x)))));
+    const calcMultiFactor = (x: Decimal) => decodeScaleMultiFactor(BnToDec(decodeFloatMultiFactor(encodeFloatMultiFactor(encodeScaleMultiFactor(x)))));
+
+    for (let a = 1; a <= 100; a++) {
+      const expectedValue = new Decimal(a).mul(1234.5678);
+      assertAccuracy('initialRate', expectedValue, calcInitialRate, '0', '0.00000000000002');
+    }
+
+    for (let b = 1; b <= 100; b++) {
+      const expectedValue = new Decimal(b).mul(0.00001234);
+      assertAccuracy('multiFactor', expectedValue, calcMultiFactor, '0', '0.0000002');
+    }
+
+    for (let a = -28; a <= 28; a++) {
+      const expectedValue = new Decimal(10).pow(a);
+      assertAccuracy('initialRate', expectedValue, calcInitialRate, '0.0000000000000005', '0.00000000000002');
+    }
+
+    for (let b = -14; b <= -1; b++) {
+      const expectedValue = new Decimal(10).pow(b);
+      assertAccuracy('multiFactor', expectedValue, calcMultiFactor, '0.000000000000004', '0.00000007');
+    }
   });
 });
