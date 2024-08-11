@@ -17,7 +17,8 @@ export { Decimal, BigNumber, BigNumberish };
 export const BigNumberMin = (a: BigNumber, b: BigNumber) => (a.lt(b) ? a : b);
 export const BigNumberMax = (a: BigNumber, b: BigNumber) => (a.gt(b) ? a : b);
 
-export const ONE = 2 ** 48;
+export const ONE_48 = 2 ** 48;
+export const ONE_24 = 2 ** 24;
 export const TEN = new Decimal(10);
 
 export const tenPow = (dec0: number, dec1: number) => {

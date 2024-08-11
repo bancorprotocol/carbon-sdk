@@ -8,7 +8,7 @@ import {
   Quote,
   Rate,
 } from '../common/types';
-import { decodeFloat } from '../utils/encoders';
+import { decodeFloatInitialRate } from '../utils/encoders';
 import { BigNumber, BigNumberMin } from '../utils/numerics';
 import {
   getEncodedTradeTargetAmount as tradeTargetAmount,
@@ -44,7 +44,7 @@ const rateByTargetAmount = (
 
 const getParams = (order: EncodedOrder) => {
   const [y, z, A, B] = [order.y, order.z, order.A, order.B];
-  return [y, z, decodeFloat(A), decodeFloat(B)];
+  return [y, z, decodeFloatInitialRate(A), decodeFloatInitialRate(B)];
 };
 
 const getLimit = (order: EncodedOrder) => {

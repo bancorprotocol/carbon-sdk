@@ -1,4 +1,4 @@
-import { BigNumber, Decimal, BnToDec, DecToBn, ONE } from './numerics';
+import { BigNumber, Decimal, BnToDec, DecToBn, ONE_48, ONE_24 } from './numerics';
 import { DecodedOrder, EncodedOrder } from '../common/types';
 
 function bitLength(value: BigNumber) {
@@ -7,24 +7,36 @@ function bitLength(value: BigNumber) {
     : 0;
 }
 
-export const encodeRate = (value: Decimal) => {
-  const data = DecToBn(value.sqrt().mul(ONE).floor());
-  const length = bitLength(data.div(ONE));
-  return data.shr(length).shl(length);
+export const encodeScaleInitialRate = (value: Decimal) => {
+  return encodeScale(value.sqrt(), ONE_48);
 };
 
-export const decodeRate = (value: Decimal) => {
-  return value.div(ONE).pow(2);
+export const decodeScaleInitialRate = (value: Decimal) => {
+  return decodeScale(value, ONE_48).pow(2);
 };
 
-export const encodeFloat = (value: BigNumber) => {
-  const exponent = bitLength(value.div(ONE));
-  const mantissa = value.shr(exponent);
-  return BigNumber.from(ONE).mul(exponent).or(mantissa);
+export const encodeFloatInitialRate = (value: BigNumber) => {
+  return encodeFloat(value, ONE_48);
 };
 
-export const decodeFloat = (value: BigNumber) => {
-  return value.mod(ONE).shl(value.div(ONE).toNumber());
+export const decodeFloatInitialRate = (value: BigNumber) => {
+  return decodeFloat(value, ONE_48);
+};
+
+export const encodeScaleMultiFactor = (value: Decimal) => {
+  return encodeScale(value.mul(ONE_24), ONE_24);
+};
+
+export const decodeScaleMultiFactor = (value: Decimal) => {
+  return decodeScale(value, ONE_24).div(ONE_24);
+};
+
+export const encodeFloatMultiFactor = (value: BigNumber) => {
+  return encodeFloat(value, ONE_24);
+};
+
+export const decodeFloatMultiFactor = (value: BigNumber) => {
+  return decodeFloat(value, ONE_24);
 };
 
 export const encodeOrders = ([order0, order1]: [DecodedOrder, DecodedOrder]): [
@@ -91,9 +103,9 @@ export const encodeOrder = (
     );
 
   const y = DecToBn(liquidity);
-  const L = encodeRate(lowestRate);
-  const H = encodeRate(highestRate);
-  const M = encodeRate(marginalRate);
+  const L = encodeScaleInitialRate(lowestRate);
+  const H = encodeScaleInitialRate(highestRate);
+  const M = encodeScaleInitialRate(marginalRate);
 
   return {
     y,
@@ -103,21 +115,21 @@ export const encodeOrder = (
         : H.eq(M) || y.isZero()
         ? y
         : y.mul(H.sub(L)).div(M.sub(L)),
-    A: encodeFloat(H.sub(L)),
-    B: encodeFloat(L),
+    A: encodeFloatInitialRate(H.sub(L)),
+    B: encodeFloatInitialRate(L),
   };
 };
 
 export const decodeOrder = (order: EncodedOrder): DecodedOrder => {
   const y = BnToDec(order.y);
   const z = BnToDec(order.z);
-  const A = BnToDec(decodeFloat(order.A));
-  const B = BnToDec(decodeFloat(order.B));
+  const A = BnToDec(decodeFloatInitialRate(order.A));
+  const B = BnToDec(decodeFloatInitialRate(order.B));
   return {
     liquidity: y.toString(),
-    lowestRate: decodeRate(B).toString(),
-    highestRate: decodeRate(B.add(A)).toString(),
-    marginalRate: decodeRate(
+    lowestRate: decodeScaleInitialRate(B).toString(),
+    highestRate: decodeScaleInitialRate(B.add(A)).toString(),
+    marginalRate: decodeScaleInitialRate(
       y.eq(z) ? B.add(A) : B.add(A.mul(y).div(z))
     ).toString(),
   };
@@ -134,9 +146,9 @@ export const calculateRequiredLiquidity = (
   vagueOrder: DecodedOrder
 ): string => {
   const z: BigNumber = calculateCorrelatedZ(knownOrder);
-  const L: BigNumber = encodeRate(new Decimal(vagueOrder.lowestRate));
-  const H: BigNumber = encodeRate(new Decimal(vagueOrder.highestRate));
-  const M: BigNumber = encodeRate(new Decimal(vagueOrder.marginalRate));
+  const L: BigNumber = encodeScaleInitialRate(new Decimal(vagueOrder.lowestRate));
+  const H: BigNumber = encodeScaleInitialRate(new Decimal(vagueOrder.highestRate));
+  const M: BigNumber = encodeScaleInitialRate(new Decimal(vagueOrder.marginalRate));
 
   return z.mul(M.sub(L)).div(H.sub(L)).toString();
 };
@@ -154,4 +166,24 @@ export const calculateCorrelatedZ = (order: DecodedOrder): BigNumber => {
   const geoAverageRate: Decimal = lowestRate.mul(highestRate).sqrt();
 
   return DecToBn(capacity.div(geoAverageRate).floor());
+};
+
+const encodeScale = (value: Decimal, one: number) => {
+  const data = DecToBn(value.mul(one).floor());
+  const length = bitLength(data.div(one));
+  return data.shr(length).shl(length);
+};
+
+const decodeScale = (value: Decimal, one: number) => {
+  return value.div(one);
+};
+
+const encodeFloat = (value: BigNumber, one: number) => {
+  const exponent = bitLength(value.div(one));
+  const mantissa = value.shr(exponent);
+  return BigNumber.from(one).mul(exponent).or(mantissa);
+};
+
+const decodeFloat = (value: BigNumber, one: number) => {
+  return value.mod(one).shl(value.div(one).toNumber());
 };
