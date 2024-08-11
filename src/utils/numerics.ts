@@ -26,7 +26,8 @@ export const BigNumberMax = (a: BigIntish, b: BigIntish): bigint => {
   return aBN > bBN ? aBN : bBN;
 };
 
-export const ONE = 2n ** 48n;
+export const ONE_48 = 2n ** 48n;
+export const ONE_24 = 2n ** 24n;
 export const TEN = new Decimal(10);
 export const MAX_UINT256 = 2n ** 256n - 1n;
 

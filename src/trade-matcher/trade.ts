@@ -1,11 +1,11 @@
-import { ONE, Decimal, BigNumberMax } from '../utils/numerics';
+import { ONE_48, Decimal, BigNumberMax } from '../utils/numerics';
 import { EncodedOrder, DecodedOrder } from '../common/types';
-import { decodeFloat } from '../utils/encoders';
+import { decodeFloatInitialRate } from '../utils/encoders';
 
-const C = ONE;
+const C = ONE_48;
 
-const MAX_UINT128 = (2n ** 128n) - 1n;
-const MAX_UINT256 = (2n ** 256n) - 1n;
+const MAX_UINT128 = 2n ** 128n - 1n;
+const MAX_UINT256 = 2n ** 256n - 1n;
 
 function check(val: bigint, max: bigint): bigint {
   if (val >= 0n && val <= max) {
@@ -126,8 +126,8 @@ export const getEncodedTradeTargetAmount = (
   const x = amount;
   const y = order.y;
   const z = order.z;
-  const A = decodeFloat(order.A);
-  const B = decodeFloat(order.B);
+  const A = decodeFloatInitialRate(order.A);
+  const B = decodeFloatInitialRate(order.B);
   try {
     return uint128(getEncodedTradeBySourceAmount(x, y, z, A, B));
   } catch {
@@ -142,8 +142,8 @@ export const getEncodedTradeSourceAmount = (
   const x = amount;
   const y = order.y;
   const z = order.z;
-  const A = decodeFloat(order.A);
-  const B = decodeFloat(order.B);
+  const A = decodeFloatInitialRate(order.A);
+  const B = decodeFloatInitialRate(order.B);
   try {
     return uint128(getEncodedTradeByTargetAmount(x, y, z, A, B));
   } catch {
