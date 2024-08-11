@@ -773,7 +773,7 @@ describe('encoders', () => {
       maxAbsoluteError: string,
       maxRelativeError: string
     ) {
-      it(`${paramName}: ${expectedValue}`, async () => {
+      it(`${paramName} = ${expectedValue}`, async () => {
         const actualValue = calcActualValue(expectedValue);
         if (!actualValue.eq(expectedValue)) {
               expect(actualValue.lt(expectedValue)).to.be.equal(
