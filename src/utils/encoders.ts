@@ -64,6 +64,29 @@ export const encodeOrders = ([order0, order1]: [DecodedOrder, DecodedOrder]): [
   return [encodeOrder(order0), encodeOrder(order1)];
 };
 
+export const isOrderEncodable = (order: DecodedOrder) => {
+  try {
+    encodeOrder(order);
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
+/**
+ * Checks if the rates are equal after scaling them
+ * @param {string} x - the first rate
+ * @param {string} y - the second rate
+ * @returns {boolean} - true if the rates are equal after scaling, false otherwise
+ */
+export const areScaledRatesEqual = (x: string, y: string): boolean => {
+  const xDec = new Decimal(x);
+  const yDec = new Decimal(y);
+  const xScaled = encodeRate(xDec);
+  const yScaled = encodeRate(yDec);
+  return xScaled.eq(yScaled);
+};
+
 export const encodeOrder = (
   order: DecodedOrder,
   z?: BigNumber
@@ -73,13 +96,16 @@ export const encodeOrder = (
   const highestRate = new Decimal(order.highestRate);
   const marginalRate = new Decimal(order.marginalRate);
 
+  const y = DecToBn(liquidity);
+  const L = encodeRate(lowestRate);
+  const H = encodeRate(highestRate);
+  const M = encodeRate(marginalRate);
+
   if (
     !(
-      (highestRate.gte(marginalRate) && marginalRate.gt(lowestRate)) ||
-      (highestRate.eq(marginalRate) && marginalRate.eq(lowestRate)) ||
-      (highestRate.gt(marginalRate) &&
-        marginalRate.eq(lowestRate) &&
-        liquidity.isZero())
+      (H.gte(M) && M.gt(L)) ||
+      (H.eq(M) && M.eq(L)) ||
+      (H.gt(M) && M.eq(L) && y.isZero())
     )
   )
     throw new Error(
@@ -89,11 +115,6 @@ export const encodeOrder = (
         '- (highestRate > marginalRate == lowestRate) AND liquidity == 0\n' +
         `(highestRate = ${highestRate}, marginalRate = ${marginalRate}, lowestRate = ${lowestRate}), liquidity = ${liquidity}`
     );
-
-  const y = DecToBn(liquidity);
-  const L = encodeRate(lowestRate);
-  const H = encodeRate(highestRate);
-  const M = encodeRate(marginalRate);
 
   return {
     y,
