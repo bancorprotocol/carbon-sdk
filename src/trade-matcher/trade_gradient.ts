@@ -165,10 +165,10 @@ function sub(one: BigNumber, mt: BigNumber): BigNumber {
  */
 function exp(x: BigNumber): BigNumber {
   if (x.lt(EXP_MID)) {
-      return _exp(x); // slightly more accurate
+    return _exp(x); // slightly more accurate
   }
   if (x.lt(EXP_MAX)) {
-      return _exp(x.mod(EXP_LN2)).shl(x.div(EXP_LN2).toNumber());
+    return _exp(x.mod(EXP_LN2)).shl(x.div(EXP_LN2).toNumber());
   }
   throw new Error('ExpOverflow');
 }
