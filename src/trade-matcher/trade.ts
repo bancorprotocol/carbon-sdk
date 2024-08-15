@@ -1,3 +1,4 @@
+import { MAX_UINT128, MAX_UINT256, uint128, add, sub, mul, mulDivF, mulDivC, minFactor } from './utils';
 import { ONE_48, Decimal, BigNumber, BigNumberMax } from '../utils/numerics';
 import { EncodedOrder, DecodedOrder } from '../common/types';
 import { decodeFloatInitialRate } from '../utils/encoders';
@@ -6,26 +7,6 @@ import { getRuntimeConfig } from '../runtime-config';
 const isLegacyTradeBySourceRange = getRuntimeConfig().legacyTradeBySourceRange;
 
 const C = BigNumber.from(ONE_48);
-
-const MAX_UINT128 = BigNumber.from(2).pow(128).sub(1);
-const MAX_UINT256 = BigNumber.from(2).pow(256).sub(1);
-
-function check(val: BigNumber, max: BigNumber) {
-  if (val.gte(0) && val.lte(max)) {
-    return val;
-  }
-  throw null;
-}
-
-const uint128 = (n: BigNumber) => check(n, MAX_UINT128);
-const add = (a: BigNumber, b: BigNumber) => check(a.add(b), MAX_UINT256);
-const sub = (a: BigNumber, b: BigNumber) => check(a.sub(b), MAX_UINT256);
-const mul = (a: BigNumber, b: BigNumber) => check(a.mul(b), MAX_UINT256);
-const mulDivF = (a: BigNumber, b: BigNumber, c: BigNumber) =>
-  check(a.mul(b).div(c), MAX_UINT256);
-const mulDivC = (a: BigNumber, b: BigNumber, c: BigNumber) =>
-  check(a.mul(b).add(c).sub(1).div(c), MAX_UINT256);
-const minFactor = (a: BigNumber, b: BigNumber) => mulDivC(a, b, MAX_UINT256);
 
 //
 //       x * (A * y + B * z) ^ 2
