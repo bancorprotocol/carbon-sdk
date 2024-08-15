@@ -37,8 +37,7 @@ const getEncodedTradeBySourceAmount = (
   z: BigNumber,
   A: BigNumber,
   B: BigNumber,
-  simulated: boolean,
-  forceLegacyTradeBySourceRange: boolean = false
+  simulated: boolean
 ): BigNumber => {
   if (simulated) {
     const temp1 = z.mul(C);
@@ -69,7 +68,7 @@ const getEncodedTradeBySourceAmount = (
   // Before - in a case of overflow it would end up with a 0 rate and not get
   // picked up for trade. This added check is to avoid the order being picked up
   // for trade - just to be reverted in the case of overflow by the contract.
-  if (forceLegacyTradeBySourceRange || isLegacyTradeBySourceRange || temp4.add(temp5).lte(MAX_UINT256)) {
+  if (isLegacyTradeBySourceRange || temp4.add(temp5).lte(MAX_UINT256)) {
     return mulDivF(temp2, temp3.div(factor), temp4.add(temp5));
   }
   return temp2.div(add(A, mulDivC(temp1, temp1, temp3)));
