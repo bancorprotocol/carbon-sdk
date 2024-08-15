@@ -2,21 +2,42 @@
   "name": "@bancor/carbon-sdk",
   "type": "module",
   "source": "src/index.ts",
-  "version": "0.0.76-DEV",
+  "version": "0.0.98-DEV",
   "description": "The SDK is a READ-ONLY tool, intended to facilitate working with Carbon contracts. It's a convenient wrapper around our matching algorithm, allowing programs and users get a ready to use transaction data that will allow them to manage strategies and fulfill trades",
-  "main": "dist/index.js",
+  "main": "dist/index.cjs",
   "module": "dist/index.js",
   "exports": {
-    ".": "./dist/index.js",
-    "./contracts-api": "./dist/contracts-api/index.js",
-    "./chain-cache": "./dist/chain-cache/index.js",
-    "./trade-matcher": "./dist/trade-matcher/index.js",
-    "./utils": "./dist/utils/index.js",
-    "./strategy-management": "./dist/strategy-management/index.js"
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./contracts-api": {
+      "import": "./dist/contracts-api/index.js",
+      "require": "./dist/contracts-api/index.cjs"
+    },
+    "./chain-cache": {
+      "import": "./dist/chain-cache/index.js",
+      "require": "./dist/chain-cache/index.cjs"
+    },
+    "./trade-matcher": {
+      "import": "./dist/trade-matcher/index.js",
+      "require": "./dist/trade-matcher/index.cjs"
+    },
+    "./utils": {
+      "import": "./dist/utils/index.js",
+      "require": "./dist/utils/index.cjs"
+    },
+    "./strategy-management": {
+      "import": "./dist/strategy-management/index.js",
+      "require": "./dist/strategy-management/index.cjs"
+    }
   },
   "files": [
-    "dist/"
+    "dist"
   ],
+  "engines": {
+    "node": ">=18"
+  },
   "typesVersions": {
     "*": {
       "contracts-api": [
@@ -41,9 +62,9 @@
     "clean": "rm -rf dist && rm -rf src/abis/types",
     "compile-abis": "typechain --target ethers-v5 --out-dir 'src/abis/types' 'src/abis/**/*.json'",
     "prebuild": "yarn clean && yarn compile-abis",
-    "build": "rollup -c",
-    "dev": "rollup -c -w",
-    "test": "mocha"
+    "build": "yarn lint && rollup -c",
+    "test": "yarn lint && mocha",
+    "lint": "eslint src --ext .ts"
   },
   "publishConfig": {
     "access": "public"
@@ -69,21 +90,26 @@
   },
   "homepage": "https://github.com/bancorprotocol/carbon-sdk#readme",
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^24.1.0",
-    "@rollup/plugin-node-resolve": "^15.0.2",
-    "@typechain/ethers-v5": "^10.2.0",
-    "@types/chai": "^4.3.5",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-typescript": "^11.1.5",
+    "@typechain/ethers-v5": "^11.1.1",
+    "@types/chai": "^4.3.11",
     "@types/mocha": "^10.0.0",
-    "@types/node": "^18.16.3",
-    "@types/sinon": "^10.0.14",
-    "chai": "^4.3.7",
+    "@types/node": "^18.19.17",
+    "@types/sinon": "^10.0.15",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.12.0",
+    "chai": "^4.3.10",
+    "eslint": "^8.46.0",
     "mocha": "^10.1.0",
-    "rollup": "^3.21.4",
-    "rollup-plugin-typescript2": "^0.34.1",
-    "sinon": "^15.0.4",
+    "rollup": "^4.5.0",
+    "rollup-plugin-terser": "^7.0.2",
+    "sinon": "^16.0.0",
     "ts-node": "^10.9.1",
-    "typechain": "^8.1.1",
-    "typescript": "^5.0.3"
+    "tslib": "^2.6.2",
+    "typechain": "^8.3.2",
+    "typescript": "^5.5.4"
   },
   "dependencies": {
     "@ethersproject/abi": "^5.7.0",

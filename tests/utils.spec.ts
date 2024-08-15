@@ -1,13 +1,160 @@
 import { expect } from 'chai';
-import { formatUnits, parseUnits, BigNumber } from '../src/utils/numerics';
+import {
+  formatUnits,
+  parseUnits,
+  BigNumber,
+  Decimal,
+} from '../src/utils/numerics';
 import {
   normalizeRate,
   normalizeInvertedRate,
   subtractFee,
   addFee,
+  calculateOverlappingBuyBudget,
+  calculateOverlappingSellBudget,
+  calculateOverlappingPrices,
+  enforcePriceRange,
 } from '../src/strategy-management';
+import { isAlmostEqual } from './test-utils';
 
 describe('utils', () => {
+  describe('enforcePriceRange', () => {
+    const tokenDecimals = 6;
+    const minPrice = new Decimal(5);
+    const maxPrice = new Decimal(10);
+    const oneWei = new Decimal(1).div(new Decimal(10).pow(tokenDecimals));
+
+    it('should return minPrice when marginalPrice is less than minPrice', () => {
+      const marginalPrice = minPrice.minus(oneWei);
+      const result = enforcePriceRange(minPrice, maxPrice, marginalPrice);
+      expect(result.equals(minPrice)).to.be.true;
+    });
+
+    it('should return maxPrice when marginalPrice is greater than maxPrice', () => {
+      const marginalPrice = maxPrice.plus(oneWei);
+      const result = enforcePriceRange(minPrice, maxPrice, marginalPrice);
+      expect(result.equals(maxPrice)).to.be.true;
+    });
+
+    it('should return marginalPrice when it is between minPrice and maxPrice', () => {
+      const marginalPrice = new Decimal(7);
+      const result = enforcePriceRange(minPrice, maxPrice, marginalPrice);
+      expect(result.equals(marginalPrice)).to.be.true;
+    });
+  });
+  describe('overlapping strategies', () => {
+    const testCases = [
+      {
+        baseTokenDecimals: 18,
+        quoteTokenDecimals: 6,
+        buyPriceLow: '1500',
+        sellPriceHigh: '2000',
+        marketPrice: '1845',
+        spreadPercentage: '1',
+        buyBudget: '100',
+        buyPriceHigh:
+          '1980.19801980198019801980198019801980198019801980198019801980198019801980198019801980198019801980198',
+        sellPriceLow: '1515',
+        buyPriceMarginal:
+          '1835.843615937429955302430075647665154941937455663234267436323585007036269526077757760470083423519019',
+        sellPriceMarginal:
+          '1854.202052096804254855454376404141806491356830219866610110686820857106632221338535338074784257754209',
+        sellBudget: '0.021054379648026716',
+      },
+      {
+        baseTokenDecimals: 18,
+        quoteTokenDecimals: 6,
+        buyPriceLow: '1500.0000000000000000001',
+        sellPriceHigh: '2000',
+        marketPrice: '1845',
+        spreadPercentage: '1',
+        buyBudget: '100',
+        buyPriceHigh:
+          '1980.19801980198019801980198019801980198019801980198019801980198019801980198019801980198019801980198',
+        sellPriceLow: '1515.000000000000000000101',
+        buyPriceMarginal:
+          '1835.843615937429955302430075647665154941937455663234267436323585007036269526077757760470083423519019',
+        sellPriceMarginal:
+          '1854.202052096804254855454376404141806491356830219866610110686820857106632221338535338074784257754209',
+        sellBudget: '0.021054379648026716',
+      },
+      {
+        baseTokenDecimals: 18,
+        quoteTokenDecimals: 6,
+        buyPriceLow: '5',
+        sellPriceHigh: '8',
+        marketPrice: '6.58',
+        spreadPercentage: '0.1',
+        buyBudget: '50000',
+        buyPriceHigh:
+          '7.992007992007992007992007992007992007992007992007992007992007992007992007992007992007992007992007992',
+        sellPriceLow: '5.005',
+        buyPriceMarginal:
+          '6.576712465445547600936103429637085089831710694731424131317177577135565931870119917241379658190121977',
+        sellPriceMarginal:
+          '6.5832891779109931485370395330667221749215424054261555554484947547127014978019900371586210378483121',
+        sellBudget: '5512.063888540195176921',
+      },
+    ];
+
+    testCases.forEach(
+      ({
+        baseTokenDecimals,
+        quoteTokenDecimals,
+        buyPriceLow,
+        sellPriceHigh,
+        marketPrice,
+        spreadPercentage,
+        buyBudget,
+        buyPriceHigh,
+        sellPriceLow,
+        buyPriceMarginal,
+        sellPriceMarginal,
+        sellBudget,
+      }) => {
+        it(`should successfully calculate overlapping distribution for inputs: 
+            baseTokenDecimals: ${baseTokenDecimals}, quoteTokenDecimals: ${quoteTokenDecimals},
+            buyPriceLow: ${buyPriceLow}, sellPriceHigh: ${sellPriceHigh}, 
+            marketPrice: ${marketPrice}, spreadPercentage: ${spreadPercentage}, 
+            buyBudget: ${buyBudget}`, () => {
+          const prices = calculateOverlappingPrices(
+            buyPriceLow,
+            sellPriceHigh,
+            marketPrice,
+            spreadPercentage
+          );
+
+          expect(prices.buyPriceHigh).to.equal(buyPriceHigh);
+          expect(prices.sellPriceLow).to.equal(sellPriceLow);
+          expect(prices.buyPriceMarginal).to.equal(buyPriceMarginal);
+          expect(prices.sellPriceMarginal).to.equal(sellPriceMarginal);
+
+          const sellRes = calculateOverlappingSellBudget(
+            baseTokenDecimals,
+            quoteTokenDecimals,
+            buyPriceLow,
+            sellPriceHigh,
+            marketPrice,
+            spreadPercentage,
+            buyBudget
+          );
+          expect(sellRes).to.equal(sellBudget);
+
+          const buyRes = calculateOverlappingBuyBudget(
+            baseTokenDecimals,
+            quoteTokenDecimals,
+            buyPriceLow,
+            sellPriceHigh,
+            marketPrice,
+            spreadPercentage,
+            sellBudget
+          );
+          expect(...isAlmostEqual(buyRes, buyBudget, '100', '0.0003')).to.be
+            .true;
+        });
+      }
+    );
+  });
   describe('parseUnits', () => {
     const testCases = [
       { amount: '1', decimals: 0, expectedResult: '1' },

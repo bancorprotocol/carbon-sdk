@@ -118,9 +118,11 @@ export type Strategy = {
   baseToken: string;
   quoteToken: string;
   buyPriceLow: string; // in quote tkn per 1 base tkn
+  buyPriceMarginal: string; // in quote tkn per 1 base tkn
   buyPriceHigh: string; // in quote tkn per 1 base tkn
   buyBudget: string; // in quote tkn
   sellPriceLow: string; // in quote tkn per 1 base tkn
+  sellPriceMarginal: string; // in quote tkn per 1 base tkn
   sellPriceHigh: string; // in quote tkn per 1 base tkn
   sellBudget: string; // in base tkn
   encoded: EncodedStrategyBNStr; // the encoded strategy
@@ -133,7 +135,15 @@ export type AtLeastOneOf<T> = {
 }[keyof T];
 
 export type StrategyUpdate = AtLeastOneOf<
-  Omit<Strategy, 'id' | 'encoded' | 'baseToken' | 'quoteToken'>
+  Omit<
+    Strategy,
+    | 'id'
+    | 'encoded'
+    | 'baseToken'
+    | 'quoteToken'
+    | 'buyPriceMarginal'
+    | 'sellPriceMarginal'
+  >
 >;
 
 export type BlockMetadata = {
@@ -144,6 +154,12 @@ export type BlockMetadata = {
 export interface Fetcher {
   pairs(): Promise<TokenPair[]>;
   strategiesByPair(token0: string, token1: string): Promise<EncodedStrategy[]>;
+  pairTradingFeePPM(token0: string, token1: string): Promise<number>;
+  pairsTradingFeePPM(pairs: TokenPair[]): Promise<[string, string, number][]>;
+  tradingFeePPM(): Promise<number>;
+  onTradingFeePPMUpdated(
+    listener: (prevFeePPM: number, newFeePPM: number) => void
+  ): void;
   getLatestStrategyCreatedStrategies(
     fromBlock: number,
     toBlock: number
@@ -160,10 +176,14 @@ export interface Fetcher {
     fromBlock: number,
     toBlock: number
   ): Promise<TradeData[]>;
+  getLatestTradingFeeUpdates(
+    fromBlock: number,
+    toBlock: number
+  ): Promise<number[]>;
+  getLatestPairTradingFeeUpdates(
+    fromBlock: number,
+    toBlock: number
+  ): Promise<[string, string, number][]>; // [token0, token1, feePPM]
   getBlockNumber(): Promise<number>;
-  tradingFeePPM(): Promise<number>;
-  onTradingFeePPMUpdated(
-    listener: (prevFeePPM: number, newFeePPM: number) => void
-  ): void;
   getBlock(blockNumber: number): Promise<BlockMetadata>;
 }

@@ -31,12 +31,12 @@ export const DecToBn = (x: Decimal) => BigNumber.from(x.toFixed());
 export const mulDiv = (x: BigNumber, y: BigNumber, z: BigNumber) =>
   y.eq(z) ? x : x.mul(y).div(z);
 
-function trimDecimal(input: string, precision: number): string {
-  let decimalIdx = input.indexOf('.');
-  if (decimalIdx !== -1) {
-    return input.slice(0, decimalIdx + precision + 1);
-  }
-  return input;
+export function trimDecimal(input: string, precision: number): string {
+  // Use Decimal for precise arithmetic
+  const result = new Decimal(input).toFixed(precision, Decimal.ROUND_DOWN);
+
+  // Remove trailing zeros and decimal point if necessary
+  return result.replace(/(\.\d*?[1-9])0+$|\.0*$/, '$1');
 }
 
 // A take on parseUnits that supports floating point

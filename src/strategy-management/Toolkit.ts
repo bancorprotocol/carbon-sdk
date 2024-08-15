@@ -8,6 +8,7 @@ import {
   tenPow,
   formatUnits,
   parseUnits,
+  BigNumberMax,
 } from '../utils/numerics';
 
 // Internal modules
@@ -42,12 +43,14 @@ import { getDepths, getMaxRate, getMinRate } from './stats';
 
 // Logger
 import { Logger } from '../common/logger';
-const logger = new Logger('index.ts');
+const logger = new Logger('Toolkit.ts');
 
 // Strategy utils
 import {
   addFee,
   buildStrategyObject,
+  calculateOverlappingBuyBudget,
+  calculateOverlappingSellBudget,
   decodeStrategy,
   encodeStrategy,
   normalizeRate,
@@ -55,9 +58,8 @@ import {
   subtractFee,
 } from './utils';
 
-// Encoder utility
-import { decodeOrder } from '../utils/encoders';
 import {
+  decodeOrder,
   encodedStrategyStrToBN,
   matchActionBNToStr,
   ordersMapBNToStr,
@@ -74,6 +76,17 @@ export enum MarginalPriceOptions {
 
   /** Indicates that the marginal price should be maintained at its current value. */
   maintain = 'MAINTAIN',
+}
+
+// Helper function to check whether an actual number was passed and not undefined or the reset/maintain options
+export function isMarginalPriceValue(
+  marginalPrice?: MarginalPriceOptions | string
+): boolean {
+  return (
+    marginalPrice !== undefined &&
+    marginalPrice !== MarginalPriceOptions.reset &&
+    marginalPrice !== MarginalPriceOptions.maintain
+  );
 }
 
 export class Toolkit {
@@ -228,6 +241,93 @@ export class Toolkit {
   }
 
   /**
+   * Gets the strategy by its id
+   *
+   * If the cache is synced, it will return the strategy from the cache.
+   * Otherwise, it will fetch the strategy from the chain.
+   *
+   * @param {string} id - ID of the strategy to fetch.
+   */
+  public async getStrategyById(id: string): Promise<Strategy> {
+    logger.debug('getStrategyById called', arguments);
+
+    let encodedStrategy: EncodedStrategy | undefined;
+
+    if (this._cache) {
+      encodedStrategy = await this._cache.getStrategyById(id);
+    }
+
+    if (encodedStrategy) {
+      logger.debug('getStrategyById fetched from cache');
+    } else {
+      logger.debug('getStrategyById fetching from chain');
+      encodedStrategy = await this._api.reader.strategy(BigNumber.from(id));
+    }
+    const decodedStrategy = decodeStrategy(encodedStrategy);
+
+    const strategy = await parseStrategy(decodedStrategy, this._decimals);
+
+    logger.debug('getStrategyById info:', {
+      id,
+      encodedStrategy,
+      decodedStrategy,
+      strategy,
+    });
+
+    return strategy;
+  }
+
+  /**
+   * Gets all the strategies that belong to the given pair
+   *
+   * If the cache is synced, it will return the strategies from the cache.
+   * Otherwise, it will fetch the strategies from the chain.
+   *
+   * @param {string} token0 - Address of one of the tokens in the pair - the order is not important.
+   * @param {string} token1 - Address of one of the tokens in the pair - the order is not important.
+   */
+  public async getStrategiesByPair(
+    token0: string,
+    token1: string
+  ): Promise<Strategy[]> {
+    logger.debug('getStrategiesByPair called', arguments);
+
+    let encodedStrategies: EncodedStrategy[] | undefined;
+
+    if (this._cache) {
+      encodedStrategies = await this._cache.getStrategiesByPair(token0, token1);
+    }
+
+    if (encodedStrategies) {
+      logger.debug('getStrategiesByPair fetched from cache');
+    } else {
+      logger.debug('getStrategiesByPair fetching from chain');
+      encodedStrategies = await this._api.reader.strategiesByPair(
+        token0,
+        token1
+      );
+    }
+
+    const decodedStrategies = encodedStrategies.map(decodeStrategy);
+
+    const strategies = await Promise.all(
+      decodedStrategies.map(async (strategy) => {
+        return await parseStrategy(strategy, this._decimals);
+      })
+    );
+
+    logger.debug('getStrategiesByPair info:', {
+      token0,
+      token1,
+      encodedStrategies,
+      decodedStrategies,
+      strategies,
+    });
+
+    return strategies;
+  }
+
+  /**
    * Gets the strategies that are owned by the user.
    * It does so by reading the voucher token and
    * figuring out strategy IDs from them.
@@ -377,7 +477,7 @@ export class Toolkit {
       tradeByTargetAmount
     );
 
-    let actionsWei: MatchActionBNStr[] = Toolkit.getMatchActions(
+    const actionsWei: MatchActionBNStr[] = Toolkit.getMatchActions(
       amountWei,
       tradeByTargetAmount,
       orders,
@@ -417,10 +517,15 @@ export class Toolkit {
   }> {
     logger.debug('getTradeDataFromActions called', arguments);
 
-    const feePPM = this._cache.tradingFeePPM;
+    const feePPM = await this._cache.getTradingFeePPMByPair(
+      sourceToken,
+      targetToken
+    );
 
-    // intentional == instead of ===
-    if (feePPM == undefined) throw new Error('tradingFeePPM is undefined');
+    if (feePPM === undefined)
+      throw new Error(
+        `tradingFeePPM is undefined for this pair: ${sourceToken}-${targetToken}`
+      );
 
     const decimals = this._decimals;
     const sourceDecimals = await decimals.fetchDecimals(sourceToken);
@@ -642,6 +747,90 @@ export class Toolkit {
   }
 
   /**
+   * Calculates the sell budget given a buy budget of an overlapping strategy.
+   *
+   * @param {string} baseToken - The address of the base token for the strategy.
+   * @param {string} buyPriceLow - The minimum buy price for the strategy, in in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} sellPriceHigh - The maximum sell price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} marketPrice - The market price, in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} spreadPercentage - The spread percentage, e.g. for 10%, enter `10`.
+   * @param {string} buyBudget - The budget for buying tokens in the strategy, in `quoteToken`, as a string.
+   * @return {Promise<string>} The result of the calculation - the sell budget in token res in base token.
+   */
+  public async calculateOverlappingStrategySellBudget(
+    baseToken: string,
+    quoteToken: string,
+    buyPriceLow: string,
+    sellPriceHigh: string,
+    marketPrice: string,
+    spreadPercentage: string,
+    buyBudget: string
+  ): Promise<string> {
+    logger.debug('calculateOverlappingStrategySellBudget called', arguments);
+    const decimals = this._decimals;
+    const baseDecimals = await decimals.fetchDecimals(baseToken);
+    const quoteDecimals = await decimals.fetchDecimals(quoteToken);
+    const budget = calculateOverlappingSellBudget(
+      baseDecimals,
+      quoteDecimals,
+      buyPriceLow,
+      sellPriceHigh,
+      marketPrice,
+      spreadPercentage,
+      buyBudget
+    );
+
+    logger.debug('calculateOverlappingStrategySellBudget info:', {
+      baseDecimals,
+      budget,
+    });
+
+    return budget;
+  }
+
+  /**
+   * Calculates the buy budget given a sell budget of an overlapping strategy.
+   *
+   * @param {string} quoteToken - The address of the base token for the strategy.
+   * @param {string} buyPriceLow - The minimum buy price for the strategy, in in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} sellPriceHigh - The maximum sell price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} marketPrice - The market price, in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} spreadPercentage - The spread percentage, e.g. for 10%, enter `10`.
+   * @param {string} sellBudget - The budget for selling tokens in the strategy, in `baseToken`, as a string.
+   * @return {Promise<string>} The result of the calculation - the buy budget in token res in quote token.
+   */
+  public async calculateOverlappingStrategyBuyBudget(
+    baseToken: string,
+    quoteToken: string,
+    buyPriceLow: string,
+    sellPriceHigh: string,
+    marketPrice: string,
+    spreadPercentage: string,
+    sellBudget: string
+  ): Promise<string> {
+    logger.debug('calculateOverlappingStrategyBuyBudget called', arguments);
+    const decimals = this._decimals;
+    const baseDecimals = await decimals.fetchDecimals(baseToken);
+    const quoteDecimals = await decimals.fetchDecimals(quoteToken);
+    const budget = calculateOverlappingBuyBudget(
+      baseDecimals,
+      quoteDecimals,
+      buyPriceLow,
+      sellPriceHigh,
+      marketPrice,
+      spreadPercentage,
+      sellBudget
+    );
+
+    logger.debug('calculateOverlappingStrategyBuyBudget info:', {
+      quoteDecimals,
+      budget,
+    });
+
+    return budget;
+  }
+
+  /**
    * Creates an unsigned transaction to create a strategy for buying and selling tokens of `baseToken` for price in `quoteToken` per 1 `baseToken`.
    *
    * The `createBuySellStrategy` method creates a strategy object based on the specified parameters, encodes it according to the
@@ -653,9 +842,11 @@ export class Toolkit {
    * @param {string} baseToken - The address of the base token for the strategy.
    * @param {string} quoteToken - The address of the quote token for the strategy.
    * @param {string} buyPriceLow - The minimum buy price for the strategy, in in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} buyPriceMarginal - The marginal buy price for the strategy, in in `quoteToken` per 1 `baseToken`, as a string.
    * @param {string} buyPriceHigh - The maximum buy price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
    * @param {string} buyBudget - The maximum budget for buying tokens in the strategy, in `quoteToken`, as a string.
    * @param {string} sellPriceLow - The minimum sell price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
+   * @param {string} sellPriceMarginal - The marginal sell price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
    * @param {string} sellPriceHigh - The maximum sell price for the strategy, in `quoteToken` per 1 `baseToken`, as a string.
    * @param {string} sellBudget - The maximum budget for selling tokens in the strategy, in `baseToken`, as a string.
    * @param {Overrides} [overrides] - Optional overrides for the transaction, such as gas price or nonce.
@@ -676,7 +867,9 @@ export class Toolkit {
    *   '0x6B175474E89094C44Da98b954EedeAC495271d0F',
    *   '0.1',
    *   '0.2',
+   *   '0.2',
    *   '1',
+   *   '0.5',
    *   '0.5',
    *   '0.6',
    *   '2'
@@ -690,9 +883,11 @@ export class Toolkit {
     baseToken: string,
     quoteToken: string,
     buyPriceLow: string,
+    buyPriceMarginal: string,
     buyPriceHigh: string,
     buyBudget: string,
     sellPriceLow: string,
+    sellPriceMarginal: string,
     sellPriceHigh: string,
     sellBudget: string,
     overrides?: PayableOverrides
@@ -707,9 +902,11 @@ export class Toolkit {
       baseDecimals,
       quoteDecimals,
       buyPriceLow,
+      buyPriceMarginal,
       buyPriceHigh,
       buyBudget,
       sellPriceLow,
+      sellPriceMarginal,
       sellPriceHigh,
       sellBudget
     );
@@ -727,15 +924,18 @@ export class Toolkit {
   }
 
   /**
+   * Creates an unsigned transaction to update an on chain strategy.
+   * This function takes various optional parameters to update different aspects of the strategy and returns a promise that resolves to a PopulatedTransaction object.
    *
-   * @param strategyId
-   * @param encoded
-   * @param param2
-   * @param {MarginalPriceOptions | string} marginalPrice - The marginal price parameter.
-   * Can either be a value from the `MarginalPriceOptions` enum, or a "BigNumberish" string value for advanced users -
-   * who wish to set the marginal price themselves.
-   * @param overrides
-   * @returns
+   * @param {string} strategyId - The unique identifier of the strategy to be updated.
+   * @param {EncodedStrategyBNStr} encoded - The encoded strategy string, representing the current state of the strategy in the contracts.
+   * @param {StrategyUpdate} strategyUpdate - An object containing optional fields to update in the strategy, including buy and sell price limits and budgets.
+   * @param {MarginalPriceOptions | string} [buyPriceMarginal] - Optional parameter that can be used to instruct the SDK what to do with the marginal price - or pass a value to use.
+   * If unsure leave this undefined.
+   * @param {MarginalPriceOptions | string} [sellPriceMarginal] - Optional parameter that can be used to instruct the SDK what to do with the marginal price - or pass a value to use.
+   * If unsure leave this undefined.
+   * @param {PayableOverrides} [overrides] - Optional Ethereum transaction overrides.
+   * @returns {Promise<PopulatedTransaction>} A promise that resolves to a PopulatedTransaction object.
    */
   public async updateStrategy(
     strategyId: string,
@@ -748,8 +948,8 @@ export class Toolkit {
       sellPriceHigh,
       sellBudget,
     }: StrategyUpdate,
-    buyMarginalPrice?: MarginalPriceOptions | string,
-    sellMarginalPrice?: MarginalPriceOptions | string,
+    buyPriceMarginal?: MarginalPriceOptions | string,
+    sellPriceMarginal?: MarginalPriceOptions | string,
     overrides?: PayableOverrides
   ): Promise<PopulatedTransaction> {
     logger.debug('updateStrategy called', arguments);
@@ -775,9 +975,15 @@ export class Toolkit {
       baseDecimals,
       quoteDecimals,
       buyPriceLow ?? originalStrategy.buyPriceLow,
+      isMarginalPriceValue(buyPriceMarginal) // if we got marginal price use it - otherwise act as reset and use buy high
+        ? buyPriceMarginal!
+        : buyPriceHigh ?? originalStrategy.buyPriceHigh,
       buyPriceHigh ?? originalStrategy.buyPriceHigh,
       buyBudget ?? originalStrategy.buyBudget,
       sellPriceLow ?? originalStrategy.sellPriceLow,
+      isMarginalPriceValue(sellPriceMarginal) // if we got marginal price use it - otherwise act as reset and use sell low
+        ? sellPriceMarginal!
+        : sellPriceLow ?? originalStrategy.sellPriceLow,
       sellPriceHigh ?? originalStrategy.sellPriceHigh,
       sellBudget ?? originalStrategy.sellBudget
     );
@@ -786,8 +992,8 @@ export class Toolkit {
     // step 3: to avoid changes due to rounding errors, we will override the new encoded strategy with selected values from the old encoded strategy:
     // - if budget wasn't defined - we will use the old y
     // - if no price was defined - we will use the old A and B
-    // - if any price was defined - we will reset z to y
     // - if any budget was defined - will set z according to MarginalPriceOptions
+    // - if any price was defined - we will reset z to y
     // - if marginalPrice is a number - we will use it to calculate z
     const encodedBN = encodedStrategyStrToBN(encoded);
     if (buyBudget === undefined) {
@@ -808,65 +1014,68 @@ export class Toolkit {
     }
 
     if (buyBudget !== undefined) {
-      if (
-        buyMarginalPrice === undefined ||
-        buyMarginalPrice === MarginalPriceOptions.reset ||
-        encodedBN.order1.y.isZero()
-      ) {
+      if (isMarginalPriceValue(buyPriceMarginal)) {
+        // do nothing - z was already calculated and set
+      } else if (buyPriceMarginal === MarginalPriceOptions.maintain) {
+        if (encodedBN.order1.y.isZero()) {
+          // When depositing into an empty order and instructed to MAINTAIN - keep the old z, unless it's lower than the new y
+          newEncodedStrategy.order1.z = BigNumberMax(
+            encodedBN.order1.z,
+            newEncodedStrategy.order1.y
+          );
+        } else {
+          // maintain the current ratio of y/z
+          newEncodedStrategy.order1.z = mulDiv(
+            encodedBN.order1.z,
+            newEncodedStrategy.order1.y,
+            encodedBN.order1.y
+          );
+        }
+      } else {
+        // reset behavior is the default
         newEncodedStrategy.order1.z = newEncodedStrategy.order1.y;
-      } else if (buyMarginalPrice === MarginalPriceOptions.maintain) {
-        // maintain the current ratio of y/z
-        newEncodedStrategy.order1.z = mulDiv(
-          encodedBN.order1.z,
-          newEncodedStrategy.order1.y,
-          encodedBN.order1.y
-        );
       }
     }
 
+    // if we have budget to set we handle reset (z <- y) and maintain (maintain y:z ratio). We don't handle marginal price value because it's expressed in z
     if (sellBudget !== undefined) {
-      if (
-        sellMarginalPrice === undefined ||
-        sellMarginalPrice === MarginalPriceOptions.reset ||
-        encodedBN.order0.y.isZero()
-      ) {
+      if (isMarginalPriceValue(sellPriceMarginal)) {
+        // do nothing - z was already calculated and set
+      } else if (sellPriceMarginal === MarginalPriceOptions.maintain) {
+        if (encodedBN.order0.y.isZero()) {
+          // When depositing into an empty order and instructed to MAINTAIN - keep the old z, unless it's lower than the new y
+          newEncodedStrategy.order0.z = BigNumberMax(
+            encodedBN.order0.z,
+            newEncodedStrategy.order0.y
+          );
+        } else {
+          // maintain the current ratio of y/z
+          newEncodedStrategy.order0.z = mulDiv(
+            encodedBN.order0.z,
+            newEncodedStrategy.order0.y,
+            encodedBN.order0.y
+          );
+        }
+      } else {
+        // reset behavior is the default
         newEncodedStrategy.order0.z = newEncodedStrategy.order0.y;
-      } else if (sellMarginalPrice === MarginalPriceOptions.maintain) {
-        // maintain the current ratio of y/z
-        newEncodedStrategy.order0.z = mulDiv(
-          encodedBN.order0.z,
-          newEncodedStrategy.order0.y,
-          encodedBN.order0.y
-        );
       }
     }
 
-    if (buyPriceLow !== undefined || buyPriceHigh !== undefined) {
+    if (
+      (buyPriceLow !== undefined || buyPriceHigh !== undefined) &&
+      (buyPriceMarginal === MarginalPriceOptions.reset ||
+        buyPriceMarginal === undefined)
+    ) {
       newEncodedStrategy.order1.z = newEncodedStrategy.order1.y;
     }
-    if (sellPriceLow !== undefined || sellPriceHigh !== undefined) {
-      newEncodedStrategy.order0.z = newEncodedStrategy.order0.y;
-    }
 
     if (
-      buyMarginalPrice !== undefined &&
-      buyMarginalPrice !== MarginalPriceOptions.reset &&
-      buyMarginalPrice !== MarginalPriceOptions.maintain
+      (sellPriceLow !== undefined || sellPriceHigh !== undefined) &&
+      (sellPriceMarginal === MarginalPriceOptions.reset ||
+        sellPriceMarginal === undefined)
     ) {
-      // TODO: set newEncodedStrategy.order1.z according to the given marginal price
-      throw new Error(
-        'Support for custom marginal price is not implemented yet'
-      );
-    }
-    if (
-      sellMarginalPrice !== undefined &&
-      sellMarginalPrice !== MarginalPriceOptions.reset &&
-      sellMarginalPrice !== MarginalPriceOptions.maintain
-    ) {
-      // TODO: set newEncodedStrategy.order0.z according to the given marginal price
-      throw new Error(
-        'Support for custom marginal price is not implemented yet'
-      );
+      newEncodedStrategy.order0.z = newEncodedStrategy.order0.y;
     }
 
     logger.debug('updateStrategy info:', {
