@@ -1,5 +1,5 @@
 import { MAX_UINT128, uint128, add, mul, mulDivF, mulDivC, minFactor } from './utils';
-import { ONE_48, ONE_24, BigNumber } from '../utils/numerics';
+import { BigNumber, ONE_48, ONE_24 } from '../utils/numerics';
 
 const EXP_ONE = BigNumber.from("0x0080000000000000000000000000000000"); // 1
 const EXP_MID = BigNumber.from("0x0400000000000000000000000000000000"); // 8
