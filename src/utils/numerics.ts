@@ -19,12 +19,8 @@ export const BigNumberMax = (a: BigNumber, b: BigNumber) => (a.gt(b) ? a : b);
 
 export const ONE_48 = 2 ** 48;
 export const ONE_24 = 2 ** 24;
-export const TEN = new Decimal(10);
 
-export const tenPow = (dec0: number, dec1: number) => {
-  const diff = dec0 - dec1;
-  return TEN.pow(diff);
-};
+export const tenPow = (dec0: number, dec1: number) => new Decimal(10).pow(dec0 - dec1);
 
 export const BnToDec = (x: BigNumber) => new Decimal(x.toString());
 export const DecToBn = (x: Decimal) => BigNumber.from(x.toFixed());

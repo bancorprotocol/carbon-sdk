@@ -1,5 +1,5 @@
 import { MAX_UINT128, MAX_UINT256, uint128, add, sub, mul, mulDivF, mulDivC, minFactor } from './utils';
-import { ONE_48, Decimal, BigNumber, BigNumberMax } from '../utils/numerics';
+import { BigNumber, BigNumberMax, Decimal, ONE_48 } from '../utils/numerics';
 import { EncodedOrder, DecodedOrder } from '../common/types';
 import { decodeFloatInitialRate } from '../utils/encoders';
 import { getRuntimeConfig } from '../runtime-config';
