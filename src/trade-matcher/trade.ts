@@ -1,28 +1,19 @@
+import {
+  MAX_UINT128,
+  MAX_UINT256,
+  uint128,
+  add,
+  sub,
+  mul,
+  mulDivF,
+  mulDivC,
+  minFactor,
+} from './utils';
 import { ONE_48, Decimal, BigNumberMax } from '../utils/numerics';
 import { EncodedOrder, DecodedOrder } from '../common/types';
 import { decodeFloatInitialRate } from '../utils/encoders';
 
 const C = ONE_48;
-
-const MAX_UINT128 = 2n ** 128n - 1n;
-const MAX_UINT256 = 2n ** 256n - 1n;
-
-function check(val: bigint, max: bigint): bigint {
-  if (val >= 0n && val <= max) {
-    return val;
-  }
-  throw null;
-}
-
-const uint128 = (n: bigint): bigint => check(n, MAX_UINT128);
-const add = (a: bigint, b: bigint): bigint => check(a + b, MAX_UINT256);
-const sub = (a: bigint, b: bigint): bigint => check(a - b, MAX_UINT256);
-const mul = (a: bigint, b: bigint): bigint => check(a * b, MAX_UINT256);
-const mulDivF = (a: bigint, b: bigint, c: bigint): bigint =>
-  check((a * b) / c, MAX_UINT256);
-const mulDivC = (a: bigint, b: bigint, c: bigint): bigint =>
-  check((a * b + c - 1n) / c, MAX_UINT256);
-const minFactor = (a: bigint, b: bigint) => mulDivC(a, b, MAX_UINT256);
 
 //
 //       x * (A * y + B * z) ^ 2
