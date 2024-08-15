@@ -22,6 +22,7 @@ const mulDivF = (a: bigint, b: bigint, c: bigint): bigint =>
   check((a * b) / c, MAX_UINT256);
 const mulDivC = (a: bigint, b: bigint, c: bigint): bigint =>
   check((a * b + c - 1n) / c, MAX_UINT256);
+const minFactor = (a: bigint, b: bigint) => mulDivC(a, b, MAX_UINT256);
 
 //
 //       x * (A * y + B * z) ^ 2
@@ -43,8 +44,8 @@ const getEncodedTradeBySourceAmount = (
   const temp2 = add(mul(y, A), mul(z, B));
   const temp3 = mul(temp2, x);
 
-  const factor1 = mulDivC(temp1, temp1, MAX_UINT256);
-  const factor2 = mulDivC(temp3, A, MAX_UINT256);
+  const factor1 = minFactor(temp1, temp1);
+  const factor2 = minFactor(temp3, A);
   const factor = BigNumberMax(factor1, factor2);
 
   const temp4 = mulDivC(temp1, temp1, factor);
@@ -78,8 +79,8 @@ const getEncodedTradeByTargetAmount = (
   const temp2 = add(mul(y, A), mul(z, B));
   const temp3 = sub(temp2, mul(x, A));
 
-  const factor1 = mulDivC(temp1, temp1, MAX_UINT256);
-  const factor2 = mulDivC(temp2, temp3, MAX_UINT256);
+  const factor1 = minFactor(temp1, temp1);
+  const factor2 = minFactor(temp2, temp3);
   const factor = BigNumberMax(factor1, factor2);
 
   const temp4 = mulDivC(temp1, temp1, factor);

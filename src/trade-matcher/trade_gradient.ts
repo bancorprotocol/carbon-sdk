@@ -1,17 +1,5 @@
 import { BigNumber } from '../utils/numerics';
 
-const R_ONE          = BigNumber.from(1).shl(48);  // = 2 ^ 48
-const M_ONE          = BigNumber.from(1).shl(24);  // = 2 ^ 24
-const EXP_ONE        = BigNumber.from(1).shl(127); // = 2 ^ 127
-const MAX_VAL        = BigNumber.from(1).shl(131); // = 2 ^ 131
-const RR             = R_ONE.mul(R_ONE);           // = 2 ^ 96
-const MM             = M_ONE.mul(M_ONE);           // = 2 ^ 48
-const RR_MUL_MM      = RR.mul(MM);                 // = 2 ^ 144
-const RR_DIV_MM      = RR.div(MM);                 // = 2 ^ 48
-const EXP_ONE_MUL_RR = EXP_ONE.mul(RR);            // = 2 ^ 223
-const EXP_ONE_DIV_RR = EXP_ONE.div(RR);            // = 2 ^ 31
-const EXP_ONE_DIV_MM = EXP_ONE.div(MM);            // = 2 ^ 79
-
 const MAX_UINT128 = BigNumber.from(2).pow(128).sub(1);
 const MAX_UINT256 = BigNumber.from(2).pow(256).sub(1);
 
@@ -29,6 +17,25 @@ const mulDivF = (a: BigNumber, b: BigNumber, c: BigNumber) =>
   check(a.mul(b).div(c), MAX_UINT256);
 const mulDivC = (a: BigNumber, b: BigNumber, c: BigNumber) =>
   check(a.mul(b).add(c).sub(1).div(c), MAX_UINT256);
+const minFactor = (a: BigNumber, b: BigNumber) => mulDivC(a, b, MAX_UINT256);
+
+const EXP_ONE = BigNumber.from("0x0080000000000000000000000000000000"); // 1
+const EXP_MID = BigNumber.from("0x0400000000000000000000000000000000"); // 8
+const EXP_MAX = BigNumber.from("0x2cb53f09f05cc627c85ddebfccfeb72758"); // ceil(ln2) * 129
+const EXP_LN2 = BigNumber.from("0x0058b90bfbe8e7bcd5e4f1d9cc01f97b58"); // ceil(ln2)
+
+const R_ONE = BigNumber.from(1).shl(48); // = 2 ^ 48
+const M_ONE = BigNumber.from(1).shl(24); // = 2 ^ 24
+
+const RR = R_ONE.mul(R_ONE); // = 2 ^ 96
+const MM = M_ONE.mul(M_ONE); // = 2 ^ 48
+
+const RR_MUL_MM = RR.mul(MM); // = 2 ^ 144
+const RR_DIV_MM = RR.div(MM); // = 2 ^ 48
+
+const EXP_ONE_MUL_RR = EXP_ONE.mul(RR); // = 2 ^ 223
+const EXP_ONE_DIV_RR = EXP_ONE.div(RR); // = 2 ^ 31
+const EXP_ONE_DIV_MM = EXP_ONE.div(MM); // = 2 ^ 79
 
 enum GradientType {
   LINEAR_INCREASE,
@@ -62,23 +69,23 @@ function calcSourceAmount(
 }
 
 /**
-* @dev Given the following parameters:
-* r - the gradient's initial exchange rate
-* m - the gradient's multiplication factor
-* t - the time elapsed since strategy creation
-*
-* Calculate the current exchange rate for each one of the following gradients:
-* +----------------+-----------+-----------------+----------------------------------------------+
-* | type           | direction | formula         | restriction                                  |
-* +----------------+-----------+-----------------+----------------------------------------------+
-* | linear         | increase  | r * (1 + m * t) |                                              |
-* | linear         | decrease  | r * (1 - m * t) | m * t < 1 (ensure a finite-positive rate)    |
-* | linear-inverse | increase  | r / (1 - m * t) | m * t < 1 (ensure a finite-positive rate)    |
-* | linear-inverse | decrease  | r / (1 + m * t) |                                              |
-* | exponential    | increase  | r * e ^ (m * t) | m * t < 16 (due to computational limitation) |
-* | exponential    | decrease  | r / e ^ (m * t) | m * t < 16 (due to computational limitation) |
-* +----------------+-----------+-----------------+----------------------------------------------+
-*/
+ * @dev Given the following parameters:
+ * r - the gradient's initial exchange rate
+ * m - the gradient's multiplication factor
+ * t - the time elapsed since strategy creation
+ *
+ * Calculate the current exchange rate for each one of the following gradients:
+ * +----------------+-----------+-----------------+----------------------------------------------+
+ * | type           | direction | formula         | restriction                                  |
+ * +----------------+-----------+-----------------+----------------------------------------------+
+ * | linear         | increase  | r * (1 + m * t) |                                              |
+ * | linear         | decrease  | r * (1 - m * t) | m * t < 1 (ensure a finite-positive rate)    |
+ * | linear-inverse | increase  | r / (1 - m * t) | m * t < 1 (ensure a finite-positive rate)    |
+ * | linear-inverse | decrease  | r / (1 + m * t) |                                              |
+ * | exponential    | increase  | r * e ^ (m * t) | m * t < 129 * ln2 (computational limitation) |
+ * | exponential    | decrease  | r / e ^ (m * t) | m * t < 129 * ln2 (computational limitation) |
+ * +----------------+-----------+-----------------+----------------------------------------------+
+ */
 function calcCurrentRate(
   gradientType: GradientType,
   initialRate: BigNumber, // the 48-bit-mantissa-6-bit-exponent encoding of the initial exchange rate square root
@@ -104,7 +111,7 @@ function calcCurrentRate(
     // initial_rate * (1 + multi_factor * time_elapsed)
     const temp1 = rr; /////////// < 2 ^ 192
     const temp2 = add(MM, mt); // < 2 ^ 81
-    const temp3 = mulDivC(temp1, temp2, MAX_UINT256);
+    const temp3 = minFactor(temp1, temp2);
     const temp4 = RR_MUL_MM;
     return [mulDivF(temp1, temp2, temp3), temp4.div(temp3)]; // not ideal
   }
@@ -134,7 +141,7 @@ function calcCurrentRate(
     // initial_rate * e ^ (multi_factor * time_elapsed)
     const temp1 = rr; //////////////////////// < 2 ^ 192
     const temp2 = exp(mul(mt, EXP_ONE_DIV_MM)); // < 2 ^ 159 (inner expression)
-    const temp3 = mulDivC(temp1, temp2, MAX_UINT256);
+    const temp3 = minFactor(temp1, temp2);
     const temp4 = EXP_ONE_MUL_RR;
     return [mulDivF(temp1, temp2, temp3), temp4.div(temp3)]; // not ideal
   }
@@ -149,6 +156,9 @@ function calcCurrentRate(
   throw new Error(`Invalid gradientType ${gradientType}`);
 }
 
+/**
+ * @dev Ensure a finite positive rate
+ */
 function sub(one: BigNumber, mt: BigNumber): BigNumber {
   if (one.lte(mt)) {
     throw new Error('InvalidRate');
@@ -157,21 +167,41 @@ function sub(one: BigNumber, mt: BigNumber): BigNumber {
 }
 
 /**
-* @dev Compute e ^ (x / EXP_ONE) * EXP_ONE
-* Input range: 0 <= x <= MAX_VAL - 1
-* Detailed description:
-* - Rewrite the input as a sum of binary exponents and a single residual r, as small as possible
-* - The exponentiation of each binary exponent is given (pre-calculated)
-* - The exponentiation of r is calculated via Taylor series for e^x, where x = r
-* - The exponentiation of the input is calculated by multiplying the intermediate results above
-* - For example: e^5.521692859 = e^(4 + 1 + 0.5 + 0.021692859) = e^4 * e^1 * e^0.5 * e^0.021692859
-*/
+ * @dev Compute e ^ (x / EXP_ONE) * EXP_ONE
+ * Input range: 0 <= x <= EXP_MAX - 1
+ * Detailed description:
+ * - For x < EXP_MID, this function computes e ^ x
+ * - For x < EXP_MAX, this function computes e ^ mod(x, ln2) * 2 ^ div(x, ln2)
+ * - The latter relies on the following identity:
+ *   e ^ x =
+ *   e ^ x * 2 ^ k / 2 ^ k =
+ *   e ^ x * 2 ^ k / e ^ (k * ln2) =
+ *   e ^ x / e ^ (k * ln2) * 2 ^ k =
+ *   e ^ (x - k * ln2) * 2 ^ k
+ * - Replacing k with div(x, ln2) gives the solution above
+ * - The value of ln2 is represented as ceil(ln2 * EXP_ONE)
+ */
 function exp(x: BigNumber): BigNumber {
-  // prettier-ignore
-  if (x.gte(MAX_VAL)) {
-    throw new Error('ExpOverflow');
+  if (x.lt(EXP_MID)) {
+      return _exp(x); // slightly more accurate
   }
+  if (x.lt(EXP_MAX)) {
+      return _exp(x.mod(EXP_LN2)).shl(x.div(EXP_LN2).toNumber());
+  }
+  throw new Error('ExpOverflow');
+}
 
+/**
+ * @dev Compute e ^ (x / EXP_ONE) * EXP_ONE
+ * Input range: 0 <= x <= EXP_ONE * 16 - 1
+ * Detailed description:
+ * - Rewrite the input as a sum of binary exponents and a single residual r, as small as possible
+ * - The exponentiation of each binary exponent is given (pre-calculated)
+ * - The exponentiation of r is calculated via Taylor series for e^x, where x = r
+ * - The exponentiation of the input is calculated by multiplying the intermediate results above
+ * - For example: e^5.521692859 = e^(4 + 1 + 0.5 + 0.021692859) = e^4 * e^1 * e^0.5 * e^0.021692859
+ */
+function _exp(x: BigNumber): BigNumber {
   let res = BigNumber.from(0);
 
   let y: BigNumber;
