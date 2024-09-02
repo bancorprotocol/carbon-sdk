@@ -516,9 +516,7 @@ describe('Toolkit', () => {
         encodedEmptyStrategy,
         {
           buyBudget: '3',
-        },
-        undefined,
-        undefined
+        }
       );
       const updateArgs = apiMock.composer.updateStrategy.getCall(0).args;
       // order 0 is supposed to remain the same
