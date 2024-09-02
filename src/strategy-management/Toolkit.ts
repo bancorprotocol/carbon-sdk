@@ -1006,11 +1006,17 @@ export class Toolkit {
     if (buyPriceLow === undefined && buyPriceHigh === undefined) {
       newEncodedStrategy.order1.A = encodedBN.order1.A;
       newEncodedStrategy.order1.B = encodedBN.order1.B;
+      if (buyPriceMarginal === undefined) {
+        newEncodedStrategy.order1.z = encodedBN.order1.z;
+      }
     }
 
     if (sellPriceLow === undefined && sellPriceHigh === undefined) {
       newEncodedStrategy.order0.A = encodedBN.order0.A;
       newEncodedStrategy.order0.B = encodedBN.order0.B;
+      if (sellPriceMarginal === undefined) {
+        newEncodedStrategy.order0.z = encodedBN.order0.z;
+      }
     }
 
     if (buyBudget !== undefined) {

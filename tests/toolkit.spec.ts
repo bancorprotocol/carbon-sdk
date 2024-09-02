@@ -489,6 +489,44 @@ describe('Toolkit', () => {
       expect(updateArgs[4][0].y.toString()).to.equal('1');
       expect(updateArgs[4][0].z.toString()).to.equal('1');
     });
+
+
+
+    it('should update budget on buy order without resetting marginalPrice of sell order', async () => {
+      const encodedEmptyStrategy = {
+        id: '1',
+        token0: 'xyz',
+        token1: 'abc',
+        order0: {
+          y: '1',
+          z: '2',
+          A: '100',
+          B: '10000',
+        },
+        order1: {
+          y: '0',
+          z: '2000000000000000000',
+          A: '100',
+          B: '10000',
+        },
+      };
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.updateStrategy(
+        encodedEmptyStrategy.id.toString(),
+        encodedEmptyStrategy,
+        {
+          buyBudget: '3',
+        },
+        undefined,
+        undefined
+      );
+      const updateArgs = apiMock.composer.updateStrategy.getCall(0).args;
+      // order 0 is supposed to remain the same
+      expect(updateArgs[4][0].A.toString()).to.equal('100');
+      expect(updateArgs[4][0].B.toString()).to.equal('10000');
+      expect(updateArgs[4][0].y.toString()).to.equal('1');
+      expect(updateArgs[4][0].z.toString()).to.equal('2');
+    });
   });
 
   describe('overlappingStrategies', () => {
