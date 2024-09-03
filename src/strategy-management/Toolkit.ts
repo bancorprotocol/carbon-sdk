@@ -990,12 +990,36 @@ export class Toolkit {
     const newEncodedStrategy = encodeStrategy(newStrategy);
 
     // step 3: to avoid changes due to rounding errors, we will override the new encoded strategy with selected values from the old encoded strategy:
+    // - if an order wasn't defined - it shouldn't be changed
     // - if budget wasn't defined - we will use the old y
     // - if no price was defined - we will use the old A and B
     // - if any budget was defined - will set z according to MarginalPriceOptions
     // - if any price was defined - we will reset z to y
     // - if marginalPrice is a number - we will use it to calculate z
     const encodedBN = encodedStrategyStrToBN(encoded);
+    if (
+      buyBudget === undefined &&
+      buyPriceLow === undefined &&
+      buyPriceHigh === undefined &&
+      buyPriceMarginal === undefined
+    ) {
+      newEncodedStrategy.order1.y = encodedBN.order1.y;
+      newEncodedStrategy.order1.z = encodedBN.order1.z;
+      newEncodedStrategy.order1.A = encodedBN.order1.A;
+      newEncodedStrategy.order1.B = encodedBN.order1.B;
+    }
+    if (
+      sellBudget === undefined &&
+      sellPriceLow === undefined &&
+      sellPriceHigh === undefined &&
+      sellPriceMarginal === undefined
+    ) {
+      newEncodedStrategy.order0.y = encodedBN.order0.y;
+      newEncodedStrategy.order0.z = encodedBN.order0.z;
+      newEncodedStrategy.order0.A = encodedBN.order0.A;
+      newEncodedStrategy.order0.B = encodedBN.order0.B;
+    }
+
     if (buyBudget === undefined) {
       newEncodedStrategy.order1.y = encodedBN.order1.y;
     }
@@ -1018,13 +1042,13 @@ export class Toolkit {
         // do nothing - z was already calculated and set
       } else if (buyPriceMarginal === MarginalPriceOptions.maintain) {
         if (encodedBN.order1.y.isZero()) {
-          // When depositing into an empty order and instructed to MAINTAIN - keep the old z, unless it's lower than the new y
+          // When depositing into an empty order and instructed to MAINTAIN - keep the old z, unless it's lower than the new y - in which case we set it to the new y
           newEncodedStrategy.order1.z = BigNumberMax(
             encodedBN.order1.z,
             newEncodedStrategy.order1.y
           );
         } else {
-          // maintain the current ratio of y/z
+          // we're not depositing into an empty order and we're instructed to MAINTAIN - maintain the current ratio of y/z
           newEncodedStrategy.order1.z = mulDiv(
             encodedBN.order1.z,
             newEncodedStrategy.order1.y,
