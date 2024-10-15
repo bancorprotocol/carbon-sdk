@@ -284,6 +284,32 @@ describe('Toolkit', () => {
       expect(updateArgs[4][0].z.toString()).to.equal(encodedStrategy.order0.z);
     });
 
+    it('when passing prices and budget and maintain - maintain should apply to z', async () => {
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      await toolkit.updateStrategy(
+        encodedStrategy.id.toString(),
+        encodedStrategy,
+        {
+          buyPriceLow: '2355',
+          buyBudget: '16',
+        },
+        MarginalPriceOptions.maintain
+      );
+      const updateArgs = apiMock.composer.updateStrategy.getCall(0).args;
+      // A, B and y of the buy order (order1) are supposed to change - and z is changed to maintain ration to y
+      expect(updateArgs[4][1].A.toString()).to.equal('272786533470912');
+      expect(updateArgs[4][1].B.toString()).to.equal('1902279766516736');
+      expect(updateArgs[4][1].y.toString()).to.equal('16000000000000000000');
+      expect(updateArgs[4][1].z.toString()).to.equal('28828060933807893468');
+
+      // order 0 is supposed to remain the same
+      expect(updateArgs[4][0].A.toString()).to.equal(encodedStrategy.order0.A);
+      expect(updateArgs[4][0].B.toString()).to.equal(encodedStrategy.order0.B);
+      expect(updateArgs[4][0].y.toString()).to.equal(encodedStrategy.order0.y);
+      expect(updateArgs[4][0].z.toString()).to.equal(encodedStrategy.order0.z);
+    });
+
+
     it('should only modify y and z values if only budget is provided', async () => {
       const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
       await toolkit.updateStrategy(
