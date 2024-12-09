@@ -8,8 +8,8 @@ import Decimal from 'decimal.js';
 Decimal.set({
   precision: 100,
   rounding: Decimal.ROUND_HALF_DOWN,
-  toExpNeg: -30,
-  toExpPos: 30,
+  toExpNeg: -300,
+  toExpPos: 300,
 });
 
 export { Decimal, BigNumber, BigNumberish };
