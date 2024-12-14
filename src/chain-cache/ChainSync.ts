@@ -152,18 +152,24 @@ export class ChainSync {
     ) {
       batches.push(this._uncachedPairs.slice(i, i + this._numOfPairsToBatch));
     }
-    this._uncachedPairs = [];
-    const strategiesBatches = await Promise.all(
-      batches.map((batch) => this._fetcher.strategiesByPairs(batch))
-    );
-    strategiesBatches.flat().forEach((pairStrategies) => {
-      this._chainCache.addPair(
-        pairStrategies.pair[0],
-        pairStrategies.pair[1],
-        pairStrategies.strategies,
-        true
+
+    try {
+      const strategiesBatches = await Promise.all(
+        batches.map((batch) => this._fetcher.strategiesByPairs(batch))
       );
-    });
+      strategiesBatches.flat().forEach((pairStrategies) => {
+        this._chainCache.addPair(
+          pairStrategies.pair[0],
+          pairStrategies.pair[1],
+          pairStrategies.strategies,
+          true
+        );
+      });
+      this._uncachedPairs = [];
+    } catch (error) {
+      logger.error('Failed to fetch strategies for pairs batch:', error);
+      throw error; // Re-throw to be handled by caller
+    }
   }
 
   public async syncPairData(token0: string, token1: string): Promise<void> {
