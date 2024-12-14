@@ -154,6 +154,12 @@ export type BlockMetadata = {
 export interface Fetcher {
   pairs(): Promise<TokenPair[]>;
   strategiesByPair(token0: string, token1: string): Promise<EncodedStrategy[]>;
+  strategiesByPairs(pairs: TokenPair[]): Promise<
+    {
+      pair: TokenPair;
+      strategies: EncodedStrategy[];
+    }[]
+  >;
   pairTradingFeePPM(token0: string, token1: string): Promise<number>;
   pairsTradingFeePPM(pairs: TokenPair[]): Promise<[string, string, number][]>;
   tradingFeePPM(): Promise<number>;

@@ -103,6 +103,32 @@ export default class Reader implements Fetcher {
     return res.map((r) => toStrategy(r));
   }
 
+  // TODO: add a method to get all strategies by a list of pairs. Returns a collection of pairs and their strategies. It will use multicall to call strategiesByPair method from the contracts.
+  public async strategiesByPairs(pairs: TokenPair[]): Promise<
+    {
+      pair: TokenPair;
+      strategies: EncodedStrategy[];
+    }[]
+  > {
+    const results = await this._multicall(
+      pairs.map((pair) => ({
+        contractAddress: this._contracts.carbonController.address,
+        interface: this._contracts.carbonController.interface,
+        methodName: 'strategiesByPair',
+        methodParameters: [pair[0], pair[1], 0, 0],
+      }))
+    );
+    if (!results || results.length === 0) return [];
+    console.debug('results', results);
+    return results.map((result, i) => {
+      const strategiesResult = result[0] as StrategyStructOutput[];
+      return {
+        pair: pairs[i],
+        strategies: strategiesResult.map((r) => toStrategy(r)),
+      };
+    });
+  }
+
   public async tokensByOwner(owner: string) {
     if (!owner) return [];
 
