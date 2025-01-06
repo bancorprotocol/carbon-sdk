@@ -2,9 +2,6 @@ import { MAX_UINT128, MAX_UINT256, uint128, add, sub, mul, mulDivF, mulDivC, min
 import { BigNumber, BigNumberMax, Decimal, ONE_48 } from '../utils/numerics';
 import { EncodedOrder, DecodedOrder } from '../common/types';
 import { decodeFloatInitialRate } from '../utils/encoders';
-import { getRuntimeConfig } from '../runtime-config';
-
-const isLegacyTradeBySourceRange = getRuntimeConfig().legacyTradeBySourceRange;
 
 const C = BigNumber.from(ONE_48);
 
@@ -18,12 +15,8 @@ const getEncodedTradeBySourceAmount = (
   y: BigNumber,
   z: BigNumber,
   A: BigNumber,
-  B: BigNumber,
-  forceLegacyTradeBySourceRange: boolean = false
+  B: BigNumber
 ): BigNumber => {
-  const legacyTradeBySourceRange =
-    forceLegacyTradeBySourceRange || isLegacyTradeBySourceRange;
-
   if (A.eq(0)) {
     return mulDivF(x, mul(B, B), mul(C, C));
   }
@@ -38,13 +31,10 @@ const getEncodedTradeBySourceAmount = (
 
   const temp4 = mulDivC(temp1, temp1, factor);
   const temp5 = mulDivC(temp3, A, factor);
-  // newer versions of the CarbonController contract can handle extended range
-  // trades by source. In case the SDK is using an older version of the
-  // contract, handle the trade "same as before" in here.
   // Before - in a case of overflow it would end up with a 0 rate and not get
   // picked up for trade. This added check is to avoid the order being picked up
   // for trade - just to be reverted in the case of overflow by the contract.
-  if (legacyTradeBySourceRange || temp4.add(temp5).lte(MAX_UINT256)) {
+  if (temp4.add(temp5).lte(MAX_UINT256)) {
     return mulDivF(temp2, temp3.div(factor), temp4.add(temp5));
   }
   return temp2.div(add(A, mulDivC(temp1, temp1, temp3)));

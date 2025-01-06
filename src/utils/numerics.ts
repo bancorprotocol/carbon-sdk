@@ -3,16 +3,18 @@ import {
   parseUnits as _parseUnits,
   formatUnits as _formatUnits,
 } from '@ethersproject/units';
-import Decimal from 'decimal.js';
+import DecimalJS from 'decimal.js';
 
+const Decimal = DecimalJS.clone();
 Decimal.set({
   precision: 100,
   rounding: Decimal.ROUND_HALF_DOWN,
-  toExpNeg: -30,
-  toExpPos: 30,
+  toExpNeg: -300,
+  toExpPos: 300,
 });
 
 export { Decimal, BigNumber, BigNumberish };
+export type Decimal = DecimalJS;
 
 export const BigNumberMin = (a: BigNumber, b: BigNumber) => (a.lt(b) ? a : b);
 export const BigNumberMax = (a: BigNumber, b: BigNumber) => (a.gt(b) ? a : b);

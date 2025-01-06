@@ -93,12 +93,6 @@ To use it from a browser app do, before importing the SDK:
 window.CARBON_DEFI_SDK_VERBOSITY = 2;
 ```
 
-### 2. For usage with contracts version < 5, without the enhanced range for trade by source:
-
-```js
-window.LEGACY_TRADE_BY_SOURCE_RANGE = true;
-```
-
 ## Authors
 
 - [@zavelevsky](https://www.github.com/zavelevsky)
