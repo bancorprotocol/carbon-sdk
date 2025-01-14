@@ -7,6 +7,8 @@ import {
   Voucher__factory,
   Token,
   Token__factory,
+  CarbonBatcher,
+  CarbonBatcher__factory,
 } from '../abis/types';
 
 import { Provider } from '@ethersproject/providers';
@@ -18,6 +20,7 @@ export default class Contracts {
   private _carbonController: CarbonController | undefined;
   private _multiCall: Multicall | undefined;
   private _voucher: Voucher | undefined;
+  private _carbonBatcher: CarbonBatcher | undefined;
   private _config = defaultConfig;
 
   public constructor(provider: Provider, config?: ContractsConfig) {
@@ -28,6 +31,8 @@ export default class Contracts {
       config?.multiCallAddress || defaultConfig.multiCallAddress;
     this._config.voucherAddress =
       config?.voucherAddress || defaultConfig.voucherAddress;
+    this._config.carbonBatcherAddress =
+      config?.carbonBatcherAddress || defaultConfig.carbonBatcherAddress;
   }
 
   public get carbonController(): CarbonController {
@@ -38,6 +43,16 @@ export default class Contracts {
       );
 
     return this._carbonController;
+  }
+
+  public get carbonBatcher(): CarbonBatcher {
+    if (!this._carbonBatcher)
+      this._carbonBatcher = CarbonBatcher__factory.connect(
+        this._config.carbonBatcherAddress,
+        this._provider
+      );
+
+    return this._carbonBatcher;
   }
 
   public get multicall(): Multicall {

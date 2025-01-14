@@ -924,6 +924,61 @@ export class Toolkit {
   }
 
   /**
+   * Creates an unsigned transaction to create multiple strategies - similarly to `createBuySellStrategy`.
+   *
+   * @param {Strategy[]} strategies - An array of strategies to create.
+   * @param {Overrides} [overrides] - Optional overrides for the transaction, such as gas price or nonce.
+   * @returns {Promise<PopulatedTransaction>} A promise that resolves to the unsigned transaction that can be used to create the strategies.
+   */
+  public async batchCreateBuySellStrategies(
+    strategies: {
+      baseToken: string;
+      quoteToken: string;
+      buyPriceLow: string;
+      buyPriceMarginal: string;
+      buyPriceHigh: string;
+      buyBudget: string;
+      sellPriceLow: string;
+      sellPriceMarginal: string;
+      sellPriceHigh: string;
+      sellBudget: string;
+    }[],
+    overrides?: PayableOverrides
+  ): Promise<PopulatedTransaction> {
+    logger.debug('batchCreateBuySellStrategies called', arguments);
+    const decimals = this._decimals;
+    const encStrategies = await Promise.all(
+      strategies.map(async (s) => {
+        const baseDecimals = await decimals.fetchDecimals(s.baseToken);
+        const quoteDecimals = await decimals.fetchDecimals(s.quoteToken);
+        const strategy: DecodedStrategy = buildStrategyObject(
+          s.baseToken,
+          s.quoteToken,
+          baseDecimals,
+          quoteDecimals,
+          s.buyPriceLow,
+          s.buyPriceMarginal,
+          s.buyPriceHigh,
+          s.buyBudget,
+          s.sellPriceLow,
+          s.sellPriceMarginal,
+          s.sellPriceHigh,
+          s.sellBudget
+        );
+        const encStrategy = encodeStrategy(strategy);
+        return {
+          token0: encStrategy.token0,
+          token1: encStrategy.token1,
+          order0: encStrategy.order0,
+          order1: encStrategy.order1,
+        };
+      })
+    );
+    logger.debug('batchCreateBuySellStrategies info:', { encStrategies });
+    return this._api.composer.batchCreateStrategies(encStrategies, overrides);
+  }
+
+  /**
    * Creates an unsigned transaction to update an on chain strategy.
    * This function takes various optional parameters to update different aspects of the strategy and returns a promise that resolves to a PopulatedTransaction object.
    *

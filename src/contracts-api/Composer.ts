@@ -122,6 +122,42 @@ export default class Composer {
     );
   }
 
+  public batchCreateStrategies(
+    strategies: {
+      token0: string;
+      token1: string;
+      order0: EncodedOrder;
+      order1: EncodedOrder;
+    }[],
+    overrides?: PayableOverrides
+  ) {
+    logger.debug('batchCreateStrategies called', arguments);
+
+    const customOverrides = { ...overrides };
+    let nativeTokenValue = BigNumber.from(0);
+    // for each order using native token, sum the its y value into customOverrides.value
+    for (const strategy of strategies) {
+      if (isETHAddress(strategy.token0)) {
+        nativeTokenValue = nativeTokenValue.add(strategy.order0.y);
+      } else if (isETHAddress(strategy.token1)) {
+        nativeTokenValue = nativeTokenValue.add(strategy.order1.y);
+      }
+    }
+    if (nativeTokenValue.gt(0)) {
+      customOverrides.value = nativeTokenValue;
+    }
+
+    logger.debug('batchCreateStrategies overrides', customOverrides);
+
+    return this._contracts.carbonBatcher.populateTransaction.batchCreate(
+      strategies.map((s) => ({
+        tokens: [s.token0, s.token1],
+        orders: [s.order0, s.order1],
+      })),
+      customOverrides
+    );
+  }
+
   public deleteStrategy(id: BigNumber) {
     return this._contracts.carbonController.populateTransaction.deleteStrategy(
       id
