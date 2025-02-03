@@ -11,6 +11,7 @@ export * from './types';
  * use the ChainCache and ChainSync classes directly.
  * @param {Fetcher} fetcher - fetcher to use for syncing the cache
  * @param {string} cachedData - serialized cache data to initialize the cache with
+ * @param {number} numOfPairsToBatch - number of pairs to fetch in a single batch - adapt this value based on the RPC limits and testing
  * @returns an object with the initialized cache and a function to start syncing the cache
  * @example
  * const { cache, startDataSync } = initSyncedCache(fetcher, cachedData);
@@ -20,7 +21,7 @@ export * from './types';
 export const initSyncedCache = (
   fetcher: Fetcher,
   cachedData?: string,
-  maxBlockAge?: number
+  numOfPairsToBatch?: number
 ): { cache: ChainCache; startDataSync: () => Promise<void> } => {
   let cache: ChainCache | undefined;
   if (cachedData) {
@@ -31,7 +32,7 @@ export const initSyncedCache = (
     cache = new ChainCache();
   }
 
-  const syncer = new ChainSync(fetcher, cache, maxBlockAge);
+  const syncer = new ChainSync(fetcher, cache, numOfPairsToBatch);
   cache.setCacheMissHandler(syncer.syncPairData.bind(syncer));
   return { cache, startDataSync: syncer.startDataSync.bind(syncer) };
 };

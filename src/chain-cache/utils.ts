@@ -39,18 +39,6 @@ export const toDirectionKey = (token0: string, token1: string): string => {
   return toKey([token0, token1]);
 };
 
-// find and return an element in an array, and remove it and all elements before it. If not found, remove all elements.
-export const findAndRemoveLeading = <T>(
-  arr: T[],
-  predicate: (value: T) => boolean
-): T | undefined => {
-  let element = undefined;
-  do {
-    element = arr.shift();
-  } while (element && !predicate(element));
-  return element;
-};
-
 export function isOrderTradable(order: EncodedOrder): boolean {
   return order.y.gt(0) && (order.A.gt(0) || order.B.gt(0));
 }
