@@ -22,15 +22,21 @@ export class ChainSync {
   // keep the time stamp of last fetch
   private _lastFetch: number = Date.now();
   private _numOfPairsToBatch: number;
+  private _msToWaitBetweenSyncs: number;
+  private _chunkSize: number;
 
   constructor(
     fetcher: Fetcher,
     chainCache: ChainCache,
-    numOfPairsToBatch: number = 100
+    numOfPairsToBatch: number = 100,
+    msToWaitBetweenSyncs: number = 1000,
+    chunkSize: number = 1000
   ) {
     this._fetcher = fetcher;
     this._chainCache = chainCache;
     this._numOfPairsToBatch = numOfPairsToBatch;
+    this._msToWaitBetweenSyncs = msToWaitBetweenSyncs;
+    this._chunkSize = chunkSize;
   }
 
   public async startDataSync(): Promise<void> {
@@ -183,7 +189,7 @@ export class ChainSync {
     this._chainCache.addPair(token0, token1, strategies, false);
   }
 
-  // used to break the blocks between latestBlock + 1 and currentBlock to chunks of 1000 blocks
+  // used to break the blocks between latestBlock + 1 and currentBlock to chunks of `chunkSize` blocks
   private _getBlockChunks(
     startBlock: number,
     endBlock: number,
@@ -200,7 +206,6 @@ export class ChainSync {
 
   private async _syncEvents(): Promise<void> {
     logger.debug('_syncEvents called');
-    const interval = 1000; // 1 second
     const processEvents = async () => {
       try {
         const latestBlock = this._chainCache.getLatestBlockNumber();
@@ -237,7 +242,7 @@ export class ChainSync {
           const blockChunks = this._getBlockChunks(
             latestBlock + 1,
             currentBlock,
-            1000
+            this._chunkSize
           );
           logger.debug('_syncEvents block chunks', blockChunks);
 
@@ -367,7 +372,7 @@ export class ChainSync {
         logger.error('Error syncing events:', err);
       }
 
-      setTimeout(processEvents, interval);
+      setTimeout(processEvents, this._msToWaitBetweenSyncs);
     };
     setTimeout(processEvents, 1);
   }

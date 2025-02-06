@@ -21,7 +21,9 @@ export * from './types';
 export const initSyncedCache = (
   fetcher: Fetcher,
   cachedData?: string,
-  numOfPairsToBatch?: number
+  numOfPairsToBatch?: number,
+  msToWaitBetweenSyncs?: number,
+  chunkSize?: number
 ): { cache: ChainCache; startDataSync: () => Promise<void> } => {
   let cache: ChainCache | undefined;
   if (cachedData) {
@@ -32,7 +34,13 @@ export const initSyncedCache = (
     cache = new ChainCache();
   }
 
-  const syncer = new ChainSync(fetcher, cache, numOfPairsToBatch);
+  const syncer = new ChainSync(
+    fetcher,
+    cache,
+    numOfPairsToBatch,
+    msToWaitBetweenSyncs,
+    chunkSize
+  );
   cache.setCacheMissHandler(syncer.syncPairData.bind(syncer));
   return { cache, startDataSync: syncer.startDataSync.bind(syncer) };
 };
