@@ -12,6 +12,8 @@ export * from './types';
  * @param {Fetcher} fetcher - fetcher to use for syncing the cache
  * @param {string} cachedData - serialized cache data to initialize the cache with
  * @param {number} numOfPairsToBatch - number of pairs to fetch in a single batch - adapt this value based on the RPC limits and testing
+ * @param {number} msToWaitBetweenSyncs - number of milliseconds to wait between syncs
+ * @param {number} chunkSize - number of blocks to fetch in a single chunk
  * @returns an object with the initialized cache and a function to start syncing the cache
  * @example
  * const { cache, startDataSync } = initSyncedCache(fetcher, cachedData);
