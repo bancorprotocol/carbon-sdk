@@ -68,7 +68,7 @@ export const isOrderEncodable = (order: DecodedOrder) => {
   try {
     encodeOrder(order);
     return true;
-  } catch (e) {
+  } catch {
     return false;
   }
 };
