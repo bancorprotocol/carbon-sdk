@@ -6,10 +6,10 @@
 const globalObject = (() => {
   try {
     return self;
-  } catch (e) {
+  } catch {
     try {
       return window;
-    } catch (e) {
+    } catch {
       return global;
     }
   }

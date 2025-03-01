@@ -130,7 +130,7 @@ export const getEncodedTradeTargetAmount = (
   const B = decodeFloat(order.B);
   try {
     return uint128(getEncodedTradeBySourceAmount(x, y, z, A, B));
-  } catch (error) {
+  } catch {
     return BigNumber.from(0); /* rate = zero / amount = zero */
   }
 };
@@ -146,7 +146,7 @@ export const getEncodedTradeSourceAmount = (
   const B = decodeFloat(order.B);
   try {
     return uint128(getEncodedTradeByTargetAmount(x, y, z, A, B));
-  } catch (error) {
+  } catch {
     return MAX_UINT128; /* rate = amount / infinity = zero */
   }
 };

@@ -57,6 +57,6 @@ export class Logger {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public debug(...args: any[]) {
-    isVerbose() && console.debug(this._prefix, ...args);
+    if (isVerbose()) console.debug(this._prefix, ...args);
   }
 }

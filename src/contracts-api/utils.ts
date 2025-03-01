@@ -39,7 +39,7 @@ export const multicall = async (
         call.returnData
       );
     });
-  } catch (error) {
+  } catch {
     /* empty */
   }
 };
