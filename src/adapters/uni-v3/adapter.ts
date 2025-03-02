@@ -6,6 +6,7 @@ import {
 } from '../../common/types';
 import { UniV3CastStrategy, UniV3Pool, UniV3Position } from './types';
 import { decodeStrategy } from '../../strategy-management/utils';
+import { encodeOrder } from '../../utils/encoders';
 
 /**
  * Constants for Uniswap V3 calculations
@@ -32,10 +33,11 @@ function calculateImpliedTick(rate: Decimal, roundUp: boolean): number {
  * @returns {string} The calculated liquidity value
  */
 function calculateLConstant(order: DecodedOrder): string {
-  const liquidity = new Decimal(order.liquidity);
+  const encodedOrder = encodeOrder(order);
+  const z = new Decimal(encodedOrder.z.toString());
   const sqrtPriceLow = new Decimal(order.lowestRate).sqrt();
   const sqrtPriceHigh = new Decimal(order.highestRate).sqrt();
-  return liquidity.div(sqrtPriceHigh.sub(sqrtPriceLow)).toString();
+  return z.div(sqrtPriceHigh.sub(sqrtPriceLow)).toFixed(0);
 }
 
 /**

@@ -50,12 +50,6 @@ describe('Uniswap V3 Adapter', () => {
   describe('castToUniV3', () => {
     it('should correctly convert a Carbon strategy to Uniswap V3 format', () => {
       const uniV3Strategy = castToUniV3(exampleStrategy);
-      console.log('sellOrder.tickLower', uniV3Strategy.sellOrder.tickLower);
-      console.log('sellOrder.tickUpper', uniV3Strategy.sellOrder.tickUpper);
-      console.log('sellOrder.liquidity', uniV3Strategy.sellOrder.liquidity);
-      console.log('buyOrder.tickLower', uniV3Strategy.buyOrder.tickLower);
-      console.log('buyOrder.tickUpper', uniV3Strategy.buyOrder.tickUpper);
-      console.log('buyOrder.liquidity', uniV3Strategy.buyOrder.liquidity);
 
       // Verify pool configuration
       expect(uniV3Strategy.pool.xAxisToken).to.equal('0xSHIB');
