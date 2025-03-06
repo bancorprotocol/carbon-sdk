@@ -19,6 +19,8 @@ import {
   matchByTargetAmount,
 } from '../src/trade-matcher/match';
 
+// created via https://github.com/bancorprotocol/carbon-simulator/blob/main/benchmark/test_match.py
+// located at https://github.com/bancorprotocol/carbon-simulator/tree/main/benchmark/resources/match
 import ArbitraryMatch from './data/ArbitraryMatch.json' assert { type: 'json' };
 import BigPoolMatch from './data/BigPoolMatch.json' assert { type: 'json' };
 import EthUsdcMatch from './data/EthUsdcMatch.json' assert { type: 'json' };
