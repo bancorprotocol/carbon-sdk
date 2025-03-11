@@ -45,11 +45,22 @@ export class ChainSync {
       throw new Error('ChainSync.startDataSync() can only be called once');
     }
     this._syncCalled = true;
-    const blockNumber = await this._fetcher.getBlockNumber();
     const latestBlockInCache = this._chainCache.getLatestBlockNumber();
 
     if (latestBlockInCache === 0) {
       logger.debug('startDataSync - cache is new', arguments);
+      const blockNumber = await this._fetcher.getBlockNumber();
+      if (typeof blockNumber !== 'number') {
+        logger.error(
+          'Fatal! startDataSync - getBlockNumber returned value is not a number. ' +
+            'This indicates a serious bug in the provider. At this point, the only ' +
+            'thing we can do is to crash the program, as the cache cannot be set to a ' +
+            'valid state.'
+        );
+        throw new Error(
+          'Fatal! startDataSync - getBlockNumber returned value is not a number.'
+        );
+      }
       // cache starts from scratch so we want to avoid getting events from the beginning of time
       this._chainCache.applyBatchedUpdates(blockNumber, [], [], [], [], []);
     }
@@ -208,8 +219,19 @@ export class ChainSync {
     logger.debug('_syncEvents called');
     const processEvents = async () => {
       try {
-        const latestBlock = this._chainCache.getLatestBlockNumber();
         const currentBlock = await this._fetcher.getBlockNumber();
+        // if the current block number isn't a number, throw an error and hope that the next iteration of processEvents will get a valid number
+        if (typeof currentBlock !== 'number') {
+          logger.error(
+            '_syncEvents - getBlockNumber returned value is not a number. ' +
+              'This indicates a serious bug in the provider. Throwing an error in hope that the next iteration will get a valid number.'
+          );
+          throw new Error(
+            '_syncEvents - getBlockNumber returned value is not a number.'
+          );
+        }
+
+        const latestBlock = this._chainCache.getLatestBlockNumber();
 
         if (currentBlock > latestBlock) {
           if (await this._detectReorg(currentBlock)) {
@@ -381,12 +403,20 @@ export class ChainSync {
     this._slowPollPairs = false;
   }
 
+  /**
+   * Detects blockchain reorganization by comparing stored block metadata with current blockchain state
+   * @param currentBlock - The current block number to check against
+   * @returns True if a reorganization is detected, false otherwise
+   */
   private async _detectReorg(currentBlock: number): Promise<boolean> {
     logger.debug('_detectReorg called');
     const blocksMetadata: BlockMetadata[] = this._chainCache.blocksMetadata;
     const numberToBlockMetadata: { [key: number]: BlockMetadata } = {};
+
     for (const blockMetadata of blocksMetadata) {
       const { number, hash } = blockMetadata;
+
+      // Check if stored block is in the future compared to current block
       if (number > currentBlock) {
         logger.log(
           'reorg detected for block number',
@@ -398,36 +428,98 @@ export class ChainSync {
         );
         return true;
       }
-      const currentHash = (await this._fetcher.getBlock(number)).hash;
-      if (hash !== currentHash) {
-        logger.log(
-          'reorg detected for block number',
+
+      try {
+        // Fetch current block data and handle potential null response
+        const currentBlockData = await this._fetcher.getBlock(number);
+
+        if (
+          !currentBlockData ||
+          !currentBlockData.hash ||
+          !currentBlockData.number
+        ) {
+          logger.error(
+            'Failed to fetch block data for block number',
+            number,
+            '- treating as potential reorg'
+          );
+          return true;
+        }
+
+        const currentHash = currentBlockData.hash;
+
+        // Compare hashes to detect reorg
+        if (hash !== currentHash) {
+          logger.log(
+            'reorg detected for block number',
+            number,
+            'old hash',
+            hash,
+            'new hash',
+            currentHash
+          );
+          return true;
+        }
+
+        // Block metadata is valid, store it for later use without unneeded fields
+        numberToBlockMetadata[number] = {
+          number: blockMetadata.number,
+          hash: blockMetadata.hash,
+        };
+      } catch (error) {
+        logger.error(
+          'Error fetching block data for block number',
           number,
-          'old hash',
-          hash,
-          'new hash',
-          currentHash
+          ':',
+          error
         );
+        // Treat any error as a potential reorg to be safe
         return true;
       }
-      // blockMetadata is valid, let's store it so that we don't have to fetch it again below
-      numberToBlockMetadata[number] = blockMetadata;
     }
 
     // no reorg detected
     logger.debug('_detectReorg no reorg detected, updating blocks metadata');
     // let's store the new blocks metadata
     const latestBlocksMetadata: BlockMetadata[] = [];
+
     for (let i = 0; i < BLOCKS_TO_KEEP; i++) {
-      // get the blocks metadata either from numberToBlockMetadata or from the blockchain
-      if (numberToBlockMetadata[currentBlock - i]) {
-        latestBlocksMetadata.push(numberToBlockMetadata[currentBlock - i]);
+      const blockNumber = currentBlock - i;
+
+      // Get blocks metadata either from cache or from the blockchain
+      if (numberToBlockMetadata[blockNumber]) {
+        latestBlocksMetadata.push(numberToBlockMetadata[blockNumber]);
       } else {
-        latestBlocksMetadata.push(
-          await this._fetcher.getBlock(currentBlock - i)
-        );
+        try {
+          const blockData = await this._fetcher.getBlock(blockNumber);
+
+          if (!blockData || !blockData.number || !blockData.hash) {
+            logger.error(
+              'Failed to fetch new block data for block number',
+              blockNumber,
+              '- skipping this block'
+            );
+            continue;
+          }
+
+          // storing the block metadata without unneeded fields
+          latestBlocksMetadata.push({
+            number: blockData.number,
+            hash: blockData.hash,
+          });
+        } catch (error) {
+          logger.error(
+            'Error fetching new block data for block number',
+            blockNumber,
+            ':',
+            error,
+            '- skipping this block'
+          );
+          continue;
+        }
       }
     }
+
     this._chainCache.blocksMetadata = latestBlocksMetadata;
     logger.debug('_detectReorg updated blocks metadata');
 

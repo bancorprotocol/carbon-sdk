@@ -85,6 +85,14 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
       return;
     }
 
+    // if, due to a bug, the cached latest block number isn't a number, print an error and return
+    if (typeof parsedCache.latestBlockNumber !== 'number') {
+      logger.error(
+        'Cached latest block number is not a number, ignoring cache'
+      );
+      return;
+    }
+
     this._strategiesByPair = Object.entries(
       parsedCache.strategiesByPair
     ).reduce((acc, [key, strategies]) => {
@@ -117,7 +125,13 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     this._latestBlockNumber = parsedCache.latestBlockNumber;
     this._latestTradesByPair = parsedCache.latestTradesByPair;
     this._latestTradesByDirectedPair = parsedCache.latestTradesByDirectedPair;
-    this._blocksMetadata = parsedCache.blocksMetadata;
+
+    // handling a case where, due to a bug, the cached blocks metadata array contains a null item
+    if (parsedCache.blocksMetadata) {
+      this._blocksMetadata = parsedCache.blocksMetadata.filter(
+        (block) => !!block && !!block.number && !!block.hash
+      );
+    }
   }
 
   public serialize(): string {
