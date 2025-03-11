@@ -109,6 +109,64 @@ describe('ChainCache', () => {
       const emptyCache = ChainCache.fromSerialized(legacySerialized);
       expect(emptyCache.getCachedPairs()).to.deep.equal([]);
     });
+    it('should return clear cache when deserialized with invalid latestBlockNumber', async () => {
+      const regex = /"latestBlockNumber":\d+/;
+      const invalidSerialized = serialized.replace(
+        regex,
+        '"latestBlockNumber":null'
+      );
+      // assert that the cache was created empty
+      const emptyCache = ChainCache.fromSerialized(invalidSerialized);
+      expect(emptyCache.getCachedPairs()).to.deep.equal([]);
+    });
+    it('should filter out null items from blocksMetadata when deserializing', async () => {
+      // Create a cache with some block metadata
+      const cacheWithBlocks = new ChainCache();
+      cacheWithBlocks.blocksMetadata = [
+        { number: 1, hash: '0x123' },
+        { number: 2, hash: '0x456' },
+      ];
+      const serializedCache = cacheWithBlocks.serialize();
+
+      // Inject a null item into the blocksMetadata array
+      const regex = /"blocksMetadata":\[(.*?)\]/s;
+      const invalidSerialized = serializedCache.replace(
+        regex,
+        (match, p1) =>
+          `"blocksMetadata":[${p1},null,{"number":3,"hash":"0x789"}]`
+      );
+
+      // Deserialize and verify null items are filtered out
+      const deserializedCache = ChainCache.fromSerialized(invalidSerialized);
+      expect(deserializedCache.blocksMetadata).to.have.length(3);
+      expect(
+        deserializedCache.blocksMetadata.map((b) => b.number)
+      ).to.deep.equal([1, 2, 3]);
+    });
+    it('should filter out invalid items from blocksMetadata when deserializing', async () => {
+      // Create a cache with some block metadata
+      const cacheWithBlocks = new ChainCache();
+      cacheWithBlocks.blocksMetadata = [
+        { number: 1, hash: '0x123' },
+        { number: 2, hash: '0x456' },
+      ];
+      const serializedCache = cacheWithBlocks.serialize();
+
+      // Inject invalid items into the blocksMetadata array
+      const regex = /"blocksMetadata":\[(.*?)\]/s;
+      const invalidSerialized = serializedCache.replace(
+        regex,
+        (match, p1) =>
+          `"blocksMetadata":[${p1},{"timestamp":3000},{"number":3}]`
+      );
+
+      // Deserialize and verify invalid items are filtered out
+      const deserializedCache = ChainCache.fromSerialized(invalidSerialized);
+      expect(deserializedCache.blocksMetadata).to.have.length(2);
+      expect(
+        deserializedCache.blocksMetadata.map((b) => b.number)
+      ).to.deep.equal([1, 2]);
+    });
   });
   describe('onChange', () => {
     it('should fire onPairAddedToCache event when pair is added', async () => {
@@ -169,7 +227,17 @@ describe('ChainCache', () => {
       expect(await cache.getTradingFeePPMByPair('xyz', 'def')).to.be.undefined;
       cache.applyBatchedUpdates(1, [['abc', 'xyz', 11]], [], [], [], []);
       expect(await cache.getTradingFeePPMByPair('xyz', 'abc')).to.equal(11);
-      cache.applyBatchedUpdates(1, [['abc', 'xyz', 12], ['abc', 'xyz', 13]], [], [], [], []);
+      cache.applyBatchedUpdates(
+        1,
+        [
+          ['abc', 'xyz', 12],
+          ['abc', 'xyz', 13],
+        ],
+        [],
+        [],
+        [],
+        []
+      );
       expect(await cache.getTradingFeePPMByPair('xyz', 'abc')).to.equal(13);
     });
   });
