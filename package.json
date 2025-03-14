@@ -114,7 +114,7 @@
   "dependencies": {
     "@ethersproject/abi": "^5.7.0",
     "@ethersproject/bignumber": "^5.7.0",
-    "@ethersproject/contracts": "^5.7.0",
+    "@ethersproject/contracts": "^5.8.0",
     "@ethersproject/providers": "^5.7.2",
     "@ethersproject/units": "^5.8.0",
     "decimal.js": "^10.5.0",
