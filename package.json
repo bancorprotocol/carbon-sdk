@@ -30,6 +30,10 @@
     "./strategy-management": {
       "import": "./dist/strategy-management/index.js",
       "require": "./dist/strategy-management/index.cjs"
+    },
+    "./adapters": {
+      "import": "./dist/adapters/index.js",
+      "require": "./dist/adapters/index.cjs"
     }
   },
   "files": [
@@ -54,6 +58,9 @@
       ],
       "strategy-management": [
         "dist/strategy-management"
+      ],
+      "adapters": [
+        "dist/adapters"
       ]
     }
   },
