@@ -11,7 +11,7 @@ import { encodeOrder } from '../../utils/encoders';
 /**
  * Constants for Uniswap V3 calculations
  */
-const TICK_BASE = new Decimal('1.0001');
+const TICK_BASE_LN = Decimal.ln('1.0001');
 const DEFAULT_TICK_SPACING = 1;
 
 /**
@@ -22,9 +22,8 @@ const DEFAULT_TICK_SPACING = 1;
  */
 function calculateImpliedTick(rate: Decimal, roundUp: boolean): number {
   const logRate = rate.ln();
-  const logTickBase = TICK_BASE.ln();
-  const tick = logRate.div(logTickBase);
-  return roundUp ? Math.ceil(Number(tick)) : Math.floor(Number(tick));
+  const tick = logRate.div(TICK_BASE_LN);
+  return roundUp ? tick.ceil().toNumber() : tick.floor().toNumber();
 }
 
 /**
