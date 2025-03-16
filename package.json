@@ -118,7 +118,7 @@
     "@ethersproject/providers": "^5.7.2",
     "@ethersproject/units": "^5.8.0",
     "decimal.js": "^10.5.0",
-    "ethers": "^5.7.2",
+    "ethers": "^5.8.0",
     "events": "^3.3.0"
   }
 }
