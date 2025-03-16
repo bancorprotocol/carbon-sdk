@@ -1,12 +1,7 @@
-import { Decimal } from '../../utils/numerics';
-import {
-  DecodedOrder,
-  DecodedStrategy,
-  EncodedStrategy,
-} from '../../common/types';
+import { Decimal, MAX_UINT256 } from '../../utils/numerics';
+import { EncodedOrder, EncodedStrategy } from '../../common/types';
 import { UniV3CastStrategy, UniV3Pool, UniV3Position } from './types';
-import { decodeStrategy } from '../../strategy-management/utils';
-import { encodeOrder } from '../../utils/encoders';
+import { decodeFloat, decodeOrder } from '../../utils/encoders';
 
 /**
  * Constants for Uniswap V3 calculations
@@ -28,29 +23,29 @@ function calculateImpliedTick(rate: Decimal, roundUp: boolean): number {
 
 /**
  * Calculates the liquidity constant (L) for a Uniswap V3 position
- * @param {DecodedOrder} order - The Carbon order to calculate liquidity for
+ * @param {EncodedOrder} order - The Carbon order to calculate liquidity for
  * @returns {string} The calculated liquidity value
  */
-function calculateLConstant(order: DecodedOrder): string {
-  const encodedOrder = encodeOrder(order);
-  const z = new Decimal(encodedOrder.z.toString());
-  const sqrtPriceLow = new Decimal(order.lowestRate).sqrt();
-  const sqrtPriceHigh = new Decimal(order.highestRate).sqrt();
-  return z.div(sqrtPriceHigh.sub(sqrtPriceLow)).toFixed(0);
+function calculateLConstant(order: EncodedOrder): string {
+  if (order.A.isZero()) {
+    return MAX_UINT256.toString();
+  }
+  return order.z.div(decodeFloat(order.A)).toString();
 }
 
 /**
  * Calculates position information for a Carbon order
- * @param {DecodedOrder} order - The Carbon order
+ * @param {EncodedOrder} order - The Carbon order
  * @param {boolean} isSellOrder - Whether this is a sell order
  * @returns {UniV3Position} The calculated Uniswap V3 position
  */
 function calculatePositionInformation(
-  order: DecodedOrder,
+  order: EncodedOrder,
   isSellOrder: boolean
 ): UniV3Position {
-  const priceLow = new Decimal(order.lowestRate);
-  const priceHigh = new Decimal(order.highestRate);
+  const decodedOrder = decodeOrder(order);
+  const priceLow = new Decimal(decodedOrder.lowestRate);
+  const priceHigh = new Decimal(decodedOrder.highestRate);
 
   if (isSellOrder) {
     return {
@@ -87,10 +82,10 @@ function definePool(baseToken: string, quoteToken: string): UniV3Pool {
 
 /**
  * Converts a Carbon strategy to Uniswap V3 format
- * @param {DecodedStrategy} strategy - The Carbon strategy to convert
+ * @param {EncodedStrategy} strategy - The Carbon strategy to convert
  * @returns {UniV3CastStrategy} The strategy in Uniswap V3 format
  */
-export function castToUniV3(strategy: DecodedStrategy): UniV3CastStrategy {
+export function castToUniV3(strategy: EncodedStrategy): UniV3CastStrategy {
   const pool = definePool(strategy.token0, strategy.token1);
 
   return {
@@ -101,24 +96,12 @@ export function castToUniV3(strategy: DecodedStrategy): UniV3CastStrategy {
 }
 
 /**
- * Converts an encoded Carbon strategy to Uniswap V3 format
- * @param {EncodedStrategy} encodedStrategy - The encoded Carbon strategy to convert
- * @returns {UniV3CastStrategy} The strategy in Uniswap V3 format
- */
-export function castEncodedToUniV3(
-  encodedStrategy: EncodedStrategy
-): UniV3CastStrategy {
-  const decodedStrategy = decodeStrategy(encodedStrategy);
-  return castToUniV3(decodedStrategy);
-}
-
-/**
  * Batch converts multiple encoded Carbon strategies to Uniswap V3 format
  * @param {EncodedStrategy[]} encodedStrategies - Array of encoded Carbon strategies
  * @returns {UniV3CastStrategy[]} Array of strategies in Uniswap V3 format
  */
-export function batchCastEncodedToUniV3(
+export function batchCastToUniV3(
   encodedStrategies: EncodedStrategy[]
 ): UniV3CastStrategy[] {
-  return encodedStrategies.map(castEncodedToUniV3);
+  return encodedStrategies.map(castToUniV3);
 }

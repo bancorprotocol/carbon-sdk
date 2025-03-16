@@ -16,11 +16,21 @@ Decimal.set({
 export { Decimal, BigNumber, BigNumberish };
 export type Decimal = DecimalJS;
 
-export const BigNumberMin = (a: BigNumber, b: BigNumber) => (a.lt(b) ? a : b);
-export const BigNumberMax = (a: BigNumber, b: BigNumber) => (a.gt(b) ? a : b);
+export const BigNumberMin = (a: BigNumberish, b: BigNumberish) => {
+  const aBN = BigNumber.from(a);
+  const bBN = BigNumber.from(b);
+  return aBN.lt(bBN) ? aBN : bBN;
+};
+
+export const BigNumberMax = (a: BigNumberish, b: BigNumberish) => {
+  const aBN = BigNumber.from(a);
+  const bBN = BigNumber.from(b);
+  return aBN.gt(bBN) ? aBN : bBN;
+};
 
 export const ONE = 2 ** 48;
 export const TEN = new Decimal(10);
+export const MAX_UINT256 = BigNumber.from(2).pow(256).sub(1);
 
 export const tenPow = (dec0: number, dec1: number) => {
   const diff = dec0 - dec1;

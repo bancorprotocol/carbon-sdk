@@ -1,10 +1,6 @@
 import { expect } from 'chai';
 import { Decimal, BigNumber } from '../src/utils/numerics';
-import {
-  castToUniV3,
-  castEncodedToUniV3,
-  batchCastEncodedToUniV3,
-} from '../src/adapters/uni-v3/adapter';
+import { castToUniV3, batchCastToUniV3 } from '../src/adapters/uni-v3/adapter';
 import { DecodedStrategy, EncodedStrategy } from '../src/common/types';
 import {
   buildStrategyObject,
@@ -49,7 +45,7 @@ describe('Uniswap V3 Adapter', () => {
 
   describe('castToUniV3', () => {
     it('should correctly convert a Carbon strategy to Uniswap V3 format', () => {
-      const uniV3Strategy = castToUniV3(exampleStrategy);
+      const uniV3Strategy = castToUniV3(exampleEncodedStrategy);
 
       // Verify pool configuration
       expect(uniV3Strategy.pool.xAxisToken).to.equal('0xSHIB');
@@ -83,16 +79,27 @@ describe('Uniswap V3 Adapter', () => {
           ...exampleStrategy.order0,
           liquidity: '0',
         },
+        order1: {
+          ...exampleStrategy.order1,
+          lowestRate: '0',
+          highestRate: '0',
+          marginalRate: '0',
+        },
       };
 
-      const uniV3Strategy = castToUniV3(zeroLiquidityStrategy);
+      const zeroLiquidityStrategyEncoded: EncodedStrategy = {
+        id: BigNumber.from(1),
+        ...encodeStrategy(zeroLiquidityStrategy),
+      };
+
+      const uniV3Strategy = castToUniV3(zeroLiquidityStrategyEncoded);
 
       expect(uniV3Strategy.sellOrder.liquidity).to.equal('0');
       expect(uniV3Strategy.buyOrder.liquidity).not.to.equal('0');
     });
 
     it('should maintain price ordering when converting to ticks', () => {
-      const uniV3Strategy = castToUniV3(exampleStrategy);
+      const uniV3Strategy = castToUniV3(exampleEncodedStrategy);
 
       // Verify tick ordering matches price ordering
       expect(uniV3Strategy.sellOrder.tickUpper).to.be.greaterThan(
@@ -102,11 +109,9 @@ describe('Uniswap V3 Adapter', () => {
         uniV3Strategy.buyOrder.tickLower
       );
     });
-  });
 
-  describe('castEncodedToUniV3', () => {
     it('should correctly convert an encoded Carbon strategy to Uniswap V3 format', () => {
-      const uniV3Strategy = castEncodedToUniV3(exampleEncodedStrategy);
+      const uniV3Strategy = castToUniV3(exampleEncodedStrategy);
 
       expect(uniV3Strategy.pool.xAxisToken).to.equal('0xSHIB');
       expect(uniV3Strategy.pool.yAxisToken).to.equal('0xWBTC');
@@ -133,13 +138,45 @@ describe('Uniswap V3 Adapter', () => {
         },
       };
 
-      const uniV3Strategy = castEncodedToUniV3(zeroLiquidityStrategy);
+      const uniV3Strategy = castToUniV3(zeroLiquidityStrategy);
       expect(uniV3Strategy.sellOrder.liquidity).to.equal('0');
       expect(uniV3Strategy.buyOrder.liquidity).not.to.equal('0');
     });
+
+    it('should correctly handle limit orders where A is 0', () => {
+      // Create a limit order by setting A to 0 (lowestRate === marginalRate === highestRate)
+      const limitOrderStrategy: EncodedStrategy = {
+        ...exampleEncodedStrategy,
+        order0: {
+          ...exampleEncodedStrategy.order0,
+          A: BigNumber.from(0), // This makes it a limit order
+          B: BigNumber.from(22290), // Keep the same B value
+          y: BigNumber.from(400000000),
+          z: BigNumber.from(737165668),
+        },
+      };
+
+      const uniV3Strategy = castToUniV3(limitOrderStrategy);
+
+      // For a limit order with A=0, the liquidity should be MAX_UINT256
+      expect(uniV3Strategy.sellOrder.liquidity).to.equal(
+        '115792089237316195423570985008687907853269984665640564039457584007913129639935' // MAX_UINT256
+      );
+
+      // Verify that the ticks are still properly ordered
+      expect(uniV3Strategy.sellOrder.tickUpper).to.be.greaterThanOrEqual(
+        uniV3Strategy.sellOrder.tickLower
+      );
+
+      // For a limit order, the ticks might be the same or very close
+      // Let's verify the tick difference is small (could be 0 or 1 due to rounding)
+      const tickDifference =
+        uniV3Strategy.sellOrder.tickUpper - uniV3Strategy.sellOrder.tickLower;
+      expect(tickDifference).to.be.lessThanOrEqual(1);
+    });
   });
 
-  describe('batchCastEncodedToUniV3', () => {
+  describe('batchCasToUniV3', () => {
     it('should convert multiple encoded strategies', () => {
       const strategies = [
         exampleEncodedStrategy,
@@ -150,7 +187,7 @@ describe('Uniswap V3 Adapter', () => {
         },
       ];
 
-      const uniV3Strategies = batchCastEncodedToUniV3(strategies);
+      const uniV3Strategies = batchCastToUniV3(strategies);
 
       expect(uniV3Strategies).to.have.length(2);
       expect(uniV3Strategies[0].pool.xAxisToken).to.equal('0xSHIB');
@@ -158,7 +195,7 @@ describe('Uniswap V3 Adapter', () => {
     });
 
     it('should handle empty array', () => {
-      const uniV3Strategies = batchCastEncodedToUniV3([]);
+      const uniV3Strategies = batchCastToUniV3([]);
       expect(uniV3Strategies).to.have.length(0);
     });
 
@@ -175,7 +212,7 @@ describe('Uniswap V3 Adapter', () => {
         },
       ];
 
-      const uniV3Strategies = batchCastEncodedToUniV3(strategies);
+      const uniV3Strategies = batchCastToUniV3(strategies);
 
       expect(uniV3Strategies).to.have.length(2);
       expect(new Decimal(uniV3Strategies[0].sellOrder.liquidity).gt(0)).to.be
