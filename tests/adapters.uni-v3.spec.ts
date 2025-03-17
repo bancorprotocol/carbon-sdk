@@ -59,6 +59,8 @@ describe('Uniswap V3 Adapter', () => {
       expect(sellOrder.tickUpper).to.be.greaterThan(sellOrder.tickLower);
       expect(sellOrder.liquidity).to.be.a('string');
       expect(new Decimal(sellOrder.liquidity).gt(0)).to.be.true;
+      expect(sellOrder.sqrtPriceX96).to.be.a('string');
+      expect(new Decimal(sellOrder.sqrtPriceX96).gt(0)).to.be.true;
 
       // Verify buy order position
       const buyOrder = uniV3Strategy.buyOrder;
@@ -67,9 +69,43 @@ describe('Uniswap V3 Adapter', () => {
       expect(buyOrder.tickUpper).to.be.greaterThan(buyOrder.tickLower);
       expect(buyOrder.liquidity).to.be.a('string');
       expect(new Decimal(buyOrder.liquidity).gt(0)).to.be.true;
+      expect(buyOrder.sqrtPriceX96).to.be.a('string');
+      expect(new Decimal(buyOrder.sqrtPriceX96).gt(0)).to.be.true;
 
       // Verify relative positioning of orders
       expect(buyOrder.tickUpper).to.be.greaterThan(sellOrder.tickUpper);
+
+      // Verify sqrtPriceX96 values are consistent with the strategy's rates
+      const sellOrderDecodedRate = new Decimal(
+        exampleStrategy.order0.marginalRate
+      );
+      const buyOrderDecodedRate = new Decimal(
+        exampleStrategy.order1.marginalRate
+      );
+
+      // The sqrtPriceX96 should be proportional to the square root of the rate
+      const sellOrderSqrtRate = sellOrderDecodedRate
+        .sqrt()
+        .mul(new Decimal(2).pow(96));
+      const buyOrderSqrtRate = buyOrderDecodedRate
+        .sqrt()
+        .mul(new Decimal(2).pow(96));
+
+      // Allow for small rounding differences
+      expect(
+        new Decimal(sellOrder.sqrtPriceX96)
+          .div(sellOrderSqrtRate)
+          .minus(1)
+          .abs()
+          .lt(0.01)
+      ).to.be.true;
+      expect(
+        new Decimal(buyOrder.sqrtPriceX96)
+          .div(buyOrderSqrtRate)
+          .minus(1)
+          .abs()
+          .lt(0.01)
+      ).to.be.true;
     });
 
     it('should handle zero liquidity orders', () => {

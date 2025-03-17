@@ -14,6 +14,7 @@ export interface UniV3Position {
   tickUpper: number;
   tickLower: number;
   liquidity: string;
+  sqrtPriceX96: string;
 }
 
 /**

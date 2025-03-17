@@ -33,6 +33,14 @@ function calculateLConstant(order: EncodedOrder): string {
   return order.z.div(decodeFloat(order.A)).toString();
 }
 
+function calculateSqrtPriceX96(order: EncodedOrder): string {
+  const decodedOrder = decodeOrder(order);
+  const marginalRate = new Decimal(decodedOrder.marginalRate);
+  const sqrtRate = marginalRate.sqrt();
+  const sqrtPriceX96 = sqrtRate.mul(new Decimal(2).pow(96));
+  return sqrtPriceX96.floor().toString();
+}
+
 /**
  * Calculates position information for a Carbon order
  * @param {EncodedOrder} order - The Carbon order
@@ -52,6 +60,7 @@ function calculatePositionInformation(
       tickUpper: calculateImpliedTick(priceHigh, true),
       tickLower: calculateImpliedTick(priceLow, false),
       liquidity: calculateLConstant(order),
+      sqrtPriceX96: calculateSqrtPriceX96(order),
     };
   }
 
@@ -63,6 +72,7 @@ function calculatePositionInformation(
     tickUpper: calculateImpliedTick(invertedPriceHigh, true),
     tickLower: calculateImpliedTick(invertedPriceLow, false),
     liquidity: calculateLConstant(order),
+    sqrtPriceX96: calculateSqrtPriceX96(order),
   };
 }
 
