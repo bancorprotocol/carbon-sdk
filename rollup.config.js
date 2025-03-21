@@ -11,6 +11,7 @@ export default {
     'contracts-api': 'src/contracts-api/index.ts',
     'strategy-management': 'src/strategy-management/index.ts',
     'trade-matcher': 'src/trade-matcher/index.ts',
+    'adapters': 'src/adapters/index.ts',
     utils: 'src/utils/index.ts',
   },
   output: [

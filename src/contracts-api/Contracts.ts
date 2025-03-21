@@ -15,7 +15,7 @@ import { Provider } from '@ethersproject/providers';
 import { config as defaultConfig } from './config';
 import { ContractsConfig } from './types';
 
-export default class Contracts {
+export class Contracts {
   private _provider: Provider;
   private _carbonController: CarbonController | undefined;
   private _multiCall: Multicall | undefined;

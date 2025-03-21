@@ -1,7 +1,7 @@
 import { Provider } from '@ethersproject/providers';
 import { ContractsConfig } from './types';
 import Composer from './Composer';
-import Contracts from './Contracts';
+import { Contracts } from './Contracts';
 import Reader from './Reader';
 
 /**

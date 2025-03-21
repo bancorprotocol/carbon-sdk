@@ -1,5 +1,5 @@
 import { BigNumber, BigNumberish } from '../utils/numerics';
-import Contracts from './Contracts';
+import { Contracts } from './Contracts';
 import { PayableOverrides, PopulatedTransaction } from 'ethers';
 import { buildTradeOverrides, isETHAddress } from './utils';
 import { Logger } from '../common/logger';

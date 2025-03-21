@@ -7,7 +7,7 @@ import {
   StrategyDeletedEventObject,
   PairTradingFeePPMUpdatedEventObject,
 } from '../abis/types/CarbonController';
-import Contracts from './Contracts';
+import { Contracts } from './Contracts';
 import { isETHAddress, MultiCall, multicall } from './utils';
 import { Logger } from '../common/logger';
 import {
