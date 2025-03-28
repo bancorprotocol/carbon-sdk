@@ -1,0 +1,20 @@
+{
+  "name": "carbon-integration-demo",
+  "version": "1.0.0",
+  "main": "dist/demo.js",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/demo.js",
+    "dev": "ts-node demo.ts"
+  },
+  "dependencies": {
+    "@bancor/carbon-sdk": "latest",
+    "ethers": "^5.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^18.15.11",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.4"
+  }
+}
