@@ -18,8 +18,7 @@ enum AMMAlgorithm {
 }
 
 // RPC provider URL including API key
-const PROVIDER_URL =
-  'https://eth-mainnet.g.alchemy.com/v2/oBk4KxWELF9-8Grh_bEds_Y6T2OVMoYL';
+const PROVIDER_URL = 'https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY';
 
 const REASON_TRADE = 1; // Event reason for trade
 
