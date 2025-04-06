@@ -17,6 +17,9 @@ export class ChainSync {
   private _numOfPairsToBatch: number;
   private _msToWaitBetweenSyncs: number;
   private _chunkSize: number;
+  // Track all active timers for cleanup
+  private _activeTimers: Set<number> = new Set();
+  private _isStopped: boolean = false;
 
   constructor(
     fetcher: Fetcher,
@@ -30,6 +33,35 @@ export class ChainSync {
     this._numOfPairsToBatch = numOfPairsToBatch;
     this._msToWaitBetweenSyncs = msToWaitBetweenSyncs;
     this._chunkSize = chunkSize;
+  }
+
+  /**
+   * Stops all running timers and cleans up resources
+   */
+  public stop(): void {
+    logger.debug('Stopping all ChainSync timers');
+    this._isStopped = true;
+    this._activeTimers.forEach((timerId) => clearTimeout(timerId));
+    this._activeTimers.clear();
+  }
+
+  // Helper method to track timers
+  private _setTimeout(callback: () => void, ms: number): number {
+    if (this._isStopped) {
+      logger.debug('Ignoring timer creation after stop() was called');
+      return 0;
+    }
+
+    const timerId = Number(
+      setTimeout(() => {
+        // Remove the timer from active timers before executing callback
+        this._activeTimers.delete(timerId);
+        callback();
+      }, ms)
+    );
+
+    this._activeTimers.add(timerId);
+    return timerId;
   }
 
   public async startDataSync(): Promise<void> {
@@ -121,7 +153,7 @@ export class ChainSync {
           // if we have no pairs we need to fetch - unless we're in slow poll mode and less than a minute has passed since last fetch
           if (this._slowPollPairs && Date.now() - this._lastFetch < 60000) {
             // go back to sleep
-            setTimeout(processPairs, 1000);
+            this._setTimeout(processPairs, 1000);
             return;
           }
           await this._updateUncachedPairsFromChain();
@@ -142,14 +174,14 @@ export class ChainSync {
           '_populatePairsData handled all pairs and goes to slow poll mode'
         );
         this._slowPollPairs = true;
-        setTimeout(processPairs, 1000);
+        this._setTimeout(processPairs, 1000);
         return;
       } catch (e) {
         logger.error('Error while syncing pairs data', e);
-        setTimeout(processPairs, 60000);
+        this._setTimeout(processPairs, 60000);
       }
     };
-    setTimeout(processPairs, 1);
+    this._setTimeout(processPairs, 1);
   }
 
   private async _syncPairDataBatch(): Promise<void> {
@@ -162,12 +194,21 @@ export class ChainSync {
     ) {
       batches.push(this._uncachedPairs.slice(i, i + this._numOfPairsToBatch));
     }
+    logger.debug('_syncPairDataBatch batches', batches);
 
     try {
       const strategiesBatches = await Promise.all(
         batches.map((batch) => this._fetcher.strategiesByPairs(batch))
       );
+      logger.debug('_syncPairDataBatch strategiesBatches', strategiesBatches);
       strategiesBatches.flat().forEach((pairStrategies) => {
+        logger.debug(
+          '_syncPairDataBatch adding pair',
+          pairStrategies.pair[0],
+          pairStrategies.pair[1],
+          'with strategies',
+          pairStrategies.strategies
+        );
         this._chainCache.addPair(
           pairStrategies.pair[0],
           pairStrategies.pair[1],
@@ -196,6 +237,7 @@ export class ChainSync {
   private async _syncEvents(): Promise<void> {
     logger.debug('_syncEvents called');
     const processEvents = async () => {
+      logger.debug('_syncEvents processEvents - new cycle started');
       try {
         const currentBlock = await this._fetcher.getBlockNumber();
         // if the current block number isn't a number, throw an error and hope that the next iteration of processEvents will get a valid number
@@ -211,13 +253,20 @@ export class ChainSync {
 
         const latestBlock = this._chainCache.getLatestBlockNumber();
 
+        logger.debug(
+          '_syncEvents processEvents - latestBlock (start point for new cycle)',
+          latestBlock,
+          'currentBlock',
+          currentBlock
+        );
+
         if (currentBlock > latestBlock) {
           if (await this._detectReorg(currentBlock)) {
             logger.debug('_syncEvents detected reorg - resetting');
             this._chainCache.clear();
             this._chainCache.applyEvents([], currentBlock);
             this._resetPairsFetching();
-            setTimeout(processEvents, 1);
+            this._setTimeout(processEvents, 1);
             return;
           }
 
@@ -247,6 +296,11 @@ export class ChainSync {
                   strategy.token1
                 )
               ) {
+                logger.debug(
+                  '_syncEvents noticed new pair created',
+                  strategy.token0,
+                  strategy.token1
+                );
                 newlyCreatedPairs.push([strategy.token0, strategy.token1]);
               }
             }
@@ -275,9 +329,9 @@ export class ChainSync {
         logger.error('Error syncing events:', err);
       }
 
-      setTimeout(processEvents, this._msToWaitBetweenSyncs);
+      this._setTimeout(processEvents, this._msToWaitBetweenSyncs);
     };
-    setTimeout(processEvents, 1);
+    this._setTimeout(processEvents, 1);
   }
 
   private _resetPairsFetching() {
