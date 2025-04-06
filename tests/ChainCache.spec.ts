@@ -57,7 +57,17 @@ describe('ChainCache', () => {
       cache = new ChainCache();
       cache.addPair('abc', 'xyz', [encodedStrategy1, encodedStrategy2]);
       cache.addPair('foo', 'bar', []);
-      cache.applyBatchedUpdates(7, [], [trade], [], [], []);
+      cache.applyEvents(
+        [
+          {
+            type: 'TokensTraded',
+            blockNumber: 7,
+            logIndex: 0,
+            data: trade,
+          },
+        ],
+        7
+      );
       serialized = cache.serialize();
       deserialized = ChainCache.fromSerialized(serialized);
     });
@@ -185,17 +195,57 @@ describe('ChainCache', () => {
         affectedPairs = pairs;
       });
       cache.addPair('abc', 'xyz', [encodedStrategy1]);
-      cache.applyBatchedUpdates(1, [], [trade], [], [], []);
+      cache.applyEvents(
+        [
+          {
+            type: 'TokensTraded',
+            blockNumber: 1,
+            logIndex: 0,
+            data: trade,
+          },
+        ],
+        1
+      );
       expect(affectedPairs).to.deep.equal([['abc', 'xyz']]);
-      cache.applyBatchedUpdates(2, [], [], [encodedStrategy2], [], []);
+      cache.applyEvents(
+        [
+          {
+            type: 'StrategyCreated',
+            blockNumber: 2,
+            logIndex: 0,
+            data: encodedStrategy2,
+          },
+        ],
+        2
+      );
       expect(affectedPairs).to.deep.equal([['abc', 'xyz']]);
-      cache.applyBatchedUpdates(3, [], [], [], [encodedStrategy1], []);
+      cache.applyEvents(
+        [
+          {
+            type: 'StrategyUpdated',
+            blockNumber: 3,
+            logIndex: 0,
+            data: encodedStrategy1,
+          },
+        ],
+        3
+      );
       expect(affectedPairs).to.deep.equal([['abc', 'xyz']]);
-      cache.applyBatchedUpdates(4, [], [], [], [], [encodedStrategy1]);
+      cache.applyEvents(
+        [
+          {
+            type: 'StrategyDeleted',
+            blockNumber: 4,
+            logIndex: 0,
+            data: encodedStrategy1,
+          },
+        ],
+        4
+      );
       expect(affectedPairs).to.deep.equal([['abc', 'xyz']]);
 
       // this shouldn't fire the event - so affectedPairs should remain the same
-      cache.applyBatchedUpdates(5, [], [], [], [], []);
+      cache.applyEvents([], 5);
       expect(affectedPairs).to.deep.equal([['abc', 'xyz']]);
     });
     it('should contain a single copy of a strategy that was updated', async () => {
@@ -205,7 +255,17 @@ describe('ChainCache', () => {
         id: BigNumber.from(encodedStrategy1.id.toString()),
       };
       cache.addPair('abc', 'xyz', [encodedStrategy1]);
-      cache.applyBatchedUpdates(10, [], [], [], [encodedStrategy1_mod], []);
+      cache.applyEvents(
+        [
+          {
+            type: 'StrategyUpdated',
+            blockNumber: 10,
+            logIndex: 0,
+            data: encodedStrategy1_mod,
+          },
+        ],
+        10
+      );
       const strategies = await cache.getStrategiesByPair('abc', 'xyz');
       expect(strategies).to.have.length(1);
     });
@@ -216,27 +276,63 @@ describe('ChainCache', () => {
         id: BigNumber.from(encodedStrategy1.id.toString()),
       };
       cache.addPair('abc', 'xyz', [encodedStrategy1]);
-      cache.applyBatchedUpdates(10, [], [], [], [], [encodedStrategy1_mod]);
+      cache.applyEvents(
+        [
+          {
+            type: 'StrategyDeleted',
+            blockNumber: 10,
+            logIndex: 0,
+            data: encodedStrategy1_mod,
+          },
+        ],
+        10
+      );
       const strategies = await cache.getStrategiesByPair('abc', 'xyz');
       expect(strategies).to.have.length(0);
     });
     it('should cache the latest fees', async () => {
       const cache = new ChainCache();
-      cache.applyBatchedUpdates(1, [['abc', 'xyz', 10]], [], [], [], []);
+      cache.applyEvents(
+        [
+          {
+            type: 'PairTradingFeePPMUpdated',
+            blockNumber: 1,
+            logIndex: 0,
+            data: ['abc', 'xyz', 10],
+          },
+        ],
+        1
+      );
       expect(await cache.getTradingFeePPMByPair('xyz', 'abc')).to.equal(10);
       expect(await cache.getTradingFeePPMByPair('xyz', 'def')).to.be.undefined;
-      cache.applyBatchedUpdates(1, [['abc', 'xyz', 11]], [], [], [], []);
-      expect(await cache.getTradingFeePPMByPair('xyz', 'abc')).to.equal(11);
-      cache.applyBatchedUpdates(
-        1,
+      cache.applyEvents(
         [
-          ['abc', 'xyz', 12],
-          ['abc', 'xyz', 13],
+          {
+            type: 'PairTradingFeePPMUpdated',
+            blockNumber: 2,
+            logIndex: 0,
+            data: ['abc', 'xyz', 11],
+          },
         ],
-        [],
-        [],
-        [],
-        []
+        2
+      );
+      expect(await cache.getTradingFeePPMByPair('xyz', 'abc')).to.equal(11);
+      cache.applyEvents(
+        [
+          {
+            type: 'PairTradingFeePPMUpdated',
+            blockNumber: 3,
+            logIndex: 0,
+            data: ['abc', 'xyz', 12],
+          },
+          {
+            type: 'PairTradingFeePPMUpdated',
+            blockNumber: 3,
+            logIndex: 1,
+            data: ['abc', 'xyz', 13],
+          },
+        ],
+        3
       );
       expect(await cache.getTradingFeePPMByPair('xyz', 'abc')).to.equal(13);
     });

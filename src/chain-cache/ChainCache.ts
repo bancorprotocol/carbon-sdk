@@ -14,6 +14,8 @@ import {
   RetypeBigNumberToString,
   TokenPair,
   TradeData,
+  TradingFeeUpdate,
+  SyncedEvents,
 } from '../common/types';
 import { BigNumberish } from '../utils/numerics';
 import {
@@ -23,6 +25,7 @@ import {
   encodedStrategyStrToBN,
 } from '../utils/serializers';
 import { Logger } from '../common/logger';
+
 const logger = new Logger('ChainCache.ts');
 
 const schemeVersion = 6; // bump this when the serialization format changes
@@ -299,7 +302,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
   /**
    * This method is to be used when all the existing strategies of a pair are
    * fetched and are to be stored in the cache.
-   * Once a pair is cached, the only way to update it is by using `applyBatchedUpdates`.
+   * Once a pair is cached, the only way to update it is by using `applyEvents`.
    * If all the strategies of a pair are deleted, the pair remains in the cache and there's
    * no need to add it again.
    * @param {string} token0 - address of the first token of the pair
@@ -338,7 +341,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
 
   /**
    * This methods allows setting the trading fee of a pair.
-   * Note that fees can also be updated via `applyBatchedUpdates`.
+   * Note that fees can also be updated via `applyEvents`.
    * This specific method is useful when the fees were fetched from the chain
    * as part of initialization or some other operation mode which doesn't
    * rely on even processing
@@ -370,53 +373,55 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
    * The way to use this work flow is to first call `getLatestBlockNumber` to
    * get the latest block number that was already cached, then fetch all the
    * events from that block number to the latest block number, and finally
-   * call this method with the fetched events.
+   * call this method with the fetched events. The events should be sorted by
+   * block number and log index.
    * Note: the cache can handle a case of a strategy that was created and then updated and then deleted
-   * @param {number} latestBlockNumber - the latest block number that was fetched
-   * @param {TradeData[]} latestTrades - the trades that were conducted
-   * @param {EncodedStrategy[]} createdStrategies - the strategies that were created
-   * @param {EncodedStrategy[]} updatedStrategies - the strategies that were updated
-   * @param {EncodedStrategy[]} deletedStrategies - the strategies that were deleted
-   * @throws {Error} if the pair of a strategy is not cached
-   * @returns {void}
+   * @param events - Array of events to apply
+   * @param currentBlock - Current block number
    */
-  public applyBatchedUpdates(
-    latestBlockNumber: number,
-    latestFeeUpdates: [string, string, number][],
-    latestTrades: TradeData[],
-    createdStrategies: EncodedStrategy[],
-    updatedStrategies: EncodedStrategy[],
-    deletedStrategies: EncodedStrategy[]
-  ): void {
-    logger.debug('Applying batched updates to cache', {
-      latestBlockNumber,
-      latestFeeUpdates,
-      latestTrades,
-      createdStrategies,
-      updatedStrategies,
-      deletedStrategies,
-    });
+  public applyEvents(events: SyncedEvents, currentBlock: number): void {
     const affectedPairs = new Set<string>();
-    latestTrades.forEach((trade) => {
-      this._setLatestTrade(trade);
-      affectedPairs.add(toPairKey(trade.sourceToken, trade.targetToken));
-    });
-    createdStrategies.forEach((strategy) => {
-      this._addStrategy(strategy);
-      affectedPairs.add(toPairKey(strategy.token0, strategy.token1));
-    });
-    updatedStrategies.forEach((strategy) => {
-      this._updateStrategy(strategy);
-      affectedPairs.add(toPairKey(strategy.token0, strategy.token1));
-    });
-    deletedStrategies.forEach((strategy) => {
-      this._deleteStrategy(strategy);
-      affectedPairs.add(toPairKey(strategy.token0, strategy.token1));
-    });
-    latestFeeUpdates.forEach(([token0, token1, newFee]) => {
-      this._tradingFeePPMByPair[toPairKey(token0, token1)] = newFee;
-    });
-    this._setLatestBlockNumber(latestBlockNumber);
+    // Update latest block number
+    this._setLatestBlockNumber(currentBlock);
+
+    // Process events in order
+    for (const event of events) {
+      switch (event.type) {
+        case 'StrategyCreated': {
+          const strategy = event.data as EncodedStrategy;
+          this._addStrategy(strategy);
+          affectedPairs.add(toPairKey(strategy.token0, strategy.token1));
+          break;
+        }
+        case 'StrategyUpdated': {
+          const strategy = event.data as EncodedStrategy;
+          this._updateStrategy(strategy);
+          affectedPairs.add(toPairKey(strategy.token0, strategy.token1));
+          break;
+        }
+        case 'StrategyDeleted': {
+          const strategy = event.data as EncodedStrategy;
+          this._deleteStrategy(strategy);
+          affectedPairs.add(toPairKey(strategy.token0, strategy.token1));
+          break;
+        }
+        case 'TokensTraded': {
+          const trade = event.data as TradeData;
+          this._setLatestTrade(trade);
+          affectedPairs.add(toPairKey(trade.sourceToken, trade.targetToken));
+          break;
+        }
+        case 'PairTradingFeePPMUpdated': {
+          const feeUpdate = event.data as TradingFeeUpdate;
+          this.addPairFees(feeUpdate[0], feeUpdate[1], feeUpdate[2]);
+          break;
+        }
+        case 'TradingFeePPMUpdated': {
+          // This event type is handled by the caller
+          break;
+        }
+      }
+    }
 
     if (affectedPairs.size > 0) {
       logger.debug('Emitting onPairDataChanged', affectedPairs);
@@ -433,12 +438,13 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
 
   private _setLatestTrade(trade: TradeData): void {
     if (!this.hasCachedPair(trade.sourceToken, trade.targetToken)) {
-      throw new Error(
+      logger.error(
         `Pair ${toPairKey(
           trade.sourceToken,
           trade.targetToken
         )} is not cached, cannot set latest trade`
       );
+      return;
     }
     const key = toPairKey(trade.sourceToken, trade.targetToken);
     this._latestTradesByPair[key] = trade;
@@ -484,12 +490,13 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
 
   private _addStrategy(strategy: EncodedStrategy): void {
     if (!this.hasCachedPair(strategy.token0, strategy.token1)) {
-      throw new Error(
+      logger.error(
         `Pair ${toPairKey(
           strategy.token0,
           strategy.token1
         )} is not cached, cannot add strategy`
       );
+      return;
     }
     const key = toPairKey(strategy.token0, strategy.token1);
     if (this._strategiesById[strategy.id.toString()]) {
@@ -507,12 +514,13 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
 
   private _updateStrategy(strategy: EncodedStrategy): void {
     if (!this.hasCachedPair(strategy.token0, strategy.token1)) {
-      throw new Error(
+      logger.error(
         `Pair ${toPairKey(
           strategy.token0,
           strategy.token1
         )} is not cached, cannot update strategy`
       );
+      return;
     }
     const key = toPairKey(strategy.token0, strategy.token1);
     const strategies = (this._strategiesByPair[key] || []).filter(
@@ -527,12 +535,13 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
 
   private _deleteStrategy(strategy: EncodedStrategy): void {
     if (!this.hasCachedPair(strategy.token0, strategy.token1)) {
-      throw new Error(
+      logger.error(
         `Pair ${toPairKey(
           strategy.token0,
           strategy.token1
         )} is not cached, cannot delete strategy`
       );
+      return;
     }
     const key = toPairKey(strategy.token0, strategy.token1);
     delete this._strategiesById[strategy.id.toString()];

@@ -1,13 +1,6 @@
 import { ChainCache } from './ChainCache';
-import { toPairKey } from './utils';
 import { Logger } from '../common/logger';
-import {
-  BlockMetadata,
-  EncodedStrategy,
-  Fetcher,
-  TokenPair,
-  TradeData,
-} from '../common/types';
+import { BlockMetadata, Fetcher, TokenPair } from '../common/types';
 
 const logger = new Logger('ChainSync.ts');
 
@@ -62,7 +55,7 @@ export class ChainSync {
         );
       }
       // cache starts from scratch so we want to avoid getting events from the beginning of time
-      this._chainCache.applyBatchedUpdates(blockNumber, [], [], [], [], []);
+      this._chainCache.applyEvents([], blockNumber);
     }
 
     // let's fetch all pairs from the chain and set them to the cache - to be used by the following syncs
@@ -200,21 +193,6 @@ export class ChainSync {
     this._chainCache.addPair(token0, token1, strategies, false);
   }
 
-  // used to break the blocks between latestBlock + 1 and currentBlock to chunks of `chunkSize` blocks
-  private _getBlockChunks(
-    startBlock: number,
-    endBlock: number,
-    chunkSize: number
-  ): number[][] {
-    const blockChunks = [];
-    for (let i = startBlock; i <= endBlock; i += chunkSize) {
-      const chunkStart = i;
-      const chunkEnd = Math.min(i + chunkSize - 1, endBlock);
-      blockChunks.push([chunkStart, chunkEnd]);
-    }
-    return blockChunks;
-  }
-
   private async _syncEvents(): Promise<void> {
     logger.debug('_syncEvents called');
     const processEvents = async () => {
@@ -237,145 +215,48 @@ export class ChainSync {
           if (await this._detectReorg(currentBlock)) {
             logger.debug('_syncEvents detected reorg - resetting');
             this._chainCache.clear();
-            this._chainCache.applyBatchedUpdates(
-              currentBlock,
-              [],
-              [],
-              [],
-              [],
-              []
-            );
+            this._chainCache.applyEvents([], currentBlock);
             this._resetPairsFetching();
             setTimeout(processEvents, 1);
             return;
           }
-
-          const cachedPairs = new Set<string>(
-            this._chainCache
-              .getCachedPairs(false)
-              .map((pair) => toPairKey(pair[0], pair[1]))
-          );
 
           logger.debug(
             '_syncEvents fetches events',
             latestBlock + 1,
             currentBlock
           );
-          const blockChunks = this._getBlockChunks(
+
+          // Fetch all events using the new unified method
+          const events = await this._fetcher.getEvents(
             latestBlock + 1,
             currentBlock,
             this._chunkSize
           );
-          logger.debug('_syncEvents block chunks', blockChunks);
 
-          const createdStrategiesChunks: EncodedStrategy[][] = [];
-          const updatedStrategiesChunks: EncodedStrategy[][] = [];
-          const deletedStrategiesChunks: EncodedStrategy[][] = [];
-          const tradesChunks: TradeData[][] = [];
-          const feeUpdatesChunks: [string, string, number][][] = [];
-          const defaultFeeUpdatesChunks: number[][] = [];
+          logger.debug('_syncEvents fetched events', events);
 
-          for (const blockChunk of blockChunks) {
-            logger.debug('_syncEvents fetches events for chunk', blockChunk);
-            const createdStrategiesChunk: EncodedStrategy[] =
-              await this._fetcher.getLatestStrategyCreatedStrategies(
-                blockChunk[0],
-                blockChunk[1]
-              );
-            const updatedStrategiesChunk: EncodedStrategy[] =
-              await this._fetcher.getLatestStrategyUpdatedStrategies(
-                blockChunk[0],
-                blockChunk[1]
-              );
-            const deletedStrategiesChunk: EncodedStrategy[] =
-              await this._fetcher.getLatestStrategyDeletedStrategies(
-                blockChunk[0],
-                blockChunk[1]
-              );
-            const tradesChunk: TradeData[] =
-              await this._fetcher.getLatestTokensTradedTrades(
-                blockChunk[0],
-                blockChunk[1]
-              );
-            const feeUpdatesChunk: [string, string, number][] =
-              await this._fetcher.getLatestPairTradingFeeUpdates(
-                blockChunk[0],
-                blockChunk[1]
-              );
-            const defaultFeeUpdatesChunk: number[] =
-              await this._fetcher.getLatestTradingFeeUpdates(
-                blockChunk[0],
-                blockChunk[1]
-              );
-
-            createdStrategiesChunks.push(createdStrategiesChunk);
-            updatedStrategiesChunks.push(updatedStrategiesChunk);
-            deletedStrategiesChunks.push(deletedStrategiesChunk);
-            tradesChunks.push(tradesChunk);
-            feeUpdatesChunks.push(feeUpdatesChunk);
-            defaultFeeUpdatesChunks.push(defaultFeeUpdatesChunk);
-            logger.debug(
-              '_syncEvents fetched the following events for chunks',
-              blockChunks,
-              {
-                createdStrategiesChunk,
-                updatedStrategiesChunk,
-                deletedStrategiesChunk,
-                tradesChunk,
-                feeUpdatesChunk,
-                defaultFeeUpdatesChunk,
-              }
-            );
-          }
-
-          const createdStrategies = createdStrategiesChunks.flat();
-          const updatedStrategies = updatedStrategiesChunks.flat();
-          const deletedStrategies = deletedStrategiesChunks.flat();
-          const trades = tradesChunks.flat();
-          const feeUpdates = feeUpdatesChunks.flat();
-          const defaultFeeWasUpdated =
-            defaultFeeUpdatesChunks.flat().length > 0;
-
-          logger.debug(
-            '_syncEvents fetched events',
-            createdStrategies,
-            updatedStrategies,
-            deletedStrategies,
-            trades,
-            feeUpdates,
-            defaultFeeWasUpdated
-          );
-
-          // let's check created strategies and see if we have a pair that's not cached yet,
-          // which means we need to set slow poll mode to false so that it will be fetched quickly
+          // Process events and collect newly created pairs
           const newlyCreatedPairs: TokenPair[] = [];
-          for (const strategy of createdStrategies) {
-            if (
-              !this._chainCache.hasCachedPair(strategy.token0, strategy.token1)
-            ) {
-              newlyCreatedPairs.push([strategy.token0, strategy.token1]);
+          for (const event of events) {
+            if (event.type === 'StrategyCreated') {
+              const strategy = event.data;
+              if (
+                !this._chainCache.hasCachedPair(
+                  strategy.token0,
+                  strategy.token1
+                )
+              ) {
+                newlyCreatedPairs.push([strategy.token0, strategy.token1]);
+              }
             }
           }
 
-          this._chainCache.applyBatchedUpdates(
-            currentBlock,
-            feeUpdates,
-            trades.filter((trade) =>
-              cachedPairs.has(toPairKey(trade.sourceToken, trade.targetToken))
-            ),
-            createdStrategies.filter((strategy) =>
-              cachedPairs.has(toPairKey(strategy.token0, strategy.token1))
-            ),
-            updatedStrategies.filter((strategy) =>
-              cachedPairs.has(toPairKey(strategy.token0, strategy.token1))
-            ),
-            deletedStrategies.filter((strategy) =>
-              cachedPairs.has(toPairKey(strategy.token0, strategy.token1))
-            )
-          );
+          // Apply events to cache
+          this._chainCache.applyEvents(events, currentBlock);
 
-          // lastly - handle side effects such as new pair detected or default fee update
-          if (defaultFeeWasUpdated) {
+          // Handle side effects
+          if (events.some((event) => event.type === 'TradingFeePPMUpdated')) {
             logger.debug(
               '_syncEvents noticed at least one default fee update - refetching pair fees for all pairs'
             );
@@ -398,6 +279,7 @@ export class ChainSync {
     };
     setTimeout(processEvents, 1);
   }
+
   private _resetPairsFetching() {
     this._uncachedPairs = [];
     this._slowPollPairs = false;
