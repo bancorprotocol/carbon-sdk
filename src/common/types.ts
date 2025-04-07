@@ -104,6 +104,8 @@ export type TradeData = {
   byTargetAmount: boolean;
 };
 
+export type TradingFeeUpdate = [string, string, number];
+
 export type Action = {
   id: string;
   sourceAmount: string;
@@ -151,6 +153,34 @@ export type BlockMetadata = {
   hash: string;
 };
 
+export type SyncedEvent =
+  | {
+      type: 'StrategyCreated' | 'StrategyUpdated' | 'StrategyDeleted';
+      blockNumber: number;
+      logIndex: number;
+      data: EncodedStrategy;
+    }
+  | {
+      type: 'TokensTraded';
+      blockNumber: number;
+      logIndex: number;
+      data: TradeData;
+    }
+  | {
+      type: 'TradingFeePPMUpdated';
+      blockNumber: number;
+      logIndex: number;
+      data: number;
+    }
+  | {
+      type: 'PairTradingFeePPMUpdated';
+      blockNumber: number;
+      logIndex: number;
+      data: TradingFeeUpdate;
+    };
+
+export type SyncedEvents = SyncedEvent[];
+
 export interface Fetcher {
   pairs(): Promise<TokenPair[]>;
   strategiesByPair(token0: string, token1: string): Promise<EncodedStrategy[]>;
@@ -166,30 +196,11 @@ export interface Fetcher {
   onTradingFeePPMUpdated(
     listener: (prevFeePPM: number, newFeePPM: number) => void
   ): void;
-  getLatestStrategyCreatedStrategies(
-    fromBlock: number,
-    toBlock: number
-  ): Promise<EncodedStrategy[]>;
-  getLatestStrategyUpdatedStrategies(
-    fromBlock: number,
-    toBlock: number
-  ): Promise<EncodedStrategy[]>;
-  getLatestStrategyDeletedStrategies(
-    fromBlock: number,
-    toBlock: number
-  ): Promise<EncodedStrategy[]>;
-  getLatestTokensTradedTrades(
-    fromBlock: number,
-    toBlock: number
-  ): Promise<TradeData[]>;
-  getLatestTradingFeeUpdates(
-    fromBlock: number,
-    toBlock: number
-  ): Promise<number[]>;
-  getLatestPairTradingFeeUpdates(
-    fromBlock: number,
-    toBlock: number
-  ): Promise<[string, string, number][]>; // [token0, token1, feePPM]
   getBlockNumber(): Promise<number>;
   getBlock(blockNumber: number): Promise<BlockMetadata>;
+  getEvents(
+    fromBlock: number,
+    toBlock: number,
+    maxChunkSize?: number
+  ): Promise<SyncedEvents>;
 }

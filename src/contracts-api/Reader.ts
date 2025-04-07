@@ -1,12 +1,5 @@
 import { BigNumber } from '../utils/numerics';
-import {
-  StrategyStructOutput,
-  TokensTradedEventObject,
-  StrategyCreatedEventObject,
-  StrategyUpdatedEventObject,
-  StrategyDeletedEventObject,
-  PairTradingFeePPMUpdatedEventObject,
-} from '../abis/types/CarbonController';
+import { StrategyStructOutput } from '../abis/types/CarbonController';
 import { Contracts } from './Contracts';
 import { isETHAddress, MultiCall, multicall } from './utils';
 import { Logger } from '../common/logger';
@@ -14,8 +7,11 @@ import {
   EncodedStrategy,
   Fetcher,
   TokenPair,
-  TradeData,
   BlockMetadata,
+  TradeData,
+  TradingFeeUpdate,
+  SyncedEvents,
+  SyncedEvent,
 } from '../common/types';
 const logger = new Logger('Reader.ts');
 
@@ -201,160 +197,6 @@ export default class Reader implements Fetcher {
     return this._contracts.token(address).decimals();
   };
 
-  private _getFilteredStrategies = async (
-    eventType: 'StrategyCreated' | 'StrategyUpdated' | 'StrategyDeleted',
-    fromBlock: number,
-    toBlock: number
-  ): Promise<EncodedStrategy[]> => {
-    const filter = this._contracts.carbonController.filters[eventType](
-      null,
-      null,
-      null,
-      null,
-      null
-    );
-    const logs = await this._contracts.carbonController.queryFilter(
-      filter,
-      fromBlock,
-      toBlock
-    );
-
-    if (logs.length === 0) return [];
-
-    const strategies = logs.map((log) => {
-      const logArgs:
-        | StrategyCreatedEventObject
-        | StrategyUpdatedEventObject
-        | StrategyDeletedEventObject = log.args;
-
-      return {
-        id: logArgs.id,
-        token0: logArgs.token0,
-        token1: logArgs.token1,
-        order0: {
-          y: logArgs.order0.y,
-          z: logArgs.order0.z,
-          A: logArgs.order0.A,
-          B: logArgs.order0.B,
-        },
-        order1: {
-          y: logArgs.order1.y,
-          z: logArgs.order1.z,
-          A: logArgs.order1.A,
-          B: logArgs.order1.B,
-        },
-      };
-    });
-    return strategies;
-  };
-
-  public async getLatestStrategyCreatedStrategies(
-    fromBlock: number,
-    toBlock: number
-  ): Promise<EncodedStrategy[]> {
-    return this._getFilteredStrategies('StrategyCreated', fromBlock, toBlock);
-  }
-
-  public async getLatestStrategyUpdatedStrategies(
-    fromBlock: number,
-    toBlock: number
-  ): Promise<EncodedStrategy[]> {
-    return this._getFilteredStrategies('StrategyUpdated', fromBlock, toBlock);
-  }
-
-  public async getLatestStrategyDeletedStrategies(
-    fromBlock: number,
-    toBlock: number
-  ): Promise<EncodedStrategy[]> {
-    return this._getFilteredStrategies('StrategyDeleted', fromBlock, toBlock);
-  }
-
-  public getLatestTokensTradedTrades = async (
-    fromBlock: number,
-    toBlock: number
-  ): Promise<TradeData[]> => {
-    const filter = this._contracts.carbonController.filters.TokensTraded(
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null
-    );
-    const logs = await this._contracts.carbonController.queryFilter(
-      filter,
-      fromBlock,
-      toBlock
-    );
-    if (logs.length === 0) return [];
-
-    const trades = logs.map((log) => {
-      const res: TokensTradedEventObject = log.args;
-      return {
-        sourceToken: res.sourceToken,
-        targetToken: res.targetToken,
-        sourceAmount: res.sourceAmount.toString(),
-        targetAmount: res.targetAmount.toString(),
-        trader: res.trader,
-        tradingFeeAmount: res.tradingFeeAmount.toString(),
-        byTargetAmount: res.byTargetAmount,
-      };
-    });
-    return trades;
-  };
-
-  public async getLatestTradingFeeUpdates(
-    fromBlock: number,
-    toBlock: number
-  ): Promise<number[]> {
-    const filter =
-      this._contracts.carbonController.filters.TradingFeePPMUpdated(null, null);
-
-    const logs = await this._contracts.carbonController.queryFilter(
-      filter,
-      fromBlock,
-      toBlock
-    );
-
-    if (logs.length === 0) return [];
-
-    const updates: number[] = logs.map((log) => {
-      const logArgs = log.args;
-      return logArgs.newFeePPM;
-    });
-
-    return updates;
-  }
-
-  public async getLatestPairTradingFeeUpdates(
-    fromBlock: number,
-    toBlock: number
-  ): Promise<[string, string, number][]> {
-    const filter =
-      this._contracts.carbonController.filters.PairTradingFeePPMUpdated(
-        null,
-        null,
-        null,
-        null
-      );
-
-    const logs = await this._contracts.carbonController.queryFilter(
-      filter,
-      fromBlock,
-      toBlock
-    );
-
-    if (logs.length === 0) return [];
-
-    const updates: [string, string, number][] = logs.map((log) => {
-      const logArgs: PairTradingFeePPMUpdatedEventObject = log.args;
-      return [logArgs.token0, logArgs.token1, logArgs.newFeePPM];
-    });
-
-    return updates;
-  }
-
   public getBlockNumber = async (): Promise<number> => {
     return this._contracts.provider.getBlockNumber();
   };
@@ -362,4 +204,136 @@ export default class Reader implements Fetcher {
   public getBlock = async (blockNumber: number): Promise<BlockMetadata> => {
     return this._contracts.provider.getBlock(blockNumber);
   };
+
+  /**
+   * Fetches all events from a block range using eth_getLogs with chunking
+   * @param fromBlock - Starting block number
+   * @param toBlock - Ending block number
+   * @param maxChunkSize - Maximum number of blocks to query in a single request
+   * @returns Array of typed events sorted by block number and log index
+   */
+  public async getEvents(
+    fromBlock: number,
+    toBlock: number,
+    maxChunkSize: number = 2000
+  ): Promise<SyncedEvents> {
+    // Calculate number of chunks needed
+    const totalBlocks = toBlock - fromBlock + 1;
+    const numChunks = Math.ceil(totalBlocks / maxChunkSize);
+
+    // Create chunk ranges
+    const chunks = Array.from({ length: numChunks }, (_, i) => {
+      const chunkStart = fromBlock + i * maxChunkSize;
+      const chunkEnd = Math.min(chunkStart + maxChunkSize - 1, toBlock);
+      return { start: chunkStart, end: chunkEnd };
+    });
+
+    // Fetch logs for all chunks concurrently
+    const chunkResults = await Promise.all(
+      chunks.map(async ({ start, end }) => {
+        const logs = await this._contracts.provider.getLogs({
+          address: this._contracts.carbonController.address,
+          fromBlock: start,
+          toBlock: end,
+        });
+        return logs;
+      })
+    );
+
+    // Flatten and process all logs
+    const allEvents = chunkResults
+      .flat()
+      .map((log) => {
+        // Get event type from topics
+        const parsedLog = this._contracts.carbonController.interface.parseLog({
+          topics: log.topics,
+          data: log.data,
+        });
+
+        if (!parsedLog) return null;
+
+        const eventType = parsedLog.name as SyncedEvent['type'];
+
+        switch (eventType) {
+          case 'StrategyCreated':
+          case 'StrategyUpdated':
+          case 'StrategyDeleted': {
+            const eventData: EncodedStrategy = {
+              id: parsedLog.args.id,
+              token0: parsedLog.args.token0,
+              token1: parsedLog.args.token1,
+              order0: {
+                A: parsedLog.args.order0.A,
+                B: parsedLog.args.order0.B,
+                y: parsedLog.args.order0.y,
+                z: parsedLog.args.order0.z,
+              },
+              order1: {
+                A: parsedLog.args.order1.A,
+                B: parsedLog.args.order1.B,
+                y: parsedLog.args.order1.y,
+                z: parsedLog.args.order1.z,
+              },
+            };
+            return {
+              type: eventType,
+              blockNumber: log.blockNumber,
+              logIndex: log.logIndex,
+              data: eventData,
+            } as const;
+          }
+          case 'TokensTraded': {
+            const eventData: TradeData = {
+              trader: parsedLog.args.trader,
+              sourceToken: parsedLog.args.sourceToken,
+              targetToken: parsedLog.args.targetToken,
+              sourceAmount: parsedLog.args.sourceAmount.toString(),
+              targetAmount: parsedLog.args.targetAmount.toString(),
+              tradingFeeAmount: parsedLog.args.tradingFeeAmount.toString(),
+              byTargetAmount: parsedLog.args.byTargetAmount,
+            };
+            return {
+              type: eventType,
+              blockNumber: log.blockNumber,
+              logIndex: log.logIndex,
+              data: eventData,
+            } as const;
+          }
+          case 'TradingFeePPMUpdated': {
+            const eventData: number = parsedLog.args.newFeePPM;
+            return {
+              type: eventType,
+              blockNumber: log.blockNumber,
+              logIndex: log.logIndex,
+              data: eventData,
+            } as const;
+          }
+          case 'PairTradingFeePPMUpdated': {
+            const eventData: TradingFeeUpdate = [
+              parsedLog.args.token0,
+              parsedLog.args.token1,
+              parsedLog.args.newFeePPM,
+            ];
+            return {
+              type: eventType,
+              blockNumber: log.blockNumber,
+              logIndex: log.logIndex,
+              data: eventData,
+            } as const;
+          }
+          default:
+            return null;
+        }
+      })
+      .filter((event): event is NonNullable<typeof event> => event !== null)
+      // Sort by block number and log index
+      .sort((a, b) => {
+        if (a.blockNumber !== b.blockNumber) {
+          return a.blockNumber - b.blockNumber;
+        }
+        return a.logIndex - b.logIndex;
+      });
+
+    return allEvents;
+  }
 }
