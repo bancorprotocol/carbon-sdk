@@ -238,16 +238,17 @@ export default class Reader implements Fetcher {
     }
   }
 
-  public async tokensByOwner(owner: string) {
-    logger.debug('tokensByOwner called', owner);
-    if (!owner) return [];
-    try {
-      const result = await this._contracts.voucher.tokensByOwner(owner, 0, 0);
-      return result.map((r) => BigInt(r));
-    } catch (error) {
-      logger.error('tokensByOwner error', error);
-      throw error;
-    }
+  public async tokensByOwner(owner: string): Promise<{
+    gradientVoucherTokens: bigint[];
+    voucherTokens: bigint[];
+  }> {
+    if (!owner) return { gradientVoucherTokens: [], voucherTokens: [] };
+
+    const [gradientVoucherTokens, voucherTokens] = await Promise.all([
+      this._contracts.gradientVoucher.tokensByOwner(owner, 0, 0),
+      this._contracts.voucher.tokensByOwner(owner, 0, 0),
+    ]);
+    return { gradientVoucherTokens, voucherTokens };
   }
 
   public async tradingFeePPM(): Promise<number> {

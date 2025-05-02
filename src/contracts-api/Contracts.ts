@@ -9,6 +9,10 @@ import {
   Token__factory,
   CarbonBatcher,
   CarbonBatcher__factory,
+  GradientVoucher,
+  GradientVoucher__factory,
+  GradientController,
+  GradientController__factory,
 } from '../abis/types';
 
 import { Provider } from 'ethers';
@@ -21,6 +25,8 @@ export class Contracts {
   private _multiCall: Multicall | undefined;
   private _voucher: Voucher | undefined;
   private _carbonBatcher: CarbonBatcher | undefined;
+  private _gradientVoucher: GradientVoucher | undefined;
+  private _gradientController: GradientController | undefined;
   private _config = defaultConfig;
 
   public constructor(provider: Provider, config?: ContractsConfig) {
@@ -31,6 +37,11 @@ export class Contracts {
       config?.multiCallAddress || defaultConfig.multiCallAddress;
     this._config.voucherAddress =
       config?.voucherAddress || defaultConfig.voucherAddress;
+    this._config.gradientVoucherAddress =
+      config?.gradientVoucherAddress || defaultConfig.gradientVoucherAddress;
+    this._config.gradientControllerAddress =
+      config?.gradientControllerAddress ||
+      defaultConfig.gradientControllerAddress;
     this._config.carbonBatcherAddress =
       config?.carbonBatcherAddress || defaultConfig.carbonBatcherAddress;
   }
@@ -43,6 +54,16 @@ export class Contracts {
       );
 
     return this._carbonController;
+  }
+
+  public get gradientController(): GradientController {
+    if (!this._gradientController)
+      this._gradientController = GradientController__factory.connect(
+        this._config.gradientControllerAddress,
+        this._provider
+      );
+
+    return this._gradientController;
   }
 
   public get carbonBatcher(): CarbonBatcher {
@@ -73,6 +94,16 @@ export class Contracts {
       );
 
     return this._voucher;
+  }
+
+  public get gradientVoucher(): GradientVoucher {
+    if (!this._gradientVoucher)
+      this._gradientVoucher = GradientVoucher__factory.connect(
+        this._config.gradientVoucherAddress,
+        this._provider
+      );
+
+    return this._gradientVoucher;
   }
 
   public token(address: string): Token {
