@@ -216,6 +216,25 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     return this._strategiesByPair[key];
   }
 
+  public async getStrategiesByPairs(pairs: TokenPair[]): Promise<
+    {
+      pair: TokenPair;
+      strategies: EncodedStrategy[];
+    }[]
+  > {
+    const result: {
+      pair: TokenPair;
+      strategies: EncodedStrategy[];
+    }[] = [];
+    for (const pair of pairs) {
+      const strategies = await this.getStrategiesByPair(pair[0], pair[1]);
+      if (strategies) {
+        result.push({ pair, strategies });
+      }
+    }
+    return result;
+  }
+
   public getStrategyById(id: BigNumberish): EncodedStrategy | undefined {
     return this._strategiesById[id.toString()];
   }
