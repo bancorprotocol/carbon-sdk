@@ -1,7 +1,12 @@
 import { BigNumber } from '../utils/numerics';
 import { StrategyStructOutput } from '../abis/types/CarbonController';
 import { Contracts } from './Contracts';
-import { isETHAddress, MultiCall, multicall } from './utils';
+import {
+  isETHAddress,
+  MultiCall,
+  MulticallService,
+  DefaultMulticallService,
+} from './utils';
 import { Logger } from '../common/logger';
 import {
   EncodedStrategy,
@@ -51,13 +56,19 @@ function toStrategy(res: StrategyStructOutput): EncodedStrategy {
  */
 export default class Reader implements Fetcher {
   private _contracts: Contracts;
+  private _multicallService: MulticallService;
 
-  public constructor(contracts: Contracts) {
+  public constructor(
+    contracts: Contracts,
+    multicallService?: MulticallService
+  ) {
     this._contracts = contracts;
+    this._multicallService =
+      multicallService ?? new DefaultMulticallService(contracts.multicall);
   }
 
   private _multicall(calls: MultiCall[], blockHeight?: number) {
-    return multicall(calls, this._contracts.multicall, blockHeight);
+    return this._multicallService.execute(calls, blockHeight);
   }
 
   public async strategy(id: BigNumber): Promise<EncodedStrategy> {
@@ -90,39 +101,88 @@ export default class Reader implements Fetcher {
     token0: string,
     token1: string
   ): Promise<EncodedStrategy[]> {
-    const res = await this._contracts.carbonController.strategiesByPair(
-      token0,
-      token1,
-      0,
-      0
-    ) ?? [];
-    return res.map((r) => toStrategy(r));
+    const allStrategies: EncodedStrategy[] = [];
+    let startIndex = 0;
+    const chunkSize = 1000;
+
+    while (true) {
+      const res =
+        (await this._contracts.carbonController.strategiesByPair(
+          token0,
+          token1,
+          startIndex,
+          startIndex + chunkSize
+        )) ?? [];
+
+      allStrategies.push(...res.map((r) => toStrategy(r)));
+
+      if (res.length < chunkSize) break;
+
+      startIndex += chunkSize;
+    }
+
+    return allStrategies;
   }
 
-  // TODO: add a method to get all strategies by a list of pairs. Returns a collection of pairs and their strategies. It will use multicall to call strategiesByPair method from the contracts.
   public async strategiesByPairs(pairs: TokenPair[]): Promise<
     {
       pair: TokenPair;
       strategies: EncodedStrategy[];
     }[]
   > {
-    const results = await this._multicall(
+    const chunkSize = 1000;
+    const results: { pair: TokenPair; strategies: EncodedStrategy[] }[] = [];
+    const pairsNeedingMore: { pair: TokenPair; index: number }[] = [];
+
+    // First, get the first chunk for all pairs using multicall
+    const firstChunkResults = await this._multicall(
       pairs.map((pair) => ({
         contractAddress: this._contracts.carbonController.address,
         interface: this._contracts.carbonController.interface,
         methodName: 'strategiesByPair',
-        methodParameters: [pair[0], pair[1], 0, 0],
+        methodParameters: [pair[0], pair[1], 0, chunkSize],
       }))
     );
-    if (!results || results.length === 0) return [];
-    console.debug('results', results);
-    return results.map((result, i) => {
-      const strategiesResult = result[0] as StrategyStructOutput[] ?? [];
-      return {
-        pair: pairs[i],
+
+    if (!firstChunkResults || firstChunkResults.length === 0) return [];
+
+    // Process first chunk results and identify pairs needing more
+    firstChunkResults.forEach((result, i) => {
+      const strategiesResult = (result[0] ?? []) as StrategyStructOutput[];
+      const currentPair = pairs[i];
+
+      results.push({
+        pair: currentPair,
         strategies: strategiesResult.map((r) => toStrategy(r)),
-      };
+      });
+
+      // If we got a full chunk, we need to fetch more
+      if (strategiesResult.length === chunkSize) {
+        pairsNeedingMore.push({ pair: currentPair, index: i });
+      }
     });
+
+    // Fetch remaining strategies for pairs that need it
+    for (const { pair, index } of pairsNeedingMore) {
+      let startIndex = chunkSize;
+
+      while (true) {
+        const res =
+          (await this._contracts.carbonController.strategiesByPair(
+            pair[0],
+            pair[1],
+            startIndex,
+            startIndex + chunkSize
+          )) ?? [];
+
+        results[index].strategies.push(...res.map((r) => toStrategy(r)));
+
+        if (res.length < chunkSize) break;
+        startIndex += chunkSize;
+      }
+    }
+
+    return results;
   }
 
   public async tokensByOwner(owner: string) {
@@ -164,7 +224,7 @@ export default class Reader implements Fetcher {
     );
     if (!results || results.length === 0) return [];
     return results.map((res, i) => {
-      return [pairs[i][0], pairs[i][1], res[0]];
+      return [pairs[i][0], pairs[i][1], Number(res[0])];
     });
   }
 
