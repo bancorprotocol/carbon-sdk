@@ -95,7 +95,7 @@ export default class Reader implements Fetcher {
       token1,
       0,
       0
-    );
+    ) ?? [];
     return res.map((r) => toStrategy(r));
   }
 
@@ -117,7 +117,7 @@ export default class Reader implements Fetcher {
     if (!results || results.length === 0) return [];
     console.debug('results', results);
     return results.map((result, i) => {
-      const strategiesResult = result[0] as StrategyStructOutput[];
+      const strategiesResult = result[0] as StrategyStructOutput[] ?? [];
       return {
         pair: pairs[i],
         strategies: strategiesResult.map((r) => toStrategy(r)),
