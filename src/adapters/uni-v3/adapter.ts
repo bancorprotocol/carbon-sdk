@@ -1,4 +1,4 @@
-import { BigNumber, Decimal, MAX_UINT256, ONE } from '../../utils/numerics';
+import { BigNumber, Decimal, ONE } from '../../utils/numerics';
 import { EncodedOrder, EncodedStrategy } from '../../common/types';
 import { UniV3CastStrategy, UniV3Pool, UniV3Position } from './types';
 import { decodeFloat, decodeOrder } from '../../utils/encoders';
@@ -28,7 +28,7 @@ function calculateImpliedTick(rate: Decimal, roundUp: boolean): number {
  */
 function calculateLConstant(order: EncodedOrder): string {
   if (order.A.isZero()) {
-    return MAX_UINT256.toString();
+    return Infinity.toString();
   }
   return order.z.mul(ONE).div(decodeFloat(order.A)).toString();
 }

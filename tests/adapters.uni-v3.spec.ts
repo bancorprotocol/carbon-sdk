@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { BigNumber, MAX_UINT256 } from '../src/utils/numerics';
+import { BigNumber } from '../src/utils/numerics';
 import {
   castToUniV3,
   batchCastToUniV3,
@@ -162,6 +162,23 @@ describe('Uniswap V3 Adapter', () => {
         z: '3959496',
       },
     },
+    {
+      id: '3402823669209384634633746074317682114000',
+      token0: '0xB75D0B03c06A926e488e2659DF1A861F860bD3d1',
+      token1: '0x3894085Ef7Ff0f0aeDf52E2A2704928d1Ec074F1',
+      order0: {
+        y: '8672',
+        z: '140169718',
+        A: '0',
+        B: '0',
+      },
+      order1: {
+        y: '140182466',
+        z: '140182466',
+        A: '0',
+        B: '0',
+      },
+    },
   ];
   const simulationResults = [
     {
@@ -284,13 +301,13 @@ describe('Uniswap V3 Adapter', () => {
       sell_order: {
         tick_upper: -1,
         tick_lower: -2,
-        L_constant: MAX_UINT256.toString(),
+        L_constant: Infinity.toString(),
         sqrt_price_x96: '79224201403219286715980054528',
       },
       buy_order: {
         tick_upper: 2,
         tick_lower: 1,
-        L_constant: MAX_UINT256.toString(),
+        L_constant: Infinity.toString(),
         sqrt_price_x96: '79232124219520464283601405494',
       },
     },
@@ -362,7 +379,7 @@ describe('Uniswap V3 Adapter', () => {
       sell_order: {
         tick_upper: -465206,
         tick_lower: -465207,
-        L_constant: MAX_UINT256.toString(),
+        L_constant: Infinity.toString(),
         sqrt_price_x96: '6274077230880522240',
       },
       buy_order: {
@@ -394,6 +411,28 @@ describe('Uniswap V3 Adapter', () => {
         tick_lower: -73,
         L_constant: '542720140',
         sqrt_price_x96: '79230805970778530560142249674',
+      },
+    },
+    {
+      axes_assignments: {
+        x: {
+          token_ticker: '0x3894085Ef7Ff0f0aeDf52E2A2704928d1Ec074F1',
+        },
+        y: {
+          token_ticker: '0xB75D0B03c06A926e488e2659DF1A861F860bD3d1',
+        },
+      },
+      sell_order: {
+        tick_upper: -Infinity,
+        tick_lower: -Infinity,
+        L_constant: Infinity.toString(),
+        sqrt_price_x96: '0',
+      },
+      buy_order: {
+        tick_upper: Infinity,
+        tick_lower: Infinity,
+        L_constant: Infinity.toString(),
+        sqrt_price_x96: Infinity.toString(),
       },
     },
   ];
@@ -449,14 +488,48 @@ describe('Uniswap V3 Adapter', () => {
         );
 
         expect(uniV3Strategy).to.deep.equal(uniV3StrategyFromSimulation);
-        // check that the tick lower and upper are in the correct order
-        expect(uniV3Strategy.sellOrder.tickLower).to.be.lessThan(
-          uniV3Strategy.sellOrder.tickUpper
-        );
-        expect(uniV3Strategy.buyOrder.tickLower).to.be.lessThan(
-          uniV3Strategy.buyOrder.tickUpper
-        );
 
+        // if ticks are not infinity, check that the tick lower and upper are in the correct order
+        if (
+          uniV3Strategy.sellOrder.tickLower !== -Infinity &&
+          uniV3Strategy.sellOrder.tickLower !== Infinity
+        ) {
+          expect(uniV3Strategy.sellOrder.tickLower).to.be.lessThan(
+            uniV3Strategy.sellOrder.tickUpper
+          );
+        }
+        if (
+          uniV3Strategy.buyOrder.tickLower !== -Infinity &&
+          uniV3Strategy.buyOrder.tickLower !== Infinity
+        ) {
+          expect(uniV3Strategy.buyOrder.tickLower).to.be.lessThan(
+            uniV3Strategy.buyOrder.tickUpper
+          );
+        }
+
+        // check that if any tick is Infinity or -Infinity, then the liquidity is Infinity and the other tick is equal
+        if (
+          uniV3Strategy.sellOrder.tickLower === -Infinity ||
+          uniV3Strategy.sellOrder.tickUpper === Infinity
+        ) {
+          expect(uniV3Strategy.sellOrder.liquidity).to.equal(
+            Infinity.toString()
+          );
+          expect(uniV3Strategy.buyOrder.tickLower).to.equal(
+            uniV3Strategy.buyOrder.tickUpper
+          );
+        }
+        if (
+          uniV3Strategy.buyOrder.tickLower === -Infinity ||
+          uniV3Strategy.buyOrder.tickUpper === Infinity
+        ) {
+          expect(uniV3Strategy.buyOrder.liquidity).to.equal(
+            Infinity.toString()
+          );
+          expect(uniV3Strategy.sellOrder.tickLower).to.equal(
+            uniV3Strategy.sellOrder.tickUpper
+          );
+        }
         // check that token0 is the xAxisToken only if the address is lower than token1
         const addr0 = BigNumber.from(strategy.token0);
         const addr1 = BigNumber.from(strategy.token1);
@@ -465,15 +538,15 @@ describe('Uniswap V3 Adapter', () => {
           isToken0XAxis ? strategy.token0 : strategy.token1
         );
 
-        // check that if order0.A is 0 then the liquidity is MAX_UINT256 in the sell order and if order1.A is 0 then the liquidity is MAX_UINT256 in the buy order
+        // check that if order0.A is 0 then the liquidity is Infinity in the sell order and if order1.A is 0 then the liquidity is Infinity in the buy order
         if (strategy.order0.A.eq(0)) {
           expect(uniV3Strategy.sellOrder.liquidity).to.equal(
-            MAX_UINT256.toString()
+            Infinity.toString()
           );
         }
         if (strategy.order1.A.eq(0)) {
           expect(uniV3Strategy.buyOrder.liquidity).to.equal(
-            MAX_UINT256.toString()
+            Infinity.toString()
           );
         }
 
