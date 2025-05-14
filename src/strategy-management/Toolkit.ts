@@ -28,6 +28,7 @@ import {
   EncodedStrategyBNStr,
   MatchType,
   MatchOptions,
+  TokenPair,
 } from '../common/types';
 import { DecimalFetcher, Decimals } from '../utils/decimals';
 
@@ -319,6 +320,79 @@ export class Toolkit {
     logger.debug('getStrategiesByPair info:', {
       token0,
       token1,
+      encodedStrategies,
+      decodedStrategies,
+      strategies,
+    });
+
+    return strategies;
+  }
+
+  /**
+   * Gets all the strategies that belong to pairs in the given list.
+   * If the cache is synced, it will return the strategies from the cache.
+   * Otherwise, it will fetch the strategies from the chain.
+   *
+   * @param {TokenPair[]} pairs - List of pairs to get strategies for.
+   *
+   * @returns {Promise<{
+   *   pair: TokenPair;
+   *   strategies: Strategy[];
+   * }[]>} An array of pairs and their strategies.
+   */
+  public async getStrategiesByPairs(pairs: TokenPair[]): Promise<
+    {
+      pair: TokenPair;
+      strategies: Strategy[];
+    }[]
+  > {
+    logger.debug('getStrategiesByPairs called', arguments);
+
+    let encodedStrategies:
+      | {
+          pair: TokenPair;
+          strategies: EncodedStrategy[];
+        }[]
+      | undefined;
+
+    if (this._cache) {
+      encodedStrategies = await this._cache.getStrategiesByPairs(pairs);
+    }
+
+    if (encodedStrategies) {
+      logger.debug('getStrategiesByPairs fetched from cache');
+    } else {
+      logger.debug('getStrategiesByPairs fetching from chain');
+      encodedStrategies = await this._api.reader.strategiesByPairs(pairs);
+    }
+
+    const decodedStrategies: {
+      pair: TokenPair;
+      strategies: (DecodedStrategy & {
+        id: BigNumber;
+        encoded: EncodedStrategy;
+      })[];
+    }[] = encodedStrategies.map(({ pair, strategies }) => ({
+      pair,
+      strategies: strategies.map(decodeStrategy),
+    }));
+
+    const strategies: {
+      pair: TokenPair;
+      strategies: Strategy[];
+    }[] = await Promise.all(
+      decodedStrategies.map(async ({ pair, strategies }) => ({
+        pair,
+        strategies: await Promise.all(
+          strategies.map(async (strategy) => {
+            return await parseStrategy(strategy, this._decimals);
+          })
+        ),
+      }))
+    );
+
+    logger.debug('getStrategiesByPairs info:', {
+      pairs,
       encodedStrategies,
       decodedStrategies,
       strategies,
