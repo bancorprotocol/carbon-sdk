@@ -14,34 +14,57 @@ export interface MultiCall {
   methodParameters: any[];
 }
 
+export interface MulticallService {
+  execute(calls: MultiCall[], blockHeight?: number): Promise<unknown[][]>;
+}
+
+export class DefaultMulticallService implements MulticallService {
+  constructor(private readonly multicallContract: Multicall) {}
+
+  async execute(
+    calls: MultiCall[],
+    blockHeight?: number
+  ): Promise<unknown[][]> {
+    try {
+      const encoded = calls.map((call) => ({
+        target: call.contractAddress.toLocaleLowerCase(),
+        callData: call.interface.encodeFunctionData(
+          call.methodName,
+          call.methodParameters
+        ),
+      }));
+      const encodedRes = await this.multicallContract.tryAggregate(
+        false,
+        encoded,
+        {
+          blockTag: blockHeight,
+        }
+      );
+
+      return encodedRes.map((call, i) => {
+        if (!call.success) return [];
+        const result = calls[i].interface.decodeFunctionResult(
+          calls[i].methodName,
+          call.returnData
+        );
+        return Array.isArray(result) ? result : [result];
+      });
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Multicall execution failed: ${errorMessage}`);
+    }
+  }
+}
+
+// For backward compatibility
 export const multicall = async (
   calls: MultiCall[],
   multicallContract: Multicall,
   blockHeight?: number
-) => {
-  try {
-    const encoded = calls.map((call) => ({
-      target: call.contractAddress.toLocaleLowerCase(),
-      callData: call.interface.encodeFunctionData(
-        call.methodName,
-        call.methodParameters
-      ),
-    }));
-    const encodedRes = await multicallContract.tryAggregate(false, encoded, {
-      blockTag: blockHeight,
-    });
-
-    return encodedRes.map((call, i) => {
-      if (!call.success) return [];
-
-      return calls[i].interface.decodeFunctionResult(
-        calls[i].methodName,
-        call.returnData
-      );
-    });
-  } catch {
-    /* empty */
-  }
+): Promise<unknown[][]> => {
+  const service = new DefaultMulticallService(multicallContract);
+  return service.execute(calls, blockHeight);
 };
 
 export const isETHAddress = (address: string) => {
