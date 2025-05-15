@@ -40,7 +40,7 @@
     "dist"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "typesVersions": {
     "*": {
@@ -67,7 +67,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "clean": "rm -rf dist && rm -rf src/abis/types",
-    "compile-abis": "typechain --target ethers-v5 --out-dir 'src/abis/types' 'src/abis/**/*.json'",
+    "compile-abis": "typechain --target ethers-v5 --out-dir \"src/abis/types\" \"src/abis/**/*.json\"",
     "prebuild": "yarn clean && yarn compile-abis",
     "build": "yarn lint && rollup -c",
     "test": "yarn lint && mocha",
@@ -127,5 +127,6 @@
     "decimal.js": "^10.5.0",
     "ethers": "^5.8.0",
     "events": "^3.3.0"
-  }
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }
