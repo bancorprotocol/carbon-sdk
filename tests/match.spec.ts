@@ -19,10 +19,10 @@ import {
   matchByTargetAmount,
 } from '../src/trade-matcher/match';
 
-import ArbitraryMatch from './data/ArbitraryMatch.json' assert { type: 'json' };
-import BigPoolMatch from './data/BigPoolMatch.json' assert { type: 'json' };
-import EthUsdcMatch from './data/EthUsdcMatch.json' assert { type: 'json' };
-import SpecialMatch from './data/SpecialMatch.json' assert { type: 'json' };
+import ArbitraryMatch from './data/ArbitraryMatch.json' with { type: 'json' };
+import BigPoolMatch from './data/BigPoolMatch.json' with { type: 'json' };
+import EthUsdcMatch from './data/EthUsdcMatch.json' with { type: 'json' };
+import SpecialMatch from './data/SpecialMatch.json' with { type: 'json' };
 
 type TradeMethod = (amount: BigNumber, order: EncodedOrder) => BigNumber;
 type MatchMethod = 'matchBySourceAmount' | 'matchByTargetAmount';
