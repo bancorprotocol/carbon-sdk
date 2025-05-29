@@ -345,10 +345,7 @@ export class Toolkit {
       const strategy = encodedStrategyStrToBN(serializedStrategy);
       let order;
 
-      if (
-        sourceToken === strategy.token0 &&
-        targetToken === strategy.token1
-      ) {
+      if (sourceToken === strategy.token0 && targetToken === strategy.token1) {
         order = strategy.order1;
       } else if (
         sourceToken === strategy.token1 &&
@@ -828,7 +825,9 @@ export class Toolkit {
   public async getUserStrategies(user: string): Promise<Strategy[]> {
     logger.debug('getUserStrategies called', arguments);
 
-    const ids = await this._api.reader.tokensByOwner(user);
+    const tokens = await this._api.reader.tokensByOwner(user);
+    // Combine both arrays into a single array of IDs
+    const ids = [...tokens.gradientVoucherTokens, ...tokens.voucherTokens];
 
     let encodedStrategies: EncodedStrategy[] = [];
     let uncachedIds: bigint[] = ids;
