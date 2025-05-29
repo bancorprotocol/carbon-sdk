@@ -1,7 +1,7 @@
-import { Decimal, ONE } from '../../utils/numerics';
+import { Decimal, ONE_48 } from '../../utils/numerics';
 import { EncodedOrder, EncodedStrategy } from '../../common/types';
 import { UniV3CastStrategy, UniV3Pool, UniV3Position } from './types';
-import { decodeFloat, decodeOrder } from '../../utils/encoders';
+import { decodeFloatInitialRate, decodeOrder } from '../../utils/encoders';
 
 /**
  * Constants for Uniswap V3 calculations
@@ -30,7 +30,7 @@ function calculateLConstant(order: EncodedOrder): string {
   if (order.A === 0n) {
     return Infinity.toString();
   }
-  return ((order.z * ONE) / decodeFloat(order.A)).toString();
+  return ((order.z * ONE_48) / decodeFloatInitialRate(order.A)).toString();
 }
 
 function calculateSqrtPriceX96(marginal: Decimal, roundUp: boolean): string {

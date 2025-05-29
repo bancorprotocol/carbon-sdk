@@ -232,7 +232,7 @@ export const getEncodedTradeTargetAmount = (
 ): BigNumber => {
   try {
     return uint128(calcTargetAmount(gradientType, initialRate, multiFactor, timeElapsed, sourceAmount));
-  } catch (error) {
+  } catch {
     return BigNumber.from(0); /* rate = zero / amount = zero */
   }
 };
@@ -247,7 +247,7 @@ export const getEncodedTradeSourceAmount = (
 ): BigNumber => {
   try {
     return uint128(calcSourceAmount(gradientType, initialRate, multiFactor, timeElapsed, targetAmount));
-  } catch (error) {
+  } catch {
     return MAX_UINT128; /* rate = amount / infinity = zero */
   }
 };
