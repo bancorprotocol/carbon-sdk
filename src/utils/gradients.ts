@@ -4,17 +4,18 @@ const ONE = new Decimal(1);
 
 export function getMultiFactor(
   gradientType: number,
-  initialRate: Decimal,
-  endmostRate: Decimal,
-  timeElapsed: Decimal
+  bgnRate: Decimal,
+  endRate: Decimal,
+  bgnTime: Decimal,
+  endTime: Decimal,
 ) {
   switch (gradientType) {
-    case 0: return endmostRate.div(initialRate).sub(ONE).div(timeElapsed);
-    case 1: return endmostRate.div(initialRate).add(ONE).div(timeElapsed);
-    case 2: return initialRate.div(endmostRate).add(ONE).div(timeElapsed);
-    case 3: return initialRate.div(endmostRate).sub(ONE).div(timeElapsed);
-    case 4: return endmostRate.div(initialRate).ln().div(timeElapsed);
-    case 5: return initialRate.div(endmostRate).ln().div(timeElapsed);
+    case 0: return endRate.div(bgnRate).sub(ONE).div(endTime.sub(bgnTime));
+    case 1: return endRate.div(bgnRate).add(ONE).div(endTime.sub(bgnTime));
+    case 2: return bgnRate.div(endRate).add(ONE).div(endTime.sub(bgnTime));
+    case 3: return bgnRate.div(endRate).sub(ONE).div(endTime.sub(bgnTime));
+    case 4: return endRate.div(bgnRate).ln().div(endTime.sub(bgnTime));
+    case 5: return bgnRate.div(endRate).ln().div(endTime.sub(bgnTime));
   }
   throw new Error(`Invalid gradientType ${gradientType}`);
 }
