@@ -56,10 +56,6 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
   private _latestTradesByDirectedPair: { [key: string]: TradeData } = {};
   private _blocksMetadata: BlockMetadata[] = [];
   private _tradingFeePPMByPair: { [key: string]: number } = {};
-
-  private _handleCacheMiss:
-    | ((token0: string, token1: string) => Promise<void>)
-    | undefined;
   //#endregion private members
 
   //#region serialization for persistent caching
@@ -177,20 +173,6 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
   }
   //#endregion serialization for persistent caching
 
-  public setCacheMissHandler(
-    handler: (token0: string, token1: string) => Promise<void>
-  ): void {
-    this._handleCacheMiss = handler;
-  }
-
-  private async _checkAndHandleCacheMiss(token0: string, token1: string) {
-    if (!this._handleCacheMiss || this.hasCachedPair(token0, token1)) return;
-
-    logger.debug('Cache miss for pair', token0, token1);
-    await this._handleCacheMiss(token0, token1);
-    logger.debug('Cache miss for pair', token0, token1, 'resolved');
-  }
-
   public clear(silent: boolean = false): void {
     const pairs = Object.keys(this._strategiesByPair).map(fromPairKey);
     this._strategiesByPair = {};
@@ -211,7 +193,6 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     token0: string,
     token1: string
   ): Promise<EncodedStrategy[] | undefined> {
-    await this._checkAndHandleCacheMiss(token0, token1);
     const key = toPairKey(token0, token1);
     return this._strategiesByPair[key];
   }
@@ -257,7 +238,6 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     targetToken: string,
     keepNonTradable: boolean = false
   ): Promise<OrdersMap> {
-    await this._checkAndHandleCacheMiss(sourceToken, targetToken);
     const key = toDirectionKey(sourceToken, targetToken);
     const orders = this._ordersByDirectedPair[key] || {};
 
@@ -277,7 +257,6 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     token0: string,
     token1: string
   ): Promise<TradeData | undefined> {
-    await this._checkAndHandleCacheMiss(token0, token1);
     const key = toPairKey(token0, token1);
     return this._latestTradesByPair[key];
   }
@@ -286,7 +265,6 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     sourceToken: string,
     targetToken: string
   ): Promise<TradeData | undefined> {
-    await this._checkAndHandleCacheMiss(sourceToken, targetToken);
     const key = toDirectionKey(sourceToken, targetToken);
     return this._latestTradesByDirectedPair[key];
   }
@@ -303,7 +281,6 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     token0: string,
     token1: string
   ): Promise<number | undefined> {
-    await this._checkAndHandleCacheMiss(token0, token1);
     const key = toPairKey(token0, token1);
     return this._tradingFeePPMByPair[key];
   }

@@ -337,34 +337,4 @@ describe('ChainCache', () => {
       expect(await cache.getTradingFeePPMByPair('xyz', 'abc')).to.equal(13);
     });
   });
-  describe('cache miss', () => {
-    it('getStrategiesByPair call miss handler when pair is not cached', async () => {
-      const cache = new ChainCache();
-      let missHandlerCalled = false;
-      cache.setCacheMissHandler(async (token0, token1) => {
-        missHandlerCalled = true;
-        expect([token0, token1]).to.deep.equal(['abc', 'xyz']);
-      });
-      await cache.getStrategiesByPair('abc', 'xyz');
-      expect(missHandlerCalled).to.be.true;
-    });
-    it('getOrdersByPair call miss handler when pair is not cached', async () => {
-      const cache = new ChainCache();
-      let missHandlerCalled = false;
-      cache.setCacheMissHandler(async (token0, token1) => {
-        missHandlerCalled = true;
-        expect([token0, token1]).to.deep.equal(['abc', 'xyz']);
-      });
-      await cache.getOrdersByPair('abc', 'xyz');
-      expect(missHandlerCalled).to.be.true;
-    });
-    it('getStrategiesByPair calls miss handler, which adds the missing pair, allowing the call to return strategies', async () => {
-      const cache = new ChainCache();
-      cache.setCacheMissHandler(async (token0, token1) => {
-        cache.addPair(token0, token1, [encodedStrategy1]);
-      });
-      const strategies = await cache.getStrategiesByPair('abc', 'xyz');
-      expect(strategies).to.deep.equal([encodedStrategy1]);
-    });
-  });
 });

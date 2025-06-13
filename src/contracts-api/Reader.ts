@@ -72,56 +72,81 @@ export default class Reader implements Fetcher {
   }
 
   public async strategy(id: BigNumber): Promise<EncodedStrategy> {
-    const res = await this._contracts.carbonController.strategy(id);
-    return toStrategy(res);
+    logger.debug('strategy called', id);
+    try {
+      const res = await this._contracts.carbonController.strategy(id);
+      return toStrategy(res);
+    } catch (error) {
+      logger.error('strategy error', error);
+      throw error;
+    }
   }
 
   public async strategies(ids: BigNumber[]): Promise<EncodedStrategy[]> {
-    const results = await this._multicall(
-      ids.map((id) => ({
-        contractAddress: this._contracts.carbonController.address,
-        interface: this._contracts.carbonController.interface,
-        methodName: 'strategy',
-        methodParameters: [id],
-      }))
-    );
-    if (!results || results.length === 0) return [];
+    logger.debug('strategies called', ids);
+    try {
+      const results = await this._multicall(
+        ids.map((id) => ({
+          contractAddress: this._contracts.carbonController.address,
+          interface: this._contracts.carbonController.interface,
+          methodName: 'strategy',
+          methodParameters: [id],
+        }))
+      );
+      logger.debug('strategies results', results);
+      if (!results || results.length === 0) return [];
 
-    return results.map((strategyRes) => {
-      const strategy = strategyRes[0] as StrategyStructOutput;
-      return toStrategy(strategy);
-    });
+      return results.map((strategyRes) => {
+        const strategy = strategyRes[0] as StrategyStructOutput;
+        return toStrategy(strategy);
+      });
+    } catch (error) {
+      logger.error('strategies error', error);
+      throw error;
+    }
   }
 
   public pairs(): Promise<TokenPair[]> {
-    return this._contracts.carbonController.pairs();
+    logger.debug('pairs called');
+    try {
+      return this._contracts.carbonController.pairs();
+    } catch (error) {
+      logger.error('pairs error', error);
+      throw error;
+    }
   }
 
   public async strategiesByPair(
     token0: string,
     token1: string
   ): Promise<EncodedStrategy[]> {
-    const allStrategies: EncodedStrategy[] = [];
-    let startIndex = 0;
-    const chunkSize = 1000;
+    logger.debug('strategiesByPair called', token0, token1);
+    try {
+      const allStrategies: EncodedStrategy[] = [];
+      let startIndex = 0;
+      const chunkSize = 1000;
 
-    while (true) {
-      const res =
-        (await this._contracts.carbonController.strategiesByPair(
-          token0,
-          token1,
-          startIndex,
-          startIndex + chunkSize
-        )) ?? [];
+      while (true) {
+        const res =
+          (await this._contracts.carbonController.strategiesByPair(
+            token0,
+            token1,
+            startIndex,
+            startIndex + chunkSize
+          )) ?? [];
 
-      allStrategies.push(...res.map((r) => toStrategy(r)));
+        allStrategies.push(...res.map((r) => toStrategy(r)));
 
-      if (res.length < chunkSize) break;
+        if (res.length < chunkSize) break;
 
-      startIndex += chunkSize;
+        startIndex += chunkSize;
+      }
+
+      return allStrategies;
+    } catch (error) {
+      logger.error('strategiesByPair error', error);
+      throw error;
     }
-
-    return allStrategies;
   }
 
   public async strategiesByPairs(pairs: TokenPair[]): Promise<
@@ -130,69 +155,104 @@ export default class Reader implements Fetcher {
       strategies: EncodedStrategy[];
     }[]
   > {
-    const chunkSize = 1000;
-    const results: { pair: TokenPair; strategies: EncodedStrategy[] }[] = [];
-    const pairsNeedingMore: { pair: TokenPair; index: number }[] = [];
+    logger.debug('strategiesByPairs called', pairs);
+    try {
+      const chunkSize = 1000;
+      const results: { pair: TokenPair; strategies: EncodedStrategy[] }[] = [];
+      const pairsNeedingMore: { pair: TokenPair; index: number }[] = [];
 
-    // First, get the first chunk for all pairs using multicall
-    const firstChunkResults = await this._multicall(
-      pairs.map((pair) => ({
-        contractAddress: this._contracts.carbonController.address,
-        interface: this._contracts.carbonController.interface,
-        methodName: 'strategiesByPair',
-        methodParameters: [pair[0], pair[1], 0, chunkSize],
-      }))
-    );
+      logger.debug('strategiesByPairs first chunk');
+      try {
+        // First, get the first chunk for all pairs using multicall
+        const firstChunkResults = await this._multicall(
+          pairs.map((pair) => ({
+            contractAddress: this._contracts.carbonController.address,
+            interface: this._contracts.carbonController.interface,
+            methodName: 'strategiesByPair',
+            methodParameters: [pair[0], pair[1], 0, chunkSize],
+          }))
+        );
 
-    if (!firstChunkResults || firstChunkResults.length === 0) return [];
+        logger.debug(
+          'strategiesByPairs first chunk results count',
+          firstChunkResults.length
+        );
 
-    // Process first chunk results and identify pairs needing more
-    firstChunkResults.forEach((result, i) => {
-      const strategiesResult = (result[0] ?? []) as StrategyStructOutput[];
-      const currentPair = pairs[i];
+        if (!firstChunkResults || firstChunkResults.length === 0) return [];
 
-      results.push({
-        pair: currentPair,
-        strategies: strategiesResult.map((r) => toStrategy(r)),
-      });
+        // Process first chunk results and identify pairs needing more
+        firstChunkResults.forEach((result, i) => {
+          const strategiesResult = (result[0] ?? []) as StrategyStructOutput[];
+          const currentPair = pairs[i];
 
-      // If we got a full chunk, we need to fetch more
-      if (strategiesResult.length === chunkSize) {
-        pairsNeedingMore.push({ pair: currentPair, index: i });
+          results.push({
+            pair: currentPair,
+            strategies: strategiesResult.map((r) => toStrategy(r)),
+          });
+
+          // If we got a full chunk, we need to fetch more
+          if (strategiesResult.length === chunkSize) {
+            pairsNeedingMore.push({ pair: currentPair, index: i });
+          }
+        });
+      } catch (error) {
+        logger.error('strategiesByPairs first chunk error', error);
+        throw error;
       }
-    });
 
-    // Fetch remaining strategies for pairs that need it
-    for (const { pair, index } of pairsNeedingMore) {
-      let startIndex = chunkSize;
+      logger.debug('number of pairs needing more', pairsNeedingMore.length);
 
-      while (true) {
-        const res =
-          (await this._contracts.carbonController.strategiesByPair(
-            pair[0],
-            pair[1],
-            startIndex,
-            startIndex + chunkSize
-          )) ?? [];
+      try {
+        // Fetch remaining strategies for pairs that need it
+        for (const { pair, index } of pairsNeedingMore) {
+          let startIndex = chunkSize;
 
-        results[index].strategies.push(...res.map((r) => toStrategy(r)));
+          while (true) {
+            const res =
+              (await this._contracts.carbonController.strategiesByPair(
+                pair[0],
+                pair[1],
+                startIndex,
+                startIndex + chunkSize
+              )) ?? [];
 
-        if (res.length < chunkSize) break;
-        startIndex += chunkSize;
+            results[index].strategies.push(...res.map((r) => toStrategy(r)));
+
+            if (res.length < chunkSize) break;
+            startIndex += chunkSize;
+          }
+        }
+      } catch (error) {
+        logger.error('strategiesByPairs remaining chunks error', error);
+        throw error;
       }
+
+      return results;
+    } catch (error) {
+      logger.error('strategiesByPairs error', error);
+      throw error;
     }
-
-    return results;
   }
 
   public async tokensByOwner(owner: string) {
+    logger.debug('tokensByOwner called', owner);
     if (!owner) return [];
-
-    return this._contracts.voucher.tokensByOwner(owner, 0, 0);
+    try {
+      return this._contracts.voucher.tokensByOwner(owner, 0, 0);
+    } catch (error) {
+      logger.error('tokensByOwner error', error);
+      throw error;
+    }
   }
 
   public tradingFeePPM(): Promise<number> {
-    return this._contracts.carbonController.tradingFeePPM();
+    logger.debug('tradingFeePPM called');
+    try {
+      return this._contracts.carbonController.tradingFeePPM();
+    } catch (error) {
+      logger.error('tradingFeePPM error', error);
+      throw error;
+    }
   }
 
   public onTradingFeePPMUpdated(
@@ -208,24 +268,37 @@ export default class Reader implements Fetcher {
   }
 
   public pairTradingFeePPM(token0: string, token1: string): Promise<number> {
-    return this._contracts.carbonController.pairTradingFeePPM(token0, token1);
+    logger.debug('pairTradingFeePPM called', token0, token1);
+    try {
+      return this._contracts.carbonController.pairTradingFeePPM(token0, token1);
+    } catch (error) {
+      logger.error('pairTradingFeePPM error', error);
+      throw error;
+    }
   }
 
   public async pairsTradingFeePPM(
     pairs: TokenPair[]
   ): Promise<[string, string, number][]> {
-    const results = await this._multicall(
-      pairs.map((pair) => ({
-        contractAddress: this._contracts.carbonController.address,
-        interface: this._contracts.carbonController.interface,
-        methodName: 'pairTradingFeePPM',
-        methodParameters: [pair[0], pair[1]],
-      }))
-    );
-    if (!results || results.length === 0) return [];
-    return results.map((res, i) => {
-      return [pairs[i][0], pairs[i][1], Number(res[0])];
-    });
+    logger.debug('pairsTradingFeePPM called', pairs);
+    try {
+      const results = await this._multicall(
+        pairs.map((pair) => ({
+          contractAddress: this._contracts.carbonController.address,
+          interface: this._contracts.carbonController.interface,
+          methodName: 'pairTradingFeePPM',
+          methodParameters: [pair[0], pair[1]],
+        }))
+      );
+      logger.debug('pairsTradingFeePPM results', results);
+      if (!results || results.length === 0) return [];
+      return results.map((res, i) => {
+        return [pairs[i][0], pairs[i][1], Number(res[0])];
+      });
+    } catch (error) {
+      logger.error('pairsTradingFeePPM error', error);
+      throw error;
+    }
   }
 
   public onPairTradingFeePPMUpdated(

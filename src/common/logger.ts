@@ -15,6 +15,7 @@ const originalLog = console.log;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function convertBigNumbersToStrings(obj: any): any {
+  if (obj === undefined || obj === null) return obj;
   if (obj instanceof BigNumber) {
     return obj.toString();
   }
