@@ -179,16 +179,19 @@ describe('ChainCache', () => {
     });
   });
   describe('onChange', () => {
-    it('should fire onCacheInitialized event when cache is initialized', async () => {
+    it('should fire onCacheInitialized event only once when cache is initialized', async () => {
       const cache = new ChainCache();
-      let cacheInitialized = false;
+      let eventCounter = 0;
       cache.on('onCacheInitialized', () => {
-        cacheInitialized = true;
+        eventCounter++;
       });
       cache.bulkAddPairs([
         { pair: ['abc', 'xyz'], strategies: [encodedStrategy1] },
       ]);
-      expect(cacheInitialized).to.be.true;
+      cache.bulkAddPairs([
+        { pair: ['def', 'ghi'], strategies: [encodedStrategy2] },
+      ]);
+      expect(eventCounter).to.equal(1);
     });
     it('should fire onPairAddedToCache event when pair is added', async () => {
       const cache = new ChainCache();
