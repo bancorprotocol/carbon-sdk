@@ -43,5 +43,6 @@ export const initSyncedCache = (
     msToWaitBetweenSyncs,
     chunkSize
   );
+  cache.setCacheMissHandler(syncer.syncPairData.bind(syncer));
   return { cache, startDataSync: syncer.startDataSync.bind(syncer) };
 };
