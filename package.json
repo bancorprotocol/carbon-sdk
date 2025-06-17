@@ -103,7 +103,7 @@
     "@typechain/ethers-v5": "^11.1.2",
     "@types/chai": "^5.2.2",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^22.13.10",
+    "@types/node": "^24.0.3",
     "@types/sinon": "^17.0.4",
     "@typescript-eslint/eslint-plugin": "^8.32.1",
     "@typescript-eslint/parser": "^8.32.1",
