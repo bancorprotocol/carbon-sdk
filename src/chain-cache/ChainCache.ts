@@ -392,6 +392,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     }
     if (pairs.length > 0 && !this._isCacheInitialized) {
       this._isCacheInitialized = true;
+      logger.debug('Emitting onCacheInitialized');
       this.emit('onCacheInitialized');
     }
   }
