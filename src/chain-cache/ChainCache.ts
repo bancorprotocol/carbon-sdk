@@ -56,6 +56,10 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
   private _latestTradesByDirectedPair: { [key: string]: TradeData } = {};
   private _blocksMetadata: BlockMetadata[] = [];
   private _tradingFeePPMByPair: { [key: string]: number } = {};
+  private _isCacheInitialized: boolean = false;
+  private _handleCacheMiss:
+    | ((token0: string, token1: string) => Promise<void>)
+    | undefined;
   //#endregion private members
 
   //#region serialization for persistent caching
@@ -173,6 +177,25 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
   }
   //#endregion serialization for persistent caching
 
+  public setCacheMissHandler(
+    handler: (token0: string, token1: string) => Promise<void>
+  ): void {
+    this._handleCacheMiss = handler;
+  }
+
+  private async _checkAndHandleCacheMiss(token0: string, token1: string) {
+    if (
+      this._isCacheInitialized ||
+      !this._handleCacheMiss ||
+      this.hasCachedPair(token0, token1)
+    )
+      return;
+
+    logger.debug('Cache miss for pair', token0, token1);
+    await this._handleCacheMiss(token0, token1);
+    logger.debug('Cache miss for pair', token0, token1, 'resolved');
+  }
+
   public clear(silent: boolean = false): void {
     const pairs = Object.keys(this._strategiesByPair).map(fromPairKey);
     this._strategiesByPair = {};
@@ -193,6 +216,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     token0: string,
     token1: string
   ): Promise<EncodedStrategy[] | undefined> {
+    await this._checkAndHandleCacheMiss(token0, token1);
     const key = toPairKey(token0, token1);
     return this._strategiesByPair[key];
   }
@@ -238,6 +262,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     targetToken: string,
     keepNonTradable: boolean = false
   ): Promise<OrdersMap> {
+    await this._checkAndHandleCacheMiss(sourceToken, targetToken);
     const key = toDirectionKey(sourceToken, targetToken);
     const orders = this._ordersByDirectedPair[key] || {};
 
@@ -257,6 +282,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     token0: string,
     token1: string
   ): Promise<TradeData | undefined> {
+    await this._checkAndHandleCacheMiss(token0, token1);
     const key = toPairKey(token0, token1);
     return this._latestTradesByPair[key];
   }
@@ -265,6 +291,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     sourceToken: string,
     targetToken: string
   ): Promise<TradeData | undefined> {
+    await this._checkAndHandleCacheMiss(sourceToken, targetToken);
     const key = toDirectionKey(sourceToken, targetToken);
     return this._latestTradesByDirectedPair[key];
   }
@@ -281,6 +308,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     token0: string,
     token1: string
   ): Promise<number | undefined> {
+    await this._checkAndHandleCacheMiss(token0, token1);
     const key = toPairKey(token0, token1);
     return this._tradingFeePPMByPair[key];
   }
@@ -295,23 +323,10 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
   //#endregion public getters
 
   //#region cache updates
-  /**
-   * This method is to be used when all the existing strategies of a pair are
-   * fetched and are to be stored in the cache.
-   * Once a pair is cached, the only way to update it is by using `applyEvents`.
-   * If all the strategies of a pair are deleted, the pair remains in the cache and there's
-   * no need to add it again.
-   * @param {string} token0 - address of the first token of the pair
-   * @param {string} token1 - address of the second token of the pair
-   * @param {EncodedStrategy[]} strategies - the strategies to be cached
-   * @throws {Error} if the pair is already cached
-   * @returns {void}
-   */
-  public addPair(
+  private _addPair(
     token0: string,
     token1: string,
-    strategies: EncodedStrategy[],
-    noPairAddedEvent: boolean = false
+    strategies: EncodedStrategy[]
   ): void {
     logger.debug(
       'Adding pair with',
@@ -329,9 +344,56 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
       this._strategiesById[strategy.id.toString()] = strategy;
       this._addStrategyOrders(strategy);
     });
-    if (!noPairAddedEvent) {
-      logger.debug('Emitting onPairAddedToCache', token0, token1);
-      this.emit('onPairAddedToCache', fromPairKey(key));
+  }
+
+  /**
+   * This method is to be used when all the existing strategies of a pair are
+   * fetched and are to be stored in the cache.
+   * Once a pair is cached, the only way to update it is by using `applyEvents`.
+   * If all the strategies of a pair are deleted, the pair remains in the cache and there's
+   * no need to add it again.
+   * It emits an event `onPairAddedToCache` with the pair info.
+   * @param {string} token0 - address of the first token of the pair
+   * @param {string} token1 - address of the second token of the pair
+   * @param {EncodedStrategy[]} strategies - the strategies to be cached
+   * @throws {Error} if the pair is already cached
+   * @returns {void}
+   * @emits {onPairAddedToCache} - when the pair is added to the cache
+   */
+  public addPair(
+    token0: string,
+    token1: string,
+    strategies: EncodedStrategy[]
+  ): void {
+    this._addPair(token0, token1, strategies);
+    logger.debug('Emitting onPairAddedToCache', token0, token1);
+    this.emit('onPairAddedToCache', fromPairKey(toPairKey(token0, token1)));
+  }
+
+  /**
+   * This method is used when a number of pairs are fetched and are to be stored in the cache.
+   * If this is the first time it is called with a non empty list of pairs it emits an event
+   * to let know that the cache was initialized with data for the first time.
+   *
+   * @param {Array<{pair: TokenPair, strategies: EncodedStrategy[]}>} pairs - the pairs to add to the cache
+   * @emits {onCacheInitialized} - when the cache is initialized with data for the first time
+   * @throws {Error} if any pair is already cached
+   * @returns {void}
+   */
+  public bulkAddPairs(
+    pairs: {
+      pair: TokenPair;
+      strategies: EncodedStrategy[];
+    }[]
+  ): void {
+    logger.debug('Bulk adding pairs', pairs);
+    for (const pair of pairs) {
+      this._addPair(pair.pair[0], pair.pair[1], pair.strategies);
+    }
+    if (pairs.length > 0 && !this._isCacheInitialized) {
+      this._isCacheInitialized = true;
+      logger.debug('Emitting onCacheInitialized');
+      this.emit('onCacheInitialized');
     }
   }
 

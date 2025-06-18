@@ -181,7 +181,7 @@ export class ChainSync {
         this._setTimeout(processPairs, 60000);
       }
     };
-    this._setTimeout(processPairs, 1);
+    await processPairs();
   }
 
   private async _syncPairDataBatch(): Promise<void> {
@@ -201,21 +201,7 @@ export class ChainSync {
         batches.map((batch) => this._fetcher.strategiesByPairs(batch))
       );
       logger.debug('_syncPairDataBatch strategiesBatches', strategiesBatches);
-      strategiesBatches.flat().forEach((pairStrategies) => {
-        logger.debug(
-          '_syncPairDataBatch adding pair',
-          pairStrategies.pair[0],
-          pairStrategies.pair[1],
-          'with strategies',
-          pairStrategies.strategies
-        );
-        this._chainCache.addPair(
-          pairStrategies.pair[0],
-          pairStrategies.pair[1],
-          pairStrategies.strategies,
-          true
-        );
-      });
+      this._chainCache.bulkAddPairs(strategiesBatches.flat());
       this._uncachedPairs = [];
     } catch (error) {
       logger.error('Failed to fetch strategies for pairs batch:', error);
@@ -229,9 +215,18 @@ export class ChainSync {
         'ChainSync.startDataSync() must be called before syncPairData()'
       );
     }
-    const strategies = await this._fetcher.strategiesByPair(token0, token1);
-    if (this._chainCache.hasCachedPair(token0, token1)) return;
-    this._chainCache.addPair(token0, token1, strategies, false);
+    try {
+      const strategies = await this._fetcher.strategiesByPair(token0, token1);
+      if (this._chainCache.hasCachedPair(token0, token1)) return;
+      this._chainCache.addPair(token0, token1, strategies);
+    } catch (error) {
+      logger.error(
+        'Failed to fetch strategies for pair:',
+        token0,
+        token1,
+        error
+      );
+    }
   }
 
   private async _syncEvents(): Promise<void> {

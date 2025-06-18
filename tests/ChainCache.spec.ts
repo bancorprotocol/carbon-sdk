@@ -179,6 +179,20 @@ describe('ChainCache', () => {
     });
   });
   describe('onChange', () => {
+    it('should fire onCacheInitialized event only once when cache is initialized', async () => {
+      const cache = new ChainCache();
+      let eventCounter = 0;
+      cache.on('onCacheInitialized', () => {
+        eventCounter++;
+      });
+      cache.bulkAddPairs([
+        { pair: ['abc', 'xyz'], strategies: [encodedStrategy1] },
+      ]);
+      cache.bulkAddPairs([
+        { pair: ['def', 'ghi'], strategies: [encodedStrategy2] },
+      ]);
+      expect(eventCounter).to.equal(1);
+    });
     it('should fire onPairAddedToCache event when pair is added', async () => {
       const cache = new ChainCache();
       let affectedPair: TokenPair = ['', ''];
@@ -335,6 +349,36 @@ describe('ChainCache', () => {
         3
       );
       expect(await cache.getTradingFeePPMByPair('xyz', 'abc')).to.equal(13);
+    });
+  });
+  describe('cache miss', () => {
+    it('getStrategiesByPair call miss handler when pair is not cached', async () => {
+      const cache = new ChainCache();
+      let missHandlerCalled = false;
+      cache.setCacheMissHandler(async (token0, token1) => {
+        missHandlerCalled = true;
+        expect([token0, token1]).to.deep.equal(['abc', 'xyz']);
+      });
+      await cache.getStrategiesByPair('abc', 'xyz');
+      expect(missHandlerCalled).to.be.true;
+    });
+    it('getOrdersByPair call miss handler when pair is not cached', async () => {
+      const cache = new ChainCache();
+      let missHandlerCalled = false;
+      cache.setCacheMissHandler(async (token0, token1) => {
+        missHandlerCalled = true;
+        expect([token0, token1]).to.deep.equal(['abc', 'xyz']);
+      });
+      await cache.getOrdersByPair('abc', 'xyz');
+      expect(missHandlerCalled).to.be.true;
+    });
+    it('getStrategiesByPair calls miss handler, which adds the missing pair, allowing the call to return strategies', async () => {
+      const cache = new ChainCache();
+      cache.setCacheMissHandler(async (token0, token1) => {
+        cache.addPair(token0, token1, [encodedStrategy1]);
+      });
+      const strategies = await cache.getStrategiesByPair('abc', 'xyz');
+      expect(strategies).to.deep.equal([encodedStrategy1]);
     });
   });
 });
