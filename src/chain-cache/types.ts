@@ -9,6 +9,7 @@ export type CacheEvents = {
   onPairDataChanged: (affectedPairs: TokenPair[]) => void;
   onPairAddedToCache: (addedPair: TokenPair) => void;
   onCacheInitialized: () => void;
+  onCacheCleared: () => void;
 };
 
 export interface TypedEventEmitter<Events extends EventMap> {
