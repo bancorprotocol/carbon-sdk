@@ -21,6 +21,27 @@ export class ChainSync {
   private _activeTimers: Set<number> = new Set();
   private _isStopped: boolean = false;
 
+  private _reinitializeSelf(): void {
+    this._syncCalled = false;
+    this._slowPollPairs = false;
+    this._uncachedPairs = [];
+    this._lastFetch = Date.now();
+    this._activeTimers = new Set();
+    this._isStopped = false;
+  }
+
+  private _resetSelf(): void {
+    const shouldSyncAgain = this._syncCalled;
+    this.stop();
+    this._reinitializeSelf();
+    
+    // clearing the cache will emit onCacheCleared event
+    this._chainCache.clear();
+    if (shouldSyncAgain) {
+      this.startDataSync();
+    }
+  }
+
   constructor(
     fetcher: Fetcher,
     chainCache: ChainCache,
@@ -28,6 +49,7 @@ export class ChainSync {
     msToWaitBetweenSyncs: number = 1000,
     chunkSize: number = 1000
   ) {
+    this._reinitializeSelf();
     this._fetcher = fetcher;
     this._chainCache = chainCache;
     this._numOfPairsToBatch = numOfPairsToBatch;
@@ -258,10 +280,7 @@ export class ChainSync {
         if (currentBlock > latestBlock) {
           if (await this._detectReorg(currentBlock)) {
             logger.debug('_syncEvents detected reorg - resetting');
-            this._chainCache.clear();
-            this._chainCache.applyEvents([], currentBlock);
-            this._resetPairsFetching();
-            this._setTimeout(processEvents, 1);
+            this._resetSelf();
             return;
           }
 
@@ -327,11 +346,6 @@ export class ChainSync {
       this._setTimeout(processEvents, this._msToWaitBetweenSyncs);
     };
     this._setTimeout(processEvents, 1);
-  }
-
-  private _resetPairsFetching() {
-    this._uncachedPairs = [];
-    this._slowPollPairs = false;
   }
 
   /**
