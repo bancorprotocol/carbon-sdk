@@ -83,6 +83,22 @@ describe('encoders', () => {
       expect(encodedOrder.B.toString()).to.equal('199032864766430');
     });
 
+    it('should throw an exception when lowest rate is encoded to zero', () => {
+      const order = {
+        liquidity: '100',
+        lowestRate: '0.0000000000000000000000000000001',
+        highestRate: '2',
+        marginalRate: '1',
+      };
+      expect(() => {
+        encodeOrder(order);
+      }).to.throw(
+        `Encoded lowest rate cannot be zero unless the highest and marginal rates are also zero. This may be the result of passing a rate that is zero or too close to zero:\n` +
+          `lowestRate = ${order.lowestRate}, highestRate = ${order.highestRate}, marginalRate = ${order.marginalRate}\n` +
+          `L = 0, H = 398065729532860, M = 281474976710656`
+      );
+    });
+
     it('should throw an exception when high price is higher than mid which is equal to min', () => {
       const order = {
         liquidity: '100',

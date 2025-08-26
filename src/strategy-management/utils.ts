@@ -17,6 +17,7 @@ import {
   calculateRequiredLiquidity,
   decodeOrder,
   encodeOrders,
+  lowestPossibleRate,
 } from '../utils/encoders';
 import { Decimals } from '../utils/decimals';
 import { encodedStrategyBNToStr } from '../utils';
@@ -370,6 +371,29 @@ export function enforcePriceRange(
   if (marginalPrice.gte(maxPrice)) return maxPrice;
 
   return marginalPrice;
+}
+
+export function getMinMaxPricesByDecimals(
+  baseTokenDecimals: number,
+  quoteTokenDecimals: number
+): {
+  minBuyPrice: string;
+  maxSellPrice: string;
+} {
+  const minBuyPrice = normalizeRate(
+    lowestPossibleRate.toString(),
+    baseTokenDecimals,
+    quoteTokenDecimals
+  );
+  const maxSellPrice = normalizeInvertedRate(
+    lowestPossibleRate.toString(),
+    quoteTokenDecimals,
+    baseTokenDecimals
+  );
+  return {
+    minBuyPrice,
+    maxSellPrice,
+  };
 }
 
 /**

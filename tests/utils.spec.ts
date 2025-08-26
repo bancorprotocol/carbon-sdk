@@ -14,8 +14,11 @@ import {
   calculateOverlappingSellBudget,
   calculateOverlappingPrices,
   enforcePriceRange,
+  getMinMaxPricesByDecimals,
+  createOrders,
 } from '../src/strategy-management';
 import { isAlmostEqual } from './test-utils';
+import { encodeOrders, lowestPossibleRate } from '../src/utils/encoders';
 
 describe('utils', () => {
   describe('enforcePriceRange', () => {
@@ -393,6 +396,90 @@ describe('utils', () => {
       const result = subtractFee(amount, tradingFeePPM);
 
       expect(result.toString()).to.equal(amount.toString());
+    });
+  });
+
+  describe('getMinMaxPricesByDecimals', () => {
+    [
+      {
+        baseTokenDecimals: 18,
+        quoteTokenDecimals: 6,
+      },
+      {
+        baseTokenDecimals: 6,
+        quoteTokenDecimals: 18,
+      },
+      {
+        baseTokenDecimals: 18,
+        quoteTokenDecimals: 18,
+      },
+    ].forEach(({ baseTokenDecimals, quoteTokenDecimals }) => {
+      it(`should return the correct min and max prices for ${baseTokenDecimals} and ${quoteTokenDecimals} decimals`, () => {
+        const { minBuyPrice, maxSellPrice } = getMinMaxPricesByDecimals(
+          baseTokenDecimals,
+          quoteTokenDecimals
+        );
+        const orders = createOrders(
+          baseTokenDecimals,
+          quoteTokenDecimals,
+          minBuyPrice,
+          minBuyPrice,
+          minBuyPrice,
+          '1',
+          maxSellPrice,
+          maxSellPrice,
+          maxSellPrice,
+          '1'
+        );
+        expect(orders.order0.lowestRate).to.equal(
+          lowestPossibleRate.toString()
+        );
+        expect(orders.order1.lowestRate).to.equal(
+          lowestPossibleRate.toString()
+        );
+      });
+    });
+    it('should return such numbers that any numbers above maxSellPrice and below minBuyPrice lead to zero B in encoded orders', () => {
+      const { minBuyPrice, maxSellPrice } = getMinMaxPricesByDecimals(18, 6);
+      const smallerMinBuyPrice = new Decimal(minBuyPrice).minus(
+        new Decimal(1).div(new Decimal(10).pow(18))
+      );
+      const largerMaxSellPrice = new Decimal(maxSellPrice).plus(
+        new Decimal(1).div(new Decimal(10).pow(6))
+      );
+      const orders = createOrders(
+        18,
+        6,
+        smallerMinBuyPrice.toString(),
+        smallerMinBuyPrice.toString(),
+        smallerMinBuyPrice.toString(),
+        '1',
+        largerMaxSellPrice.toString(),
+        largerMaxSellPrice.toString(),
+        largerMaxSellPrice.toString(),
+        '1'
+      );
+      const encodedOrders = encodeOrders([orders.order0, orders.order1]);
+      expect(encodedOrders[0].B.toString()).to.equal('0');
+      expect(encodedOrders[1].B.toString()).to.equal('0');
+    });
+    it('should return such numbers that any numbers between maxSellPrice and minBuyPrice lead to non-zero B in encoded orders', () => {
+      const { minBuyPrice, maxSellPrice } = getMinMaxPricesByDecimals(18, 6);
+      const orders = createOrders(
+        18,
+        6,
+        minBuyPrice,
+        minBuyPrice,
+        minBuyPrice,
+        '1',
+        maxSellPrice,
+        maxSellPrice,
+        maxSellPrice,
+        '1'
+      );
+      const encodedOrders = encodeOrders([orders.order0, orders.order1]);
+      expect(encodedOrders[0].B.toString()).to.not.equal('0');
+      expect(encodedOrders[1].B.toString()).to.not.equal('0');
     });
   });
 });
