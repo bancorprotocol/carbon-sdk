@@ -54,6 +54,7 @@ import {
   calculateOverlappingSellBudget,
   decodeStrategy,
   encodeStrategy,
+  getMinMaxPricesByDecimals,
   normalizeRate,
   parseStrategy,
   subtractFee,
@@ -120,6 +121,19 @@ export class Toolkit {
       return decimals;
     };
     this._decimals = new Decimals(fetcher);
+  }
+
+  public async getMinMaxPricesByAddresses(
+    baseToken: string,
+    quoteToken: string
+  ): Promise<{
+    minBuyPrice: string;
+    maxSellPrice: string;
+  }> {
+    const decimals = this._decimals;
+    const baseDecimals = await decimals.fetchDecimals(baseToken);
+    const quoteDecimals = await decimals.fetchDecimals(quoteToken);
+    return getMinMaxPricesByDecimals(baseDecimals, quoteDecimals);
   }
 
   public static getMatchActions(

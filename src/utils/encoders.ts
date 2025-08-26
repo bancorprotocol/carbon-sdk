@@ -17,6 +17,9 @@ export const decodeRate = (value: Decimal) => {
   return value.div(ONE).pow(2);
 };
 
+// The smallest rate that, once encoded, will not be zero.
+export const lowestPossibleRate = decodeRate(new Decimal(1));
+
 export const encodeFloat = (value: BigNumber) => {
   const exponent = bitLength(value.div(ONE));
   const mantissa = value.shr(exponent);
@@ -100,6 +103,14 @@ export const encodeOrder = (
   const L = encodeRate(lowestRate);
   const H = encodeRate(highestRate);
   const M = encodeRate(marginalRate);
+
+  if (L.isZero() && !(H.isZero() && M.isZero())) {
+    throw new Error(
+      `Encoded lowest rate cannot be zero unless the highest and marginal rates are also zero. This may be the result of passing a rate that is zero or too close to zero:\n` +
+        `lowestRate = ${lowestRate}, highestRate = ${highestRate}, marginalRate = ${marginalRate}\n` +
+        `L = ${L}, H = ${H}, M = ${M}`
+    );
+  }
 
   if (
     !(
