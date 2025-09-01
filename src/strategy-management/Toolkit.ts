@@ -347,20 +347,27 @@ export class Toolkit {
    * If the cache is synced, it will return the strategies from the cache.
    * Otherwise, it will fetch the strategies from the chain.
    *
-   * @param {TokenPair[]} pairs - List of pairs to get strategies for.
+   * @param {TokenPair[]} pairs - List of pairs to get strategies for. If undefined, all pairs will be fetched.
    *
    * @returns {Promise<{
    *   pair: TokenPair;
    *   strategies: Strategy[];
    * }[]>} An array of pairs and their strategies.
    */
-  public async getStrategiesByPairs(pairs: TokenPair[]): Promise<
+  public async getStrategiesByPairs(pairs?: TokenPair[]): Promise<
     {
       pair: TokenPair;
       strategies: Strategy[];
     }[]
   > {
     logger.debug('getStrategiesByPairs called', arguments);
+
+    let pairsToFetch = pairs;
+    if (!pairsToFetch) {
+      pairsToFetch = this._cache
+        ? this._cache.getCachedPairs()
+        : await this._api.reader.pairs();
+    }
 
     let encodedStrategies:
       | {
@@ -370,14 +377,16 @@ export class Toolkit {
       | undefined;
 
     if (this._cache) {
-      encodedStrategies = await this._cache.getStrategiesByPairs(pairs);
+      encodedStrategies = await this._cache.getStrategiesByPairs(pairsToFetch);
     }
 
     if (encodedStrategies) {
       logger.debug('getStrategiesByPairs fetched from cache');
     } else {
       logger.debug('getStrategiesByPairs fetching from chain');
-      encodedStrategies = await this._api.reader.strategiesByPairs(pairs);
+      encodedStrategies = await this._api.reader.strategiesByPairs(
+        pairsToFetch
+      );
     }
 
     const decodedStrategies: {
@@ -407,6 +416,7 @@ export class Toolkit {
 
     logger.debug('getStrategiesByPairs info:', {
       pairs,
+      pairsToFetch,
       encodedStrategies,
       decodedStrategies,
       strategies,
