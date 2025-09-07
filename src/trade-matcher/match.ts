@@ -95,7 +95,7 @@ const sortedQuotes = (
  * - Iterate the orders from best rate to worst rate:
  *   - Let `m` denote the maximum tradable amount not larger than `n`
  *   - Add the id of the order along with `m` to the output matching
- *   - If `m < n` then subtract `m` from `n` and continue, otherwise break
+ *   - Subtract `m` from `n` and repeat the process until `n` is zero
  */
 const matchFast = (
   amount: BigNumber,
@@ -107,37 +107,14 @@ const matchFast = (
   const actions: MatchAction[] = [];
 
   for (const quote of quotes) {
-    if (amount.gt(quote.rate.input)) {
-      if (filter(quote.rate)) {
-        actions.push({
-          id: quote.id,
-          input: quote.rate.input,
-          output: quote.rate.output,
-        });
-        amount = amount.sub(quote.rate.input);
+    const input: BigNumber = BigNumberMin(quote.rate.input, amount);
+    const output: BigNumber = trade(input, ordersMap[quote.id.toString()]).output;
+    if (filter({input, output})) {
+      actions.push({id: quote.id, input, output});
+      amount = amount.sub(input);
+      if (amount.eq(0)) {
+        break;
       }
-    } else if (amount.eq(quote.rate.input)) {
-      if (filter(quote.rate)) {
-        actions.push({
-          id: quote.id,
-          input: quote.rate.input,
-          output: quote.rate.output,
-        });
-      }
-      break;
-    } /* if (amount.lt(rate.input)) */ else {
-      const adjustedRate: Rate = {
-        input: amount,
-        output: trade(amount, ordersMap[quote.id.toString()]).output,
-      };
-      if (filter(adjustedRate)) {
-        actions.push({
-          id: quote.id,
-          input: adjustedRate.input,
-          output: adjustedRate.output,
-        });
-      }
-      break;
     }
   }
 
