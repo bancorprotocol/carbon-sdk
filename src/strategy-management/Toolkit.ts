@@ -268,8 +268,8 @@ export class Toolkit {
 
     let encodedStrategy: EncodedStrategy | undefined;
 
-    if (this._cache) {
-      encodedStrategy = await this._cache.getStrategyById(id);
+    if (this._cache.isCacheInitialized()) {
+      encodedStrategy = this._cache.getStrategyById(id);
     }
 
     if (encodedStrategy) {
@@ -309,7 +309,7 @@ export class Toolkit {
 
     let encodedStrategies: EncodedStrategy[] | undefined;
 
-    if (this._cache) {
+    if (this._cache.isCacheInitialized()) {
       encodedStrategies = await this._cache.getStrategiesByPair(token0, token1);
     }
 
@@ -364,7 +364,7 @@ export class Toolkit {
 
     let pairsToFetch = pairs;
     if (!pairsToFetch) {
-      pairsToFetch = this._cache
+      pairsToFetch = this._cache.isCacheInitialized()
         ? this._cache.getCachedPairs()
         : await this._api.reader.pairs();
     }
@@ -376,11 +376,8 @@ export class Toolkit {
         }[]
       | undefined;
 
-    if (this._cache) {
+    if (this._cache.isCacheInitialized()) {
       encodedStrategies = await this._cache.getStrategiesByPairs(pairsToFetch);
-    }
-
-    if (encodedStrategies) {
       logger.debug('getStrategiesByPairs fetched from cache');
     } else {
       logger.debug('getStrategiesByPairs fetching from chain');
@@ -443,7 +440,7 @@ export class Toolkit {
 
     let encodedStrategies: EncodedStrategy[] = [];
     let uncachedIds: BigNumber[] = ids;
-    if (this._cache) {
+    if (this._cache.isCacheInitialized()) {
       uncachedIds = ids.reduce((acc, id) => {
         const strategy = this._cache.getStrategyById(id);
         if (!strategy) {
