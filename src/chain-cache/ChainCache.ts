@@ -56,7 +56,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
   private _latestTradesByDirectedPair: { [key: string]: TradeData } = {};
   private _blocksMetadata: BlockMetadata[] = [];
   private _tradingFeePPMByPair: { [key: string]: number } = {};
-  private _isCacheInitialized: boolean = false;
+  private _isCacheInitialized: boolean = false; // should only be set to true after the cache is FULLY initialized with data for the first time by `bulkAddPairs` or when loaded from serialized data
   private _handleCacheMiss:
     | ((token0: string, token1: string) => Promise<void>)
     | undefined;
@@ -135,6 +135,8 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
         (block) => !!block && !!block.number && !!block.hash
       );
     }
+    this._isCacheInitialized = true;
+    logger.debug('Cache initialized from serialized data');
   }
 
   public serialize(): string {
@@ -194,6 +196,14 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     logger.debug('Cache miss for pair', token0, token1);
     await this._handleCacheMiss(token0, token1);
     logger.debug('Cache miss for pair', token0, token1, 'resolved');
+  }
+
+  /**
+   * Returns true if the cache is initialized with data for the first time by `bulkAddPairs` or when loaded from serialized data
+   * @returns {boolean} true if the cache is initialized, false otherwise
+   */
+  public isCacheInitialized(): boolean {
+    return this._isCacheInitialized;
   }
 
   public clear(): void {

@@ -100,6 +100,7 @@ describe('Toolkit', () => {
       },
     };
     cacheMock = sinon.createStubInstance(ChainCache);
+    cacheMock.isCacheInitialized.returns(true);
     decimalFetcher = () => 18;
   });
 
@@ -653,7 +654,7 @@ describe('Toolkit', () => {
 
   describe('getStrategyById', () => {
     it('should fetch strategies from cache if available', async () => {
-      cacheMock.getStrategyById.resolves(encodedStrategies[0]);
+      cacheMock.getStrategyById.returns(encodedStrategies[0]);
 
       const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
       const strategy = await toolkit.getStrategyById('0');
@@ -663,7 +664,7 @@ describe('Toolkit', () => {
     });
 
     it('should fetch strategies from the chain if not available in cache', async () => {
-      cacheMock.getStrategyById.resolves(undefined);
+      cacheMock.getStrategyById.returns(undefined);
 
       apiMock.reader.strategy.resolves(encodedStrategies[0]);
 
