@@ -2,8 +2,6 @@ import { expect } from 'chai';
 import { BigNumber } from '../src/utils/numerics';
 import { encodeOrder } from '../src/utils/encoders';
 import {
-  MatchOptions,
-  MatchType,
   Filter,
   Rate,
   MatchAction,
@@ -32,9 +30,8 @@ type MatchMethod = 'matchBySourceAmount' | 'matchByTargetAmount';
 type MatchFunction = (
   amount: BigNumber,
   ordersMap: OrdersMap,
-  matchTypes: MatchType[],
   filter: Filter
-) => MatchOptions;
+) => MatchAction[];
 
 const methods: {
   [key in MatchMethod]: MatchFunction;
@@ -78,17 +75,10 @@ interface MatchTest {
     marginalRate: string;
   }[];
   actions: {
-    [MatchType.Fast]: {
-      id: string;
-      input: string;
-      output: string;
-    }[];
-    [MatchType.Best]: {
-      id: string;
-      input: string;
-      output: string;
-    }[];
-  };
+    id: string;
+    input: string;
+    output: string;
+  }[];
 }
 
 type MatchTests = MatchTest[];
@@ -123,53 +113,22 @@ describe('Match', () => {
         const actions = method(
           BigNumber.from(test.amount),
           ordersMap,
-          Object.keys(test.actions) as MatchType[],
           filter
         );
-        for (const matchType in actions) {
-          expect(actions[matchType as MatchType]!.length).to.equal(
-            test.actions[matchType as MatchType].length
-          );
-          for (const [j, action] of actions[
-            matchType as MatchType
-          ]!.entries()) {
-            expect(action.id.toString()).to.equal(
-              test.actions[matchType as MatchType][j].id
-            );
-            expect(action.input.toString()).to.equal(
-              test.actions[matchType as MatchType][j].input
-            );
-            expect(action.output.toString()).to.equal(
-              test.actions[matchType as MatchType][j].output
-            );
-            expect(
-              getAttr(action).lte(test.orders[action.id.toNumber()].liquidity)
-            ).to.be.true;
-            expect(
-              action.output.eq(
-                trade(action.input, ordersMap[action.id.toNumber()])
-              )
-            ).to.be.true;
-          }
-          expect(
-            sum(
-              actions[matchType as MatchType]!.map(
-                (action: MatchAction) => action.input
-              )
-            ).lte(BigNumber.from(test.amount))
-          ).to.be.true;
+        expect(actions.length).to.equal(test.actions.length);
+        for (const [j, action] of actions.entries()) {
+          expect(action.id.toString()).to.equal(test.actions[j].id);
+          expect(action.input.toString()).to.equal(test.actions[j].input);
+          expect(action.output.toString()).to.equal(test.actions[j].output);
+          expect(getAttr(action).lte(test.orders[action.id.toNumber()].liquidity)).to.be.true;
+          expect(action.output.eq(trade(action.input, ordersMap[action.id.toNumber()]))).to.be.true;
         }
         expect(
-          compareInput(
-            sum(actions.Best!.map((action) => action.input)),
-            sum(actions.Fast!.map((action) => action.input))
-          )
-        ).to.be.true;
-        expect(
-          compareOutput(
-            sum(actions.Best!.map((action) => action.output)),
-            sum(actions.Fast!.map((action) => action.output))
-          )
+          sum(
+            actions!.map(
+              (action: MatchAction) => action.input
+            )
+          ).lte(BigNumber.from(test.amount))
         ).to.be.true;
       }).timeout(3000);
     }
