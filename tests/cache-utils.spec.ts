@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { toPairKey, toDirectionKey } from '../src/chain-cache/utils';
 
-const SEPARATOR = '->-<-';
+const SEPARATOR = '_';
 describe('toPairKey', () => {
   it('should return the key for two tokens sorted in alphabetical order', () => {
     expect(toPairKey('abc', 'xyz')).to.equal(`abc${SEPARATOR}xyz`);

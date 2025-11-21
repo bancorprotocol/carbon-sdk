@@ -9,7 +9,7 @@ import {
   Rate,
 } from '../common/types';
 import { decodeFloat } from '../utils/encoders';
-import { BigNumber, BigNumberMin } from '../utils/numerics';
+import { BigNumberMin } from '../utils/numerics';
 import {
   getEncodedTradeTargetAmount as tradeTargetAmount,
   getEncodedTradeSourceAmount as tradeSourceAmount,
@@ -17,16 +17,16 @@ import {
 import { sortByMaxRate, sortByMinRate } from './utils';
 
 const rateBySourceAmount = (
-  sourceAmount: BigNumber,
+  sourceAmount: bigint,
   order: EncodedOrder
 ): Rate => {
   let input = sourceAmount;
   let output = tradeTargetAmount(input, order);
-  if (output.gt(order.y)) {
+  if (output > order.y) {
     input = tradeSourceAmount(order.y, order);
     output = tradeTargetAmount(input, order);
-    while (output.gt(order.y)) {
-      input = input.sub(1);
+    while (output > order.y) {
+      input = input - 1n;
       output = tradeTargetAmount(input, order);
     }
   }
@@ -34,7 +34,7 @@ const rateBySourceAmount = (
 };
 
 const rateByTargetAmount = (
-  targetAmount: BigNumber,
+  targetAmount: bigint,
   order: EncodedOrder
 ): Rate => {
   const input = BigNumberMin(targetAmount, order.y);
@@ -43,26 +43,23 @@ const rateByTargetAmount = (
 };
 
 const getParams = (order: EncodedOrder) => {
-  const [y, z, A, B] = [order.y, order.z, order.A, order.B];
-  return [y, z, decodeFloat(A), decodeFloat(B)];
+  const [y, z, A, B] = [order.y, order.z, decodeFloat(order.A), decodeFloat(order.B)];
+  return [y, z, A, B];
 };
 
-const getLimit = (order: EncodedOrder) => {
+const getLimit = (order: EncodedOrder): bigint => {
   const [y, z, A, B] = getParams(order);
-  return z.gt(0) ? y.mul(A).add(z.mul(B)).div(z) : BigNumber.from(0);
+  return z > 0n ? (y * A + z * B) / z : 0n;
 };
 
-const equalTargetAmount = (order: EncodedOrder, limit: BigNumber) => {
+const equalTargetAmount = (order: EncodedOrder, limit: bigint): bigint => {
   const [y, z, A, B] = getParams(order);
-  return A.gt(0)
-    ? y
-        .mul(A)
-        .add(z.mul(B.sub(limit)))
-        .div(A)
+  return A > 0n
+    ? (y * A + z * (B - limit)) / A
     : y;
 };
 
-const equalSourceAmount = (order: EncodedOrder, limit: BigNumber) => {
+const equalSourceAmount = (order: EncodedOrder, limit: bigint): bigint => {
   return tradeSourceAmount(equalTargetAmount(order, limit), order);
 };
 
@@ -77,14 +74,14 @@ const equalSourceAmount = (order: EncodedOrder, limit: BigNumber) => {
  *   - If the rates are identical, then the one with a better value of `y` prevails
  */
 const sortedQuotes = (
-  amount: BigNumber,
+  amount: bigint,
   ordersMap: OrdersMap,
-  trade: (amount: BigNumber, order: EncodedOrder) => Rate,
+  trade: (amount: bigint, order: EncodedOrder) => Rate,
   sort: (x: Rate, y: Rate) => number
 ): Quote[] =>
   Object.keys(ordersMap)
     .map((id) => ({
-      id: BigNumber.from(id),
+      id: BigInt(id),
       rate: trade(amount, ordersMap[id]),
     }))
     .sort((a, b) => sort(a.rate, b.rate));
@@ -98,21 +95,22 @@ const sortedQuotes = (
  *   - Subtract `m` from `n` and repeat the process until `n` is zero
  */
 const matchFast = (
-  amount: BigNumber,
+  amount: bigint,
   ordersMap: OrdersMap,
   quotes: Quote[],
   filter: Filter,
-  trade: (amount: BigNumber, order: EncodedOrder) => Rate
+  trade: (amount: bigint, order: EncodedOrder) => Rate
 ): MatchAction[] => {
   const actions: MatchAction[] = [];
+  let remainingAmount = amount;
 
   for (const quote of quotes) {
-    const input: BigNumber = BigNumberMin(quote.rate.input, amount);
-    const output: BigNumber = trade(input, ordersMap[quote.id.toString()]).output;
+    const input: bigint = BigNumberMin(quote.rate.input, remainingAmount);
+    const output: bigint = trade(input, ordersMap[quote.id.toString()]).output;
     if (filter({input, output})) {
       actions.push({id: quote.id, input, output});
-      amount = amount.sub(input);
-      if (amount.eq(0)) {
+      remainingAmount = remainingAmount - input;
+      if (remainingAmount === 0n) {
         break;
       }
     }
@@ -132,56 +130,56 @@ const matchFast = (
  *   - If the result is equal to the requested trade amount, then stop
  */
 const matchBest = (
-  amount: BigNumber,
+  amount: bigint,
   ordersMap: OrdersMap,
   quotes: Quote[],
   filter: Filter,
-  trade: (amount: BigNumber, order: EncodedOrder) => Rate,
-  equalize: (order: EncodedOrder, limit: BigNumber) => BigNumber
+  trade: (amount: bigint, order: EncodedOrder) => Rate,
+  equalize: (order: EncodedOrder, limit: bigint) => bigint
 ): MatchAction[] => {
   const order0: EncodedOrder = {
-    y: BigNumber.from(0),
-    z: BigNumber.from(0),
-    A: BigNumber.from(0),
-    B: BigNumber.from(0),
+    y: 0n,
+    z: 0n,
+    A: 0n,
+    B: 0n,
   };
   const orders = quotes
     .map((quote) => ordersMap[quote.id.toString()])
     .concat(order0);
 
   let rates: Rate[] = [];
-  let limit = BigNumber.from(0);
-  let total = BigNumber.from(0);
-  let delta = BigNumber.from(0);
+  let limit = 0n;
+  let total = 0n;
+  let delta = 0n;
 
   for (let n = 1; n < orders.length; n++) {
     limit = getLimit(orders[n]);
     rates = orders
       .slice(0, n)
       .map((order) => trade(equalize(order, limit), order));
-    total = rates.reduce((sum, rate) => sum.add(rate.input), BigNumber.from(0));
-    delta = total.sub(amount);
-    if (delta.eq(0)) {
+    total = rates.reduce((sum, rate) => sum + rate.input, 0n);
+    delta = total - amount;
+    if (delta === 0n) {
       break;
     }
-    if (delta.gt(0)) {
+    if (delta > 0n) {
       let lo = limit;
       let hi = getLimit(orders[n - 1]);
-      while (lo.add(1).lt(hi)) {
-        limit = lo.add(hi).div(2);
+      while (lo + 1n < hi) {
+        limit = (lo + hi) / 2n;
         rates = orders
           .slice(0, n)
           .map((order) => trade(equalize(order, limit), order));
         total = rates.reduce(
-          (sum, rate) => sum.add(rate.input),
-          BigNumber.from(0)
+          (sum, rate) => sum + rate.input,
+          0n
         );
-        delta = total.sub(amount);
-        if (delta.gt(0)) {
+        delta = total - amount;
+        if (delta > 0n) {
           lo = limit;
-        } else if (delta.lt(0)) {
+        } else if (delta < 0n) {
           hi = limit;
-        } /* if (delta.eq(0)) */ else {
+        } /* if (delta === 0n) */ else {
           break;
         }
       }
@@ -189,20 +187,20 @@ const matchBest = (
     }
   }
 
-  if (delta.gt(0)) {
+  if (delta > 0n) {
     for (let i = rates.length - 1; i >= 0; i--) {
-      const rate = trade(rates[i].input.sub(delta), orders[i]);
-      delta = delta.add(rate.input.sub(rates[i].input));
+      const rate = trade(rates[i].input - delta, orders[i]);
+      delta = delta + (rate.input - rates[i].input);
       rates[i] = rate;
-      if (delta.lte(0)) {
+      if (delta <= 0n) {
         break;
       }
     }
-  } else if (delta.lt(0)) {
+  } else if (delta < 0n) {
     for (let i = 0; i <= rates.length - 1; i++) {
-      const rate = trade(rates[i].input.sub(delta), orders[i]);
-      delta = delta.add(rate.input.sub(rates[i].input));
-      if (delta.gt(0)) {
+      const rate = trade(rates[i].input - delta, orders[i]);
+      delta = delta + (rate.input - rates[i].input);
+      if (delta > 0n) {
         break;
       }
       rates[i] = rate;
@@ -219,13 +217,13 @@ const matchBest = (
 };
 
 const matchBy = (
-  amount: BigNumber,
+  amount: bigint,
   ordersMap: OrdersMap,
   matchTypes: MatchType[],
   filter: Filter,
-  trade: (amount: BigNumber, order: EncodedOrder) => Rate,
+  trade: (amount: bigint, order: EncodedOrder) => Rate,
   sort: (x: Rate, y: Rate) => number,
-  equalize: (order: EncodedOrder, limit: BigNumber) => BigNumber
+  equalize: (order: EncodedOrder, limit: bigint) => bigint
 ): MatchOptions => {
   const quotes = sortedQuotes(amount, ordersMap, trade, sort);
   const res: MatchOptions = {};
@@ -246,10 +244,10 @@ const matchBy = (
 };
 
 const defaultFilter: Filter = (rate: Rate) =>
-  rate.input.gt(0) && rate.output.gt(0);
+  rate.input > 0n && rate.output > 0n;
 
 export const matchBySourceAmount = (
-  amount: BigNumber,
+  amount: bigint,
   ordersMap: OrdersMap,
   matchTypes: MatchType[],
   filter: Filter = defaultFilter
@@ -266,7 +264,7 @@ export const matchBySourceAmount = (
 };
 
 export const matchByTargetAmount = (
-  amount: BigNumber,
+  amount: bigint,
   ordersMap: OrdersMap,
   matchTypes: MatchType[],
   filter: Filter = defaultFilter

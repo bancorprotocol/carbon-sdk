@@ -1,4 +1,3 @@
-import { BigNumber } from './numerics';
 import {
   EncodedOrder,
   EncodedOrderBNStr,
@@ -8,17 +7,17 @@ import {
   MatchActionBNStr,
   OrdersMap,
   OrdersMapBNStr,
-  RetypeBigNumberToString,
+  RetypeBigIntToString,
   TradeAction,
   TradeActionBNStr,
 } from '../common/types';
 
-export const replaceBigNumbersWithStrings = <T>(
+export const replaceBigIntsWithStrings = <T>(
   obj: T
-): RetypeBigNumberToString<T> => {
+): RetypeBigIntToString<T> => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function replace(obj: any): any {
-    if (BigNumber.isBigNumber(obj)) {
+    if (typeof obj === 'bigint') {
       return obj.toString();
     }
 
@@ -34,33 +33,29 @@ export const replaceBigNumbersWithStrings = <T>(
     return obj;
   }
 
-  return replace(obj) as RetypeBigNumberToString<T>;
-};
-
-export const encodedOrderBNToStr = (order: EncodedOrder): EncodedOrderBNStr => {
-  return replaceBigNumbersWithStrings(order);
+  return replace(obj) as RetypeBigIntToString<T>;
 };
 
 export const encodedOrderStrToBN = (order: EncodedOrderBNStr): EncodedOrder => {
   return {
-    y: BigNumber.from(order.y),
-    z: BigNumber.from(order.z),
-    A: BigNumber.from(order.A),
-    B: BigNumber.from(order.B),
+    y: BigInt(order.y),
+    z: BigInt(order.z),
+    A: BigInt(order.A),
+    B: BigInt(order.B),
   };
 };
 
-export const encodedStrategyBNToStr = (
+export const encodedStrategyBigIntToStr = (
   strategy: EncodedStrategy
 ): EncodedStrategyBNStr => {
-  return replaceBigNumbersWithStrings(strategy);
+  return replaceBigIntsWithStrings(strategy);
 };
 
 export const encodedStrategyStrToBN = (
   strategy: EncodedStrategyBNStr
 ): EncodedStrategy => {
   return {
-    id: BigNumber.from(strategy.id),
+    id: BigInt(strategy.id),
     token0: strategy.token0,
     token1: strategy.token1,
     order0: encodedOrderStrToBN(strategy.order0),
@@ -69,7 +64,7 @@ export const encodedStrategyStrToBN = (
 };
 
 export const ordersMapBNToStr = (ordersMap: OrdersMap): OrdersMapBNStr => {
-  return replaceBigNumbersWithStrings(ordersMap);
+  return replaceBigIntsWithStrings(ordersMap);
 };
 
 export const ordersMapStrToBN = (ordersMap: OrdersMapBNStr): OrdersMap => {
@@ -81,12 +76,12 @@ export const ordersMapStrToBN = (ordersMap: OrdersMapBNStr): OrdersMap => {
 };
 
 export const matchActionBNToStr = (action: MatchAction): MatchActionBNStr => {
-  return replaceBigNumbersWithStrings(action);
+  return replaceBigIntsWithStrings(action);
 };
 
 export const tradeActionStrToBN = (action: TradeActionBNStr): TradeAction => {
   return {
-    strategyId: BigNumber.from(action.strategyId),
-    amount: BigNumber.from(action.amount),
+    strategyId: BigInt(action.strategyId),
+    amount: BigInt(action.amount),
   };
 };

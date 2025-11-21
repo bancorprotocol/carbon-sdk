@@ -15,7 +15,7 @@ import {
 } from '../src/strategy-management/';
 import { DecodedStrategy, EncodedStrategy } from '../src/common/types';
 import sinon, { SinonStubbedInstance } from 'sinon';
-import { BigNumber, Decimal } from '../src/utils/numerics';
+import { Decimal } from '../src/utils/numerics';
 import { Decimals } from '../src/utils/decimals';
 import { isAlmostEqual } from './test-utils';
 
@@ -48,7 +48,7 @@ describe('encoders', () => {
         highestRate: '1',
         marginalRate: '1',
       };
-      const encodedOrder = encodeOrder(order, BigNumber.from('200'));
+      const encodedOrder = encodeOrder(order, BigInt('200'));
       expect(encodedOrder.y.toString()).to.equal('100');
       expect(encodedOrder.z.toString()).to.equal('200');
       expect(encodedOrder.A.toString()).to.equal('82442111944226');
@@ -743,8 +743,8 @@ describe('encoders', () => {
     it('should convert a DecodedStrategy object to a Strategy object', async () => {
       decimalsStub.fetchDecimals.onCall(0).resolves(18).onCall(1).resolves(6);
 
-      const decodedStrategy: DecodedStrategy & { id: BigNumber } = {
-        id: BigNumber.from(0),
+      const decodedStrategy: DecodedStrategy & { id: bigint } = {
+        id: 0n,
         token0: '0x6b175474e89094c44da98b954eedeac495271d0f',
         token1: '0x57ab1e02fee23774580c119740129eac7081e9d3',
         order0: {
@@ -776,27 +776,27 @@ describe('encoders', () => {
       };
 
       const decodedWithEncodedField: DecodedStrategy & {
-        id: BigNumber;
+        id: bigint;
         encoded: EncodedStrategy;
       } =
         // @ts-ignore
         {
           ...decodedStrategy,
           encoded: {
-            id: BigNumber.from(0),
+            id: 0n,
             token0: 'abc',
             token1: 'xyz',
             order0: {
-              y: BigNumber.from(0),
-              z: BigNumber.from(0),
-              A: BigNumber.from(0),
-              B: BigNumber.from(0),
+              y: 0n,
+              z: 0n,
+              A: 0n,
+              B: 0n,
             },
             order1: {
-              y: BigNumber.from(0),
-              z: BigNumber.from(0),
-              A: BigNumber.from(0),
-              B: BigNumber.from(0),
+              y: 0n,
+              z: 0n,
+              A: 0n,
+              B: 0n,
             },
           },
         };
