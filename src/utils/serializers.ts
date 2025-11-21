@@ -37,10 +37,6 @@ export const replaceBigNumbersWithStrings = <T>(
   return replace(obj) as RetypeBigNumberToString<T>;
 };
 
-export const encodedOrderBNToStr = (order: EncodedOrder): EncodedOrderBNStr => {
-  return replaceBigNumbersWithStrings(order);
-};
-
 export const encodedOrderStrToBN = (order: EncodedOrderBNStr): EncodedOrder => {
   return {
     y: BigNumber.from(order.y),

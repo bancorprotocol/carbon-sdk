@@ -94,16 +94,6 @@ export type DecodedStrategy = {
   order1: DecodedOrder;
 };
 
-export type TradeData = {
-  trader: string;
-  sourceToken: string;
-  targetToken: string;
-  sourceAmount: string;
-  targetAmount: string;
-  tradingFeeAmount: string;
-  byTargetAmount: boolean;
-};
-
 export type TradingFeeUpdate = [string, string, number];
 
 export type Action = {
@@ -159,12 +149,6 @@ export type SyncedEvent =
       blockNumber: number;
       logIndex: number;
       data: EncodedStrategy;
-    }
-  | {
-      type: 'TokensTraded';
-      blockNumber: number;
-      logIndex: number;
-      data: TradeData;
     }
   | {
       type: 'TradingFeePPMUpdated';

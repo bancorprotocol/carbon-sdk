@@ -4,7 +4,7 @@ import { EncodedOrder, TokenPair } from '../common/types';
 const compareTokens = (token0: string, token1: string): number =>
   token0.localeCompare(token1);
 
-const SEPARATOR = '->-<-';
+const SEPARATOR = '_';
 
 // Convert two tokens to a string key
 const toKey = (tokens: string[]): string => {

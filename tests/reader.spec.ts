@@ -6,7 +6,6 @@ import { MulticallService, MultiCall } from '../src/contracts-api/utils';
 import { Multicall } from '../src/abis/types';
 import {
   EncodedStrategy,
-  TradeData,
   TradingFeeUpdate,
   TokenPair,
 } from '../src/common/types';
@@ -53,16 +52,6 @@ describe('Reader', () => {
     },
   };
 
-  const mockTradeData: TradeData = {
-    trader: '0x789',
-    sourceToken: '0x123',
-    targetToken: '0x456',
-    sourceAmount: '1000',
-    targetAmount: '2000',
-    tradingFeeAmount: '10',
-    byTargetAmount: true,
-  };
-
   const mockTradingFeeUpdate: TradingFeeUpdate = ['0x123', '0x456', 100];
 
   beforeEach(() => {
@@ -79,11 +68,6 @@ describe('Reader', () => {
                 return {
                   name: 'StrategyCreated',
                   args: mockEncodedStrategy,
-                };
-              case '0x456': // TokensTraded
-                return {
-                  name: 'TokensTraded',
-                  args: mockTradeData,
                 };
               case '0x789': // TradingFeePPMUpdated
                 return {
@@ -142,10 +126,10 @@ describe('Reader', () => {
               {
                 blockNumber: block,
                 logIndex: 1,
-                topics: ['0x456'], // TokensTraded
+                topics: ['0x789'], // TradingFeePPMUpdated
                 data: '0x',
                 blockHash: '0x123',
-                transactionIndex: 1,
+                transactionIndex: 2,
                 removed: false,
                 address: '0x123',
                 transactionHash: '0x456',
@@ -224,9 +208,6 @@ describe('Reader', () => {
       // Verify event types and data
       expect(events[0].type).to.equal('StrategyCreated');
       expect(events[0].data).to.deep.equal(mockEncodedStrategy);
-
-      expect(events[1].type).to.equal('TokensTraded');
-      expect(events[1].data).to.deep.equal(mockTradeData);
 
       expect(events[2].type).to.equal('TradingFeePPMUpdated');
       expect(events[2].data).to.equal(100);

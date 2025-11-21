@@ -13,22 +13,19 @@ import {
   OrdersMap,
   RetypeBigNumberToString,
   TokenPair,
-  TradeData,
   TradingFeeUpdate,
   SyncedEvents,
 } from '../common/types';
 import { BigNumberish } from '../utils/numerics';
 import {
-  encodedOrderBNToStr,
   encodedStrategyBNToStr,
-  encodedOrderStrToBN,
   encodedStrategyStrToBN,
 } from '../utils/serializers';
 import { Logger } from '../common/logger';
 
 const logger = new Logger('ChainCache.ts');
 
-const schemeVersion = 6; // bump this when the serialization format changes
+const schemeVersion = 7; // bump this when the serialization format changes
 
 type PairToStrategiesMap = { [key: string]: EncodedStrategy[] };
 type StrategyById = { [key: string]: EncodedStrategy };
@@ -37,13 +34,8 @@ type PairToDirectedOrdersMap = { [key: string]: OrdersMap };
 type SerializableDump = {
   schemeVersion: number;
   strategiesByPair: RetypeBigNumberToString<PairToStrategiesMap>;
-  strategiesById: RetypeBigNumberToString<StrategyById>;
-  ordersByDirectedPair: RetypeBigNumberToString<PairToDirectedOrdersMap>;
   tradingFeePPMByPair: { [key: string]: number };
   latestBlockNumber: number;
-  latestTradesByPair: { [key: string]: TradeData };
-  latestTradesByDirectedPair: { [key: string]: TradeData };
-  blocksMetadata: BlockMetadata[];
 };
 
 export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<CacheEvents>) {
@@ -52,8 +44,6 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
   private _strategiesById: StrategyById = {};
   private _ordersByDirectedPair: PairToDirectedOrdersMap = {};
   private _latestBlockNumber: number = 0;
-  private _latestTradesByPair: { [key: string]: TradeData } = {};
-  private _latestTradesByDirectedPair: { [key: string]: TradeData } = {};
   private _blocksMetadata: BlockMetadata[] = [];
   private _tradingFeePPMByPair: { [key: string]: number } = {};
   private _isCacheInitialized: boolean = false; // should only be set to true after the cache is FULLY initialized with data for the first time by `bulkAddPairs` or when loaded from serialized data
@@ -96,45 +86,16 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
       return;
     }
 
-    this._strategiesByPair = Object.entries(
+    // iterate over the pairs and their strategies and populate this._strategiesByPair, this._strategiesById and this._ordersByDirectedPair
+    for (const [key, strategies] of Object.entries(
       parsedCache.strategiesByPair
-    ).reduce((acc, [key, strategies]) => {
-      acc[key] = strategies.map(encodedStrategyStrToBN);
-      return acc;
-    }, {} as PairToStrategiesMap);
-
-    this._strategiesById = Object.entries(parsedCache.strategiesById).reduce(
-      (acc, [key, strategy]) => {
-        acc[key] = encodedStrategyStrToBN(strategy);
-        return acc;
-      },
-      {} as StrategyById
-    );
-
-    this._ordersByDirectedPair = Object.entries(
-      parsedCache.ordersByDirectedPair
-    ).reduce((acc, [directedPairKey, orderMap]) => {
-      acc[directedPairKey] = Object.entries(orderMap).reduce(
-        (acc, [strategyId, order]) => {
-          acc[strategyId] = encodedOrderStrToBN(order);
-          return acc;
-        },
-        {} as OrdersMap
-      );
-      return acc;
-    }, {} as PairToDirectedOrdersMap);
+    )) {
+      const [token0, token1] = fromPairKey(key);
+      this._addPair(token0, token1, strategies.map(encodedStrategyStrToBN));
+    }
 
     this._tradingFeePPMByPair = parsedCache.tradingFeePPMByPair;
     this._latestBlockNumber = parsedCache.latestBlockNumber;
-    this._latestTradesByPair = parsedCache.latestTradesByPair;
-    this._latestTradesByDirectedPair = parsedCache.latestTradesByDirectedPair;
-
-    // handling a case where, due to a bug, the cached blocks metadata array contains a null item
-    if (parsedCache.blocksMetadata) {
-      this._blocksMetadata = parsedCache.blocksMetadata.filter(
-        (block) => !!block && !!block.number && !!block.hash
-      );
-    }
     this._isCacheInitialized = true;
     logger.debug('Cache initialized from serialized data');
   }
@@ -149,31 +110,8 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
         },
         {} as RetypeBigNumberToString<PairToStrategiesMap>
       ),
-      strategiesById: Object.entries(this._strategiesById).reduce(
-        (acc, [key, strategy]) => {
-          acc[key] = encodedStrategyBNToStr(strategy);
-          return acc;
-        },
-        {} as RetypeBigNumberToString<StrategyById>
-      ),
-      ordersByDirectedPair: Object.entries(this._ordersByDirectedPair).reduce(
-        (acc, [directedPairKey, orderMap]) => {
-          acc[directedPairKey] = Object.entries(orderMap).reduce(
-            (acc, [strategyId, order]) => {
-              acc[strategyId] = encodedOrderBNToStr(order);
-              return acc;
-            },
-            {} as RetypeBigNumberToString<OrdersMap>
-          );
-          return acc;
-        },
-        {} as RetypeBigNumberToString<PairToDirectedOrdersMap>
-      ),
       tradingFeePPMByPair: this._tradingFeePPMByPair,
       latestBlockNumber: this._latestBlockNumber,
-      latestTradesByPair: this._latestTradesByPair,
-      latestTradesByDirectedPair: this._latestTradesByDirectedPair,
-      blocksMetadata: this._blocksMetadata,
     };
     return JSON.stringify(dump);
   }
@@ -211,8 +149,6 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     this._strategiesById = {};
     this._ordersByDirectedPair = {};
     this._latestBlockNumber = 0;
-    this._latestTradesByPair = {};
-    this._latestTradesByDirectedPair = {};
     this._blocksMetadata = [];
     this._blocksMetadata = [];
     this._tradingFeePPMByPair = {};
@@ -286,28 +222,6 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
   public hasCachedPair(token0: string, token1: string): boolean {
     const key = toPairKey(token0, token1);
     return !!this._strategiesByPair[key];
-  }
-
-  public async getLatestTradeByPair(
-    token0: string,
-    token1: string
-  ): Promise<TradeData | undefined> {
-    await this._checkAndHandleCacheMiss(token0, token1);
-    const key = toPairKey(token0, token1);
-    return this._latestTradesByPair[key];
-  }
-
-  public async getLatestTradeByDirectedPair(
-    sourceToken: string,
-    targetToken: string
-  ): Promise<TradeData | undefined> {
-    await this._checkAndHandleCacheMiss(sourceToken, targetToken);
-    const key = toDirectionKey(sourceToken, targetToken);
-    return this._latestTradesByDirectedPair[key];
-  }
-
-  public getLatestTrades(): TradeData[] {
-    return Object.values(this._latestTradesByPair);
   }
 
   public getLatestBlockNumber(): number {
@@ -473,12 +387,6 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
           affectedPairs.add(toPairKey(strategy.token0, strategy.token1));
           break;
         }
-        case 'TokensTraded': {
-          const trade = event.data as TradeData;
-          this._setLatestTrade(trade);
-          affectedPairs.add(toPairKey(trade.sourceToken, trade.targetToken));
-          break;
-        }
         case 'PairTradingFeePPMUpdated': {
           const feeUpdate = event.data as TradingFeeUpdate;
           this.addPairFees(feeUpdate[0], feeUpdate[1], feeUpdate[2]);
@@ -502,22 +410,6 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
 
   private _setLatestBlockNumber(blockNumber: number): void {
     this._latestBlockNumber = blockNumber;
-  }
-
-  private _setLatestTrade(trade: TradeData): void {
-    if (!this.hasCachedPair(trade.sourceToken, trade.targetToken)) {
-      logger.error(
-        `Pair ${toPairKey(
-          trade.sourceToken,
-          trade.targetToken
-        )} is not cached, cannot set latest trade`
-      );
-      return;
-    }
-    const key = toPairKey(trade.sourceToken, trade.targetToken);
-    this._latestTradesByPair[key] = trade;
-    const directedKey = toDirectionKey(trade.sourceToken, trade.targetToken);
-    this._latestTradesByDirectedPair[directedKey] = trade;
   }
 
   private _addStrategyOrders(strategy: EncodedStrategy): void {

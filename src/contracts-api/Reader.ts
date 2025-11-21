@@ -13,7 +13,6 @@ import {
   Fetcher,
   TokenPair,
   BlockMetadata,
-  TradeData,
   TradingFeeUpdate,
   SyncedEvents,
   SyncedEvent,
@@ -407,23 +406,6 @@ export default class Reader implements Fetcher {
                 y: parsedLog.args.order1.y,
                 z: parsedLog.args.order1.z,
               },
-            };
-            return {
-              type: eventType,
-              blockNumber: log.blockNumber,
-              logIndex: log.logIndex,
-              data: eventData,
-            } as const;
-          }
-          case 'TokensTraded': {
-            const eventData: TradeData = {
-              trader: parsedLog.args.trader,
-              sourceToken: parsedLog.args.sourceToken,
-              targetToken: parsedLog.args.targetToken,
-              sourceAmount: parsedLog.args.sourceAmount.toString(),
-              targetAmount: parsedLog.args.targetAmount.toString(),
-              tradingFeeAmount: parsedLog.args.tradingFeeAmount.toString(),
-              byTargetAmount: parsedLog.args.byTargetAmount,
             };
             return {
               type: eventType,

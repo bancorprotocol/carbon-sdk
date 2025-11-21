@@ -4,7 +4,7 @@ import {
   EncodedOrder,
   EncodedStrategy,
   TokenPair,
-  TradeData,
+  TradingFeeUpdate,
 } from '../src/common/types';
 import { BigNumber } from '../src/utils/numerics';
 
@@ -38,16 +38,6 @@ const encodedStrategy2: EncodedStrategy = {
   order1: encodedOrder1,
 };
 
-const trade: TradeData = {
-  trader: 'Doron',
-  sourceToken: 'abc',
-  targetToken: 'xyz',
-  sourceAmount: '100',
-  targetAmount: '200',
-  tradingFeeAmount: '10',
-  byTargetAmount: true,
-};
-
 describe('ChainCache', () => {
   describe('serialize and deserialize', () => {
     let cache: ChainCache;
@@ -60,10 +50,10 @@ describe('ChainCache', () => {
       cache.applyEvents(
         [
           {
-            type: 'TokensTraded',
+            type: 'TradingFeePPMUpdated',
             blockNumber: 7,
             logIndex: 0,
-            data: trade,
+            data: 100,
           },
         ],
         7
@@ -92,16 +82,6 @@ describe('ChainCache', () => {
     it('last block number should match', async () => {
       expect(deserialized.getLatestBlockNumber()).to.equal(7);
     });
-    it('trades by pair should match', async () => {
-      expect(
-        await deserialized.getLatestTradeByPair('xyz', 'abc')
-      ).to.deep.equal(trade);
-      expect(
-        await deserialized.getLatestTradeByDirectedPair('abc', 'xyz')
-      ).to.deep.equal(trade);
-      expect(await deserialized.getLatestTradeByDirectedPair('xyz', 'abc')).to
-        .be.undefined;
-    });
     it('should return clear cache when deserialized from older version', async () => {
       const regex = /("schemeVersion":)(\d+)/;
       const legacySerialized = serialized.replace(
@@ -128,54 +108,6 @@ describe('ChainCache', () => {
       // assert that the cache was created empty
       const emptyCache = ChainCache.fromSerialized(invalidSerialized);
       expect(emptyCache.getCachedPairs()).to.deep.equal([]);
-    });
-    it('should filter out null items from blocksMetadata when deserializing', async () => {
-      // Create a cache with some block metadata
-      const cacheWithBlocks = new ChainCache();
-      cacheWithBlocks.blocksMetadata = [
-        { number: 1, hash: '0x123' },
-        { number: 2, hash: '0x456' },
-      ];
-      const serializedCache = cacheWithBlocks.serialize();
-
-      // Inject a null item into the blocksMetadata array
-      const regex = /"blocksMetadata":\[(.*?)\]/s;
-      const invalidSerialized = serializedCache.replace(
-        regex,
-        (match, p1) =>
-          `"blocksMetadata":[${p1},null,{"number":3,"hash":"0x789"}]`
-      );
-
-      // Deserialize and verify null items are filtered out
-      const deserializedCache = ChainCache.fromSerialized(invalidSerialized);
-      expect(deserializedCache.blocksMetadata).to.have.length(3);
-      expect(
-        deserializedCache.blocksMetadata.map((b) => b.number)
-      ).to.deep.equal([1, 2, 3]);
-    });
-    it('should filter out invalid items from blocksMetadata when deserializing', async () => {
-      // Create a cache with some block metadata
-      const cacheWithBlocks = new ChainCache();
-      cacheWithBlocks.blocksMetadata = [
-        { number: 1, hash: '0x123' },
-        { number: 2, hash: '0x456' },
-      ];
-      const serializedCache = cacheWithBlocks.serialize();
-
-      // Inject invalid items into the blocksMetadata array
-      const regex = /"blocksMetadata":\[(.*?)\]/s;
-      const invalidSerialized = serializedCache.replace(
-        regex,
-        (match, p1) =>
-          `"blocksMetadata":[${p1},{"timestamp":3000},{"number":3}]`
-      );
-
-      // Deserialize and verify invalid items are filtered out
-      const deserializedCache = ChainCache.fromSerialized(invalidSerialized);
-      expect(deserializedCache.blocksMetadata).to.have.length(2);
-      expect(
-        deserializedCache.blocksMetadata.map((b) => b.number)
-      ).to.deep.equal([1, 2]);
     });
   });
   describe('onChange', () => {
@@ -212,10 +144,10 @@ describe('ChainCache', () => {
       cache.applyEvents(
         [
           {
-            type: 'TokensTraded',
+            type: 'StrategyDeleted',
             blockNumber: 1,
             logIndex: 0,
-            data: trade,
+            data: encodedStrategy1,
           },
         ],
         1
