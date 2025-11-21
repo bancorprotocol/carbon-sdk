@@ -1,6 +1,5 @@
 import {
-  BigNumber,
-  BigNumberish,
+  BigIntish,
   Decimal,
   formatUnits,
   parseUnits,
@@ -20,12 +19,12 @@ import {
   lowestPossibleRate,
 } from '../utils/encoders';
 import { Decimals } from '../utils/decimals';
-import { encodedStrategyBNToStr } from '../utils';
+import { encodedStrategyBigIntToStr } from '../utils';
 
 const logger = new Logger('utils.ts');
 
 export function normalizeRate(
-  amount: BigNumberish,
+  amount: BigIntish,
   amountTokenDecimals: number,
   otherTokenDecimals: number
 ) {
@@ -35,7 +34,7 @@ export function normalizeRate(
 }
 
 export function normalizeInvertedRate(
-  amount: BigNumberish,
+  amount: BigIntish,
   amountTokenDecimals: number,
   otherTokenDecimals: number
 ) {
@@ -61,7 +60,7 @@ export const encodeStrategy = (
 
 export const decodeStrategy = (
   strategy: EncodedStrategy
-): DecodedStrategy & { id: BigNumber; encoded: EncodedStrategy } => {
+): DecodedStrategy & { id: bigint; encoded: EncodedStrategy } => {
   return {
     id: strategy.id,
     token0: strategy.token0,
@@ -80,7 +79,7 @@ export const decodeStrategy = (
  * @throws {Error} If an error occurs while fetching the decimals for the tokens.
  */
 export async function parseStrategy(
-  strategy: DecodedStrategy & { id: BigNumber; encoded: EncodedStrategy },
+  strategy: DecodedStrategy & { id: bigint; encoded: EncodedStrategy },
   decimals: Decimals
 ): Promise<Strategy> {
   logger.debug('parseStrategy called', arguments);
@@ -113,7 +112,7 @@ export async function parseStrategy(
   const buyBudget = formatUnits(order1.liquidity, decimals1);
 
   const strId = id.toString();
-  const strEncoded = encodedStrategyBNToStr(encoded);
+  const strEncoded = encodedStrategyBigIntToStr(encoded);
   logger.debug('parseStrategy info:', {
     id: strId,
     token0,
@@ -344,17 +343,14 @@ export function createOrders(
 
 export const PPM_RESOLUTION = 1_000_000;
 
-export function addFee(amount: BigNumberish, tradingFeePPM: number): Decimal {
+export function addFee(amount: BigIntish, tradingFeePPM: number): Decimal {
   return new Decimal(amount.toString())
     .mul(PPM_RESOLUTION)
     .div(PPM_RESOLUTION - tradingFeePPM)
     .ceil();
 }
 
-export function subtractFee(
-  amount: BigNumberish,
-  tradingFeePPM: number
-): Decimal {
+export function subtractFee(amount: BigIntish, tradingFeePPM: number): Decimal {
   return new Decimal(amount.toString())
     .mul(PPM_RESOLUTION - tradingFeePPM)
     .div(PPM_RESOLUTION)

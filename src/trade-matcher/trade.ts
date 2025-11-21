@@ -1,27 +1,27 @@
-import { ONE, Decimal, BigNumber, BigNumberMax } from '../utils/numerics';
+import { ONE, Decimal, BigNumberMax } from '../utils/numerics';
 import { EncodedOrder, DecodedOrder } from '../common/types';
 import { decodeFloat } from '../utils/encoders';
 
-const C = BigNumber.from(ONE);
+const C = ONE;
 
-const MAX_UINT128 = BigNumber.from(2).pow(128).sub(1);
-const MAX_UINT256 = BigNumber.from(2).pow(256).sub(1);
+const MAX_UINT128 = (2n ** 128n) - 1n;
+const MAX_UINT256 = (2n ** 256n) - 1n;
 
-function check(val: BigNumber, max: BigNumber) {
-  if (val.gte(0) && val.lte(max)) {
+function check(val: bigint, max: bigint): bigint {
+  if (val >= 0n && val <= max) {
     return val;
   }
   throw null;
 }
 
-const uint128 = (n: BigNumber) => check(n, MAX_UINT128);
-const add = (a: BigNumber, b: BigNumber) => check(a.add(b), MAX_UINT256);
-const sub = (a: BigNumber, b: BigNumber) => check(a.sub(b), MAX_UINT256);
-const mul = (a: BigNumber, b: BigNumber) => check(a.mul(b), MAX_UINT256);
-const mulDivF = (a: BigNumber, b: BigNumber, c: BigNumber) =>
-  check(a.mul(b).div(c), MAX_UINT256);
-const mulDivC = (a: BigNumber, b: BigNumber, c: BigNumber) =>
-  check(a.mul(b).add(c).sub(1).div(c), MAX_UINT256);
+const uint128 = (n: bigint): bigint => check(n, MAX_UINT128);
+const add = (a: bigint, b: bigint): bigint => check(a + b, MAX_UINT256);
+const sub = (a: bigint, b: bigint): bigint => check(a - b, MAX_UINT256);
+const mul = (a: bigint, b: bigint): bigint => check(a * b, MAX_UINT256);
+const mulDivF = (a: bigint, b: bigint, c: bigint): bigint =>
+  check((a * b) / c, MAX_UINT256);
+const mulDivC = (a: bigint, b: bigint, c: bigint): bigint =>
+  check((a * b + c - 1n) / c, MAX_UINT256);
 
 //
 //       x * (A * y + B * z) ^ 2
@@ -29,13 +29,13 @@ const mulDivC = (a: BigNumber, b: BigNumber, c: BigNumber) =>
 //   A * x * (A * y + B * z) + z ^ 2
 //
 const getEncodedTradeBySourceAmount = (
-  x: BigNumber,
-  y: BigNumber,
-  z: BigNumber,
-  A: BigNumber,
-  B: BigNumber
-): BigNumber => {
-  if (A.eq(0)) {
+  x: bigint,
+  y: bigint,
+  z: bigint,
+  A: bigint,
+  B: bigint
+): bigint => {
+  if (A === 0n) {
     return mulDivF(x, mul(B, B), mul(C, C));
   }
 
@@ -52,10 +52,10 @@ const getEncodedTradeBySourceAmount = (
   // Before - in a case of overflow it would end up with a 0 rate and not get
   // picked up for trade. This added check is to avoid the order being picked up
   // for trade - just to be reverted in the case of overflow by the contract.
-  if (temp4.add(temp5).lte(MAX_UINT256)) {
-    return mulDivF(temp2, temp3.div(factor), temp4.add(temp5));
+  if (temp4 + temp5 <= MAX_UINT256) {
+    return mulDivF(temp2, temp3 / factor, temp4 + temp5);
   }
-  return temp2.div(add(A, mulDivC(temp1, temp1, temp3)));
+  return temp2 / add(A, mulDivC(temp1, temp1, temp3));
 };
 
 //
@@ -64,13 +64,13 @@ const getEncodedTradeBySourceAmount = (
 //   (A * y + B * z) * (A * y + B * z - A * x)
 //
 const getEncodedTradeByTargetAmount = (
-  x: BigNumber,
-  y: BigNumber,
-  z: BigNumber,
-  A: BigNumber,
-  B: BigNumber
-): BigNumber => {
-  if (A.eq(0)) {
+  x: bigint,
+  y: bigint,
+  z: bigint,
+  A: bigint,
+  B: bigint
+): bigint => {
+  if (A === 0n) {
     return mulDivC(x, mul(C, C), mul(B, B));
   }
 
@@ -120,9 +120,9 @@ const getDecodedTradeByTargetAmount = (
 };
 
 export const getEncodedTradeTargetAmount = (
-  amount: BigNumber,
+  amount: bigint,
   order: EncodedOrder
-): BigNumber => {
+): bigint => {
   const x = amount;
   const y = order.y;
   const z = order.z;
@@ -131,14 +131,14 @@ export const getEncodedTradeTargetAmount = (
   try {
     return uint128(getEncodedTradeBySourceAmount(x, y, z, A, B));
   } catch {
-    return BigNumber.from(0); /* rate = zero / amount = zero */
+    return 0n; /* rate = zero / amount = zero */
   }
 };
 
 export const getEncodedTradeSourceAmount = (
-  amount: BigNumber,
+  amount: bigint,
   order: EncodedOrder
-): BigNumber => {
+): bigint => {
   const x = amount;
   const y = order.y;
   const z = order.z;

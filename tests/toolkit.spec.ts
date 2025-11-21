@@ -3,42 +3,41 @@ import sinon from 'sinon';
 import { MarginalPriceOptions, Toolkit } from '../src/strategy-management';
 import { ChainCache } from '../src/chain-cache';
 import { EncodedStrategy, Strategy } from '../src/common/types';
-import { BigNumber } from '../src/utils/numerics';
-import { encodedStrategyBNToStr } from '../src/utils';
+import { encodedStrategyBigIntToStr } from '../src/utils';
 
 const encodedStrategies: EncodedStrategy[] = [
   {
-    id: BigNumber.from(0),
+    id: 0n,
     token0: 'abc',
     token1: 'xyz',
     order0: {
-      y: BigNumber.from(0),
-      z: BigNumber.from(0),
-      A: BigNumber.from(0),
-      B: BigNumber.from(0),
+      y: 0n,
+      z: 0n,
+      A: 0n,
+      B: 0n,
     },
     order1: {
-      y: BigNumber.from(0),
-      z: BigNumber.from(0),
-      A: BigNumber.from(0),
-      B: BigNumber.from(0),
+      y: 0n,
+      z: 0n,
+      A: 0n,
+      B: 0n,
     },
   },
   {
-    id: BigNumber.from(1),
+    id: 1n,
     token0: 'xyz',
     token1: 'abc',
     order0: {
-      y: BigNumber.from(1),
-      z: BigNumber.from(1),
-      A: BigNumber.from(1),
-      B: BigNumber.from(1),
+      y: 1n,
+      z: 1n,
+      A: 1n,
+      B: 1n,
     },
     order1: {
-      y: BigNumber.from(1),
-      z: BigNumber.from(1),
-      A: BigNumber.from(1),
-      B: BigNumber.from(1),
+      y: 1n,
+      z: 1n,
+      A: 1n,
+      B: 1n,
     },
   },
 ];
@@ -56,7 +55,7 @@ const expectedStrategies: Strategy[] = [
     sellPriceMarginal: '0',
     sellPriceHigh: '0',
     sellBudget: '0',
-    encoded: encodedStrategyBNToStr(encodedStrategies[0]),
+    encoded: encodedStrategyBigIntToStr(encodedStrategies[0]),
   },
   {
     id: '1',
@@ -73,7 +72,7 @@ const expectedStrategies: Strategy[] = [
     sellPriceMarginal: '19807040628566084398385987584',
     sellPriceHigh: '79228162514264337593543950336',
     sellBudget: '0.000000000000000001',
-    encoded: encodedStrategyBNToStr(encodedStrategies[1]),
+    encoded: encodedStrategyBigIntToStr(encodedStrategies[1]),
   },
 ];
 
@@ -671,7 +670,7 @@ describe('Toolkit', () => {
       const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
       const strategies = await toolkit.getStrategyById('0');
 
-      expect(apiMock.reader.strategy.calledWith(BigNumber.from('0'))).to.be
+      expect(apiMock.reader.strategy.calledWith(0n)).to.be
         .true;
       expect(strategies).to.deep.equal(expectedStrategies[0]);
     });

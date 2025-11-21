@@ -11,7 +11,7 @@ import {
   CarbonBatcher__factory,
 } from '../abis/types';
 
-import { Provider } from '@ethersproject/providers';
+import { Provider } from 'ethers';
 import { config as defaultConfig } from './config';
 import { ContractsConfig } from './types';
 

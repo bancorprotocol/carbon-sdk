@@ -1,33 +1,35 @@
-import { BigNumber, Decimal, BnToDec, DecToBn, ONE } from './numerics';
+import { Decimal, BnToDec, DecToBn, ONE } from './numerics';
 import { DecodedOrder, EncodedOrder } from '../common/types';
 
-function bitLength(value: BigNumber) {
-  return value.gt(0)
+function bitLength(value: bigint): number {
+  return value > 0n
     ? Decimal.log2(value.toString()).add(1).floor().toNumber()
     : 0;
 }
 
-export const encodeRate = (value: Decimal) => {
-  const data = DecToBn(value.sqrt().mul(ONE).floor());
-  const length = bitLength(data.div(ONE));
-  return data.shr(length).shl(length);
+export const encodeRate = (value: Decimal): bigint => {
+  const oneDecimal = new Decimal(ONE.toString());
+  const data = DecToBn(value.sqrt().mul(oneDecimal).floor());
+  const length = bitLength(data / ONE);
+  return (data >> BigInt(length)) << BigInt(length);
 };
 
-export const decodeRate = (value: Decimal) => {
-  return value.div(ONE).pow(2);
+export const decodeRate = (value: Decimal): Decimal => {
+  const oneDecimal = new Decimal(ONE.toString());
+  return value.div(oneDecimal).pow(2);
 };
 
 // The smallest rate that, once encoded, will not be zero.
 export const lowestPossibleRate = decodeRate(new Decimal(1));
 
-export const encodeFloat = (value: BigNumber) => {
-  const exponent = bitLength(value.div(ONE));
-  const mantissa = value.shr(exponent);
-  return BigNumber.from(ONE).mul(exponent).or(mantissa);
+export const encodeFloat = (value: bigint): bigint => {
+  const exponent = bitLength(value / ONE);
+  const mantissa = value >> BigInt(exponent);
+  return (ONE * BigInt(exponent)) | mantissa;
 };
 
-export const decodeFloat = (value: BigNumber) => {
-  return value.mod(ONE).shl(value.div(ONE).toNumber());
+export const decodeFloat = (value: bigint): bigint => {
+  return (value % ONE) << BigInt(Number(value / ONE));
 };
 
 export const encodeOrders = ([order0, order1]: [DecodedOrder, DecodedOrder]): [
@@ -67,7 +69,7 @@ export const encodeOrders = ([order0, order1]: [DecodedOrder, DecodedOrder]): [
   return [encodeOrder(order0), encodeOrder(order1)];
 };
 
-export const isOrderEncodable = (order: DecodedOrder) => {
+export const isOrderEncodable = (order: DecodedOrder): boolean => {
   try {
     encodeOrder(order);
     return true;
@@ -87,12 +89,12 @@ export const areScaledRatesEqual = (x: string, y: string): boolean => {
   const yDec = new Decimal(y);
   const xScaled = encodeRate(xDec);
   const yScaled = encodeRate(yDec);
-  return xScaled.eq(yScaled);
+  return xScaled === yScaled;
 };
 
 export const encodeOrder = (
   order: DecodedOrder,
-  z?: BigNumber
+  z?: bigint
 ): EncodedOrder => {
   const liquidity = new Decimal(order.liquidity);
   const lowestRate = new Decimal(order.lowestRate);
@@ -104,7 +106,7 @@ export const encodeOrder = (
   const H = encodeRate(highestRate);
   const M = encodeRate(marginalRate);
 
-  if (L.isZero() && !(H.isZero() && M.isZero())) {
+  if (L === 0n && !(H === 0n && M === 0n)) {
     throw new Error(
       `Encoded lowest rate cannot be zero unless the highest and marginal rates are also zero. This may be the result of passing a rate that is zero or too close to zero:\n` +
         `lowestRate = ${lowestRate}, highestRate = ${highestRate}, marginalRate = ${marginalRate}\n` +
@@ -112,11 +114,15 @@ export const encodeOrder = (
     );
   }
 
+  const HDec = BnToDec(H);
+  const MDec = BnToDec(M);
+  const LDec = BnToDec(L);
+
   if (
     !(
-      (H.gte(M) && M.gt(L)) ||
-      (H.eq(M) && M.eq(L)) ||
-      (H.gt(M) && M.eq(L) && y.isZero())
+      (HDec.gte(MDec) && MDec.gt(LDec)) ||
+      (HDec.eq(MDec) && MDec.eq(LDec)) ||
+      (HDec.gt(MDec) && MDec.eq(LDec) && y === 0n)
     )
   )
     throw new Error(
@@ -132,10 +138,10 @@ export const encodeOrder = (
     z:
       z !== undefined
         ? z
-        : H.eq(M) || y.isZero()
+        : H === M || y === 0n
         ? y
-        : y.mul(H.sub(L)).div(M.sub(L)),
-    A: encodeFloat(H.sub(L)),
+        : (y * (H - L)) / (M - L),
+    A: encodeFloat(H - L),
     B: encodeFloat(L),
   };
 };
@@ -165,12 +171,12 @@ export const calculateRequiredLiquidity = (
   knownOrder: DecodedOrder,
   vagueOrder: DecodedOrder
 ): string => {
-  const z: BigNumber = calculateCorrelatedZ(knownOrder);
-  const L: BigNumber = encodeRate(new Decimal(vagueOrder.lowestRate));
-  const H: BigNumber = encodeRate(new Decimal(vagueOrder.highestRate));
-  const M: BigNumber = encodeRate(new Decimal(vagueOrder.marginalRate));
+  const z: bigint = calculateCorrelatedZ(knownOrder);
+  const L: bigint = encodeRate(new Decimal(vagueOrder.lowestRate));
+  const H: bigint = encodeRate(new Decimal(vagueOrder.highestRate));
+  const M: bigint = encodeRate(new Decimal(vagueOrder.marginalRate));
 
-  return z.mul(M.sub(L)).div(H.sub(L)).toString();
+  return ((z * (M - L)) / (H - L)).toString();
 };
 
 /**
@@ -179,7 +185,7 @@ export const calculateRequiredLiquidity = (
  * marginal price to be set according to the given input - and provide the
  * liquidity that should be used to achieve that. This function assumes that the other order has 0 liquidity.
  */
-export const calculateCorrelatedZ = (order: DecodedOrder): BigNumber => {
+export const calculateCorrelatedZ = (order: DecodedOrder): bigint => {
   const capacity: Decimal = BnToDec(encodeOrder(order).z);
   const lowestRate: Decimal = new Decimal(order.lowestRate);
   const highestRate: Decimal = new Decimal(order.highestRate);

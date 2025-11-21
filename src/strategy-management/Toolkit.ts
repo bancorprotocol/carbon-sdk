@@ -1,8 +1,6 @@
 // External libraries
-import { PopulatedTransaction } from '@ethersproject/contracts';
-import { PayableOverrides } from 'ethers';
+import { PopulatedTransaction, PayableOverrides } from '../common/types';
 import {
-  BigNumber,
   Decimal,
   mulDiv,
   tenPow,
@@ -147,14 +145,14 @@ export class Toolkit {
     let result: MatchOptions;
     if (tradeByTargetAmount) {
       result = matchByTargetAmount(
-        BigNumber.from(amountWei),
+        BigInt(amountWei),
         orders,
         [matchType],
         filter
       );
     } else {
       result = matchBySourceAmount(
-        BigNumber.from(amountWei),
+        BigInt(amountWei),
         orders,
         [matchType],
         filter
@@ -204,8 +202,8 @@ export class Toolkit {
 
     const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
     const liquidityWei = Object.values(orders).reduce(
-      (acc, { y }) => acc.add(y),
-      BigNumber.from(0)
+      (acc, { y }) => acc + y,
+      0n
     );
     const decimals = await this._decimals.fetchDecimals(targetToken);
 
@@ -239,8 +237,8 @@ export class Toolkit {
 
     const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
     const maxSourceAmountWei = Object.values(orders).reduce(
-      (acc, order) => acc.add(getEncodedTradeSourceAmount(order.y, order)),
-      BigNumber.from(0)
+      (acc, order) => acc + getEncodedTradeSourceAmount(order.y, order),
+      0n
     );
     const decimals = await this._decimals.fetchDecimals(sourceToken);
 
@@ -276,7 +274,7 @@ export class Toolkit {
       logger.debug('getStrategyById fetched from cache');
     } else {
       logger.debug('getStrategyById fetching from chain');
-      encodedStrategy = await this._api.reader.strategy(BigNumber.from(id));
+      encodedStrategy = await this._api.reader.strategy(BigInt(id));
     }
     const decodedStrategy = decodeStrategy(encodedStrategy);
 
@@ -389,7 +387,7 @@ export class Toolkit {
     const decodedStrategies: {
       pair: TokenPair;
       strategies: (DecodedStrategy & {
-        id: BigNumber;
+        id: bigint;
         encoded: EncodedStrategy;
       })[];
     }[] = encodedStrategies.map(({ pair, strategies }) => ({
@@ -439,7 +437,7 @@ export class Toolkit {
     const ids = await this._api.reader.tokensByOwner(user);
 
     let encodedStrategies: EncodedStrategy[] = [];
-    let uncachedIds: BigNumber[] = ids;
+    let uncachedIds: bigint[] = ids;
     if (this._cache.isCacheInitialized()) {
       uncachedIds = ids.reduce((acc, id) => {
         const strategy = this._cache.getStrategyById(id);
@@ -449,7 +447,7 @@ export class Toolkit {
           encodedStrategies.push(strategy);
         }
         return acc;
-      }, [] as BigNumber[]);
+      }, [] as bigint[]);
     }
 
     if (uncachedIds.length > 0) {
@@ -627,8 +625,8 @@ export class Toolkit {
     const targetDecimals = await decimals.fetchDecimals(targetToken);
     const tradeActions: TradeActionBNStr[] = [];
     const actionsTokenRes: Action[] = [];
-    let totalOutput = BigNumber.from(0);
-    let totalInput = BigNumber.from(0);
+    let totalOutput = 0n;
+    let totalInput = 0n;
 
     actionsWei.forEach((action) => {
       tradeActions.push({
@@ -655,8 +653,8 @@ export class Toolkit {
         });
       }
 
-      totalInput = totalInput.add(action.input);
-      totalOutput = totalOutput.add(action.output);
+      totalInput = totalInput + BigInt(action.input);
+      totalOutput = totalOutput + BigInt(action.output);
     });
 
     let totalSourceAmount: string, totalTargetAmount: string;
@@ -740,15 +738,15 @@ export class Toolkit {
    *
    * // Import the ethers.js library and the relevant wallet provider
    * const ethers = require('ethers');
-   * const provider = new ethers.providers.Web3Provider(web3.currentProvider);
+   * const provider = new ethers.BrowserProvider(window.ethereum);
    *
    * // Load the private key for the wallet that will sign and send the transaction
    * const privateKey = '0x...';
    * const wallet = new ethers.Wallet(privateKey, provider);
    *
    * // Sign and send the transaction
-   * const signedTradeTx = await wallet.sign(tradeTx);
-   * const txReceipt = await provider.sendTransaction(signedTradeTx);
+   * const txResponse = await wallet.sendTransaction(tradeTx);
+   * const txReceipt = await txResponse.wait();
    * console.log(txReceipt);
    * // {
    * //   blockHash: '0x...',
@@ -804,15 +802,15 @@ export class Toolkit {
    *
    * // Import the ethers.js library and the relevant wallet provider
    * const ethers = require('ethers');
-   * const provider = new ethers.providers.Web3Provider(web3.currentProvider);
+   * const provider = new ethers.BrowserProvider(window.ethereum);
    *
    * // Load the private key for the wallet that will sign and send the transaction
    * const privateKey = '0x...';
    * const wallet = new ethers.Wallet(privateKey, provider);
    *
    * // Sign and send the transaction
-   * const signedTradeTx = await wallet.sign(tradeTx);
-   * const txReceipt = await provider.sendTransaction(signedTradeTx);
+   * const txResponse = await wallet.sendTransaction(tradeTx);
+   * const txReceipt = await txResponse.wait();
    * console.log(txReceipt);
    * // {
    * //   blockHash: '0x...',
@@ -1191,7 +1189,7 @@ export class Toolkit {
       if (isMarginalPriceValue(buyPriceMarginal)) {
         // do nothing - z was already calculated and set
       } else if (buyPriceMarginal === MarginalPriceOptions.maintain) {
-        if (encodedBN.order1.y.isZero()) {
+        if (encodedBN.order1.y === 0n) {
           // When depositing into an empty order and instructed to MAINTAIN - keep the old z, unless it's lower than the new y - in which case we set it to the new y
           newEncodedStrategy.order1.z = BigNumberMax(
             encodedBN.order1.z,
@@ -1216,7 +1214,7 @@ export class Toolkit {
       if (isMarginalPriceValue(sellPriceMarginal)) {
         // do nothing - z was already calculated and set
       } else if (sellPriceMarginal === MarginalPriceOptions.maintain) {
-        if (encodedBN.order0.y.isZero()) {
+        if (encodedBN.order0.y === 0n) {
           // When depositing into an empty order and instructed to MAINTAIN - keep the old z, unless it's lower than the new y
           newEncodedStrategy.order0.z = BigNumberMax(
             encodedBN.order0.z,
@@ -1262,7 +1260,7 @@ export class Toolkit {
     });
 
     return this._api.composer.updateStrategy(
-      BigNumber.from(strategyId),
+      BigInt(strategyId),
       newEncodedStrategy.token0,
       newEncodedStrategy.token1,
       [encodedBN.order0, encodedBN.order1],
@@ -1275,7 +1273,7 @@ export class Toolkit {
     strategyId: string
   ): Promise<PopulatedTransaction> {
     logger.debug('deleteStrategy called', arguments);
-    return this._api.composer.deleteStrategy(BigNumber.from(strategyId));
+    return this._api.composer.deleteStrategy(BigInt(strategyId));
   }
 
   /**

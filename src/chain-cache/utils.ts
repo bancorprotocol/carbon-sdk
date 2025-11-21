@@ -40,5 +40,5 @@ export const toDirectionKey = (token0: string, token1: string): string => {
 };
 
 export function isOrderTradable(order: EncodedOrder): boolean {
-  return order.y.gt(0) && (order.A.gt(0) || order.B.gt(0));
+  return order.y > 0n && (order.A > 0n || order.B > 0n);
 }

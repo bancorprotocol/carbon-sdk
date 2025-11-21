@@ -1,4 +1,3 @@
-import { BigNumber } from '../utils/numerics';
 import { getRuntimeConfig } from '../runtime-config';
 
 const verbosity = getRuntimeConfig().logVerbosityLevel;
@@ -7,36 +6,36 @@ function isVerbose(): boolean {
   return verbosity >= 1;
 }
 
-function shouldConvertBigNumbersToStrings(): boolean {
+function shouldConvertBigIntsToStrings(): boolean {
   return verbosity >= 2;
 }
 
 const originalLog = console.log;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function convertBigNumbersToStrings(obj: any): any {
+function convertBigIntsToStrings(obj: any): any {
   if (obj === undefined || obj === null) return obj;
-  if (obj instanceof BigNumber) {
+  if (typeof obj === 'bigint') {
     return obj.toString();
   }
   if (Array.isArray(obj)) {
-    return obj.map(convertBigNumbersToStrings);
+    return obj.map(convertBigIntsToStrings);
   }
   if (typeof obj === 'object') {
     return Object.fromEntries(
       Object.entries(obj).map(([key, value]) => [
         key,
-        convertBigNumbersToStrings(value),
+        convertBigIntsToStrings(value),
       ])
     );
   }
   return obj;
 }
 
-if (shouldConvertBigNumbersToStrings()) {
+if (shouldConvertBigIntsToStrings()) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   console.debug = (...args: any[]) => {
-    const convertedArgs = args.map(convertBigNumbersToStrings);
+    const convertedArgs = args.map(convertBigIntsToStrings);
     originalLog.apply(console, convertedArgs);
   };
 }

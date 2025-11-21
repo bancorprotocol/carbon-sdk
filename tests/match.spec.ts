@@ -1,5 +1,4 @@
 import { expect } from 'chai';
-import { BigNumber } from '../src/utils/numerics';
 import { encodeOrder } from '../src/utils/encoders';
 import {
   MatchOptions,
@@ -26,11 +25,11 @@ import BigPoolMatch from './data/BigPoolMatch.json' assert { type: 'json' };
 import EthUsdcMatch from './data/EthUsdcMatch.json' assert { type: 'json' };
 import SpecialMatch from './data/SpecialMatch.json' assert { type: 'json' };
 
-type TradeMethod = (amount: BigNumber, order: EncodedOrder) => BigNumber;
+type TradeMethod = (amount: bigint, order: EncodedOrder) => bigint;
 type MatchMethod = 'matchBySourceAmount' | 'matchByTargetAmount';
 
 type MatchFunction = (
-  amount: BigNumber,
+  amount: bigint,
   ordersMap: OrdersMap,
   matchTypes: MatchType[],
   filter: Filter
@@ -46,27 +45,27 @@ const methods: {
 const checker: {
   [key in MatchMethod]: {
     trade: TradeMethod;
-    getAttr: (action: MatchAction) => BigNumber;
-    compareInput: (x: BigNumber, y: BigNumber) => boolean;
-    compareOutput: (x: BigNumber, y: BigNumber) => boolean;
+    getAttr: (action: MatchAction) => bigint;
+    compareInput: (x: bigint, y: bigint) => boolean;
+    compareOutput: (x: bigint, y: bigint) => boolean;
   };
 } = {
   matchBySourceAmount: {
     trade: tradeBySourceAmount,
     getAttr: (action: MatchAction) => action.output,
-    compareInput: (x: BigNumber, y: BigNumber) => x.lte(y),
-    compareOutput: (x: BigNumber, y: BigNumber) => x.gte(y),
+    compareInput: (x: bigint, y: bigint) => x <= y,
+    compareOutput: (x: bigint, y: bigint) => x >= y,
   },
   matchByTargetAmount: {
     trade: tradeByTargetAmount,
     getAttr: (action: MatchAction) => action.input,
-    compareInput: (x: BigNumber, y: BigNumber) => x.gte(y),
-    compareOutput: (x: BigNumber, y: BigNumber) => x.lte(y),
+    compareInput: (x: bigint, y: bigint) => x >= y,
+    compareOutput: (x: bigint, y: bigint) => x <= y,
   },
 };
 
-const sum = (arr: BigNumber[]) =>
-  arr.reduce((a, b) => a.add(b), BigNumber.from(0));
+const sum = (arr: bigint[]): bigint =>
+  arr.reduce((a, b) => a + b, 0n);
 
 interface MatchTest {
   method: string;
@@ -102,7 +101,7 @@ const batches: {
   SpecialMatch,
 };
 
-const filter: Filter = (rate: Rate) => rate.input.gt(0) && rate.output.gt(0);
+const filter: Filter = (rate: Rate) => rate.input > 0n && rate.output > 0n;
 
 describe('Match', () => {
   for (const batch in batches) {
@@ -121,7 +120,7 @@ describe('Match', () => {
         const { trade, getAttr, compareInput, compareOutput } =
           checker[test.method as MatchMethod];
         const actions = method(
-          BigNumber.from(test.amount),
+          BigInt(test.amount),
           ordersMap,
           Object.keys(test.actions) as MatchType[],
           filter
@@ -142,13 +141,12 @@ describe('Match', () => {
             expect(action.output.toString()).to.equal(
               test.actions[matchType as MatchType][j].output
             );
+            const orderIndex = Number(action.id);
             expect(
-              getAttr(action).lte(test.orders[action.id.toNumber()].liquidity)
+              getAttr(action) <= BigInt(test.orders[orderIndex].liquidity)
             ).to.be.true;
             expect(
-              action.output.eq(
-                trade(action.input, ordersMap[action.id.toNumber()])
-              )
+              action.output === trade(action.input, ordersMap[orderIndex.toString()])
             ).to.be.true;
           }
           expect(
@@ -156,7 +154,7 @@ describe('Match', () => {
               actions[matchType as MatchType]!.map(
                 (action: MatchAction) => action.input
               )
-            ).lte(BigNumber.from(test.amount))
+            ) <= BigInt(test.amount)
           ).to.be.true;
         }
         expect(

@@ -6,24 +6,22 @@ import {
   TokenPair,
   TradingFeeUpdate,
 } from '../src/common/types';
-import { BigNumber } from '../src/utils/numerics';
-
 const encodedOrder1: EncodedOrder = {
-  y: BigNumber.from(1),
-  z: BigNumber.from(2),
-  A: BigNumber.from(3),
-  B: BigNumber.from(4),
+  y: 1n,
+  z: 2n,
+  A: 3n,
+  B: 4n,
 };
 
 const encodedOrder2: EncodedOrder = {
-  y: BigNumber.from(5),
-  z: BigNumber.from(6),
-  A: BigNumber.from(7),
-  B: BigNumber.from(8),
+  y: 5n,
+  z: 6n,
+  A: 7n,
+  B: 8n,
 };
 
 const encodedStrategy1: EncodedStrategy = {
-  id: BigNumber.from(1),
+  id: 1n,
   token0: 'abc',
   token1: 'xyz',
   order0: encodedOrder1,
@@ -31,7 +29,7 @@ const encodedStrategy1: EncodedStrategy = {
 };
 
 const encodedStrategy2: EncodedStrategy = {
-  id: BigNumber.from(2),
+  id: 2n,
   token0: 'xyz',
   token1: 'abc',
   order0: encodedOrder2,
@@ -198,7 +196,7 @@ describe('ChainCache', () => {
       const cache = new ChainCache();
       const encodedStrategy1_mod = {
         ...encodedStrategy1,
-        id: BigNumber.from(encodedStrategy1.id.toString()),
+        id: BigInt(encodedStrategy1.id.toString()),
       };
       cache.addPair('abc', 'xyz', [encodedStrategy1]);
       cache.applyEvents(
@@ -219,7 +217,7 @@ describe('ChainCache', () => {
       const cache = new ChainCache();
       const encodedStrategy1_mod = {
         ...encodedStrategy1,
-        id: BigNumber.from(encodedStrategy1.id.toString()),
+        id: BigInt(encodedStrategy1.id.toString()),
       };
       cache.addPair('abc', 'xyz', [encodedStrategy1]);
       cache.applyEvents(

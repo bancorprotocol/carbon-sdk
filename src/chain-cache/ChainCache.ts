@@ -11,14 +11,14 @@ import {
   EncodedOrder,
   EncodedStrategy,
   OrdersMap,
-  RetypeBigNumberToString,
+  RetypeBigIntToString,
   TokenPair,
   TradingFeeUpdate,
   SyncedEvents,
 } from '../common/types';
-import { BigNumberish } from '../utils/numerics';
+import { BigIntish } from '../utils/numerics';
 import {
-  encodedStrategyBNToStr,
+  encodedStrategyBigIntToStr,
   encodedStrategyStrToBN,
 } from '../utils/serializers';
 import { Logger } from '../common/logger';
@@ -33,7 +33,7 @@ type PairToDirectedOrdersMap = { [key: string]: OrdersMap };
 
 type SerializableDump = {
   schemeVersion: number;
-  strategiesByPair: RetypeBigNumberToString<PairToStrategiesMap>;
+  strategiesByPair: RetypeBigIntToString<PairToStrategiesMap>;
   tradingFeePPMByPair: { [key: string]: number };
   latestBlockNumber: number;
 };
@@ -105,10 +105,10 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
       schemeVersion,
       strategiesByPair: Object.entries(this._strategiesByPair).reduce(
         (acc, [key, strategies]) => {
-          acc[key] = strategies.map(encodedStrategyBNToStr);
+          acc[key] = strategies.map(encodedStrategyBigIntToStr);
           return acc;
         },
-        {} as RetypeBigNumberToString<PairToStrategiesMap>
+        {} as RetypeBigIntToString<PairToStrategiesMap>
       ),
       tradingFeePPMByPair: this._tradingFeePPMByPair,
       latestBlockNumber: this._latestBlockNumber,
@@ -186,7 +186,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     return result;
   }
 
-  public getStrategyById(id: BigNumberish): EncodedStrategy | undefined {
+  public getStrategyById(id: BigIntish): EncodedStrategy | undefined {
     return this._strategiesById[id.toString()];
   }
 
@@ -484,7 +484,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     }
     const key = toPairKey(strategy.token0, strategy.token1);
     const strategies = (this._strategiesByPair[key] || []).filter(
-      (s) => !s.id.eq(strategy.id)
+      (s) => s.id !== strategy.id
     );
     strategies.push(strategy);
     this._strategiesByPair[key] = strategies;
@@ -506,7 +506,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     const key = toPairKey(strategy.token0, strategy.token1);
     delete this._strategiesById[strategy.id.toString()];
     const strategies = (this._strategiesByPair[key] || []).filter(
-      (s) => !s.id.eq(strategy.id)
+      (s) => s.id !== strategy.id
     );
     this._strategiesByPair[key] = strategies;
     this._removeStrategyOrders(strategy);

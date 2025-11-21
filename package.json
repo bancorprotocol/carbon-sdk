@@ -67,7 +67,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "clean": "rm -rf dist && rm -rf src/abis/types",
-    "compile-abis": "typechain --target ethers-v5 --out-dir 'src/abis/types' 'src/abis/**/*.json'",
+    "compile-abis": "typechain --target ethers-v6 --out-dir 'src/abis/types' 'src/abis/**/*.json'",
     "prebuild": "yarn clean && yarn compile-abis",
     "build": "yarn lint && rollup -c",
     "test": "yarn lint && mocha",
@@ -100,7 +100,7 @@
     "@rollup/plugin-commonjs": "^28.0.2",
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-typescript": "^12.1.2",
-    "@typechain/ethers-v5": "^11.1.2",
+    "@typechain/ethers-v6": "^0.5.1",
     "@types/chai": "^5.2.2",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.13.10",
@@ -119,13 +119,8 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
-    "@ethersproject/abi": "^5.7.0",
-    "@ethersproject/bignumber": "^5.7.0",
-    "@ethersproject/contracts": "^5.8.0",
-    "@ethersproject/providers": "^5.7.2",
-    "@ethersproject/units": "^5.8.0",
     "decimal.js": "^10.5.0",
-    "ethers": "^5.8.0",
+    "ethers": "^6.15.0",
     "events": "^3.3.0"
   }
 }

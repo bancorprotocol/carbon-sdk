@@ -1,5 +1,4 @@
 import { expect } from 'chai';
-import { BigNumber } from '../src/utils/numerics';
 import {
   castToUniV3,
   batchCastToUniV3,
@@ -439,20 +438,20 @@ describe('Uniswap V3 Adapter', () => {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const strategyFromDemoStrategy = (strategy: any): EncodedStrategy => ({
-    id: BigNumber.from(strategy.id),
+    id: BigInt(strategy.id),
     token0: strategy.token0,
     token1: strategy.token1,
     order0: {
-      y: BigNumber.from(strategy.order0.y),
-      z: BigNumber.from(strategy.order0.z),
-      A: BigNumber.from(strategy.order0.A),
-      B: BigNumber.from(strategy.order0.B),
+      y: BigInt(strategy.order0.y),
+      z: BigInt(strategy.order0.z),
+      A: BigInt(strategy.order0.A),
+      B: BigInt(strategy.order0.B),
     },
     order1: {
-      y: BigNumber.from(strategy.order1.y),
-      z: BigNumber.from(strategy.order1.z),
-      A: BigNumber.from(strategy.order1.A),
-      B: BigNumber.from(strategy.order1.B),
+      y: BigInt(strategy.order1.y),
+      z: BigInt(strategy.order1.z),
+      A: BigInt(strategy.order1.A),
+      B: BigInt(strategy.order1.B),
     },
   });
 
@@ -531,30 +530,30 @@ describe('Uniswap V3 Adapter', () => {
           );
         }
         // check that token0 is the xAxisToken only if the address is lower than token1
-        const addr0 = BigNumber.from(strategy.token0);
-        const addr1 = BigNumber.from(strategy.token1);
-        const isToken0XAxis = addr0.lt(addr1);
+        const addr0 = BigInt(strategy.token0);
+        const addr1 = BigInt(strategy.token1);
+        const isToken0XAxis = addr0 < addr1;
         expect(uniV3Strategy.pool.xAxisToken).to.equal(
           isToken0XAxis ? strategy.token0 : strategy.token1
         );
 
         // check that if order0.A is 0 then the liquidity is Infinity in the sell order and if order1.A is 0 then the liquidity is Infinity in the buy order
-        if (strategy.order0.A.eq(0)) {
+        if (strategy.order0.A === 0n) {
           expect(uniV3Strategy.sellOrder.liquidity).to.equal(
             Infinity.toString()
           );
         }
-        if (strategy.order1.A.eq(0)) {
+        if (strategy.order1.A === 0n) {
           expect(uniV3Strategy.buyOrder.liquidity).to.equal(
             Infinity.toString()
           );
         }
 
         // check that if order0.z is 0 then the liquidity is 0 in the sell order and if order1.z is 0 then the liquidity is 0 in the buy order
-        if (strategy.order0.z.eq(0)) {
+        if (strategy.order0.z === 0n) {
           expect(uniV3Strategy.sellOrder.liquidity).to.equal('0');
         }
-        if (strategy.order1.z.eq(0)) {
+        if (strategy.order1.z === 0n) {
           expect(uniV3Strategy.buyOrder.liquidity).to.equal('0');
         }
       });

@@ -1,5 +1,4 @@
-import { BigNumber } from '../utils/numerics';
-import { StrategyStructOutput } from '../abis/types/CarbonController';
+import { StrategyStructOutput, CarbonController } from '../abis/types/CarbonController';
 import { Contracts } from './Contracts';
 import {
   isETHAddress,
@@ -70,7 +69,7 @@ export default class Reader implements Fetcher {
     return this._multicallService.execute(calls, blockHeight);
   }
 
-  public async strategy(id: BigNumber): Promise<EncodedStrategy> {
+  public async strategy(id: bigint): Promise<EncodedStrategy> {
     logger.debug('strategy called', id);
     try {
       const res = await this._contracts.carbonController.strategy(id);
@@ -81,12 +80,12 @@ export default class Reader implements Fetcher {
     }
   }
 
-  public async strategies(ids: BigNumber[]): Promise<EncodedStrategy[]> {
+  public async strategies(ids: bigint[]): Promise<EncodedStrategy[]> {
     logger.debug('strategies called', ids);
     try {
       const results = await this._multicall(
         ids.map((id) => ({
-          contractAddress: this._contracts.carbonController.address,
+          contractAddress: this._contracts.carbonController.target as string,
           interface: this._contracts.carbonController.interface,
           methodName: 'strategy',
           methodParameters: [id],
@@ -165,7 +164,7 @@ export default class Reader implements Fetcher {
         // First, get the first chunk for all pairs using multicall
         const firstChunkResults = await this._multicall(
           pairs.map((pair) => ({
-            contractAddress: this._contracts.carbonController.address,
+            contractAddress: this._contracts.carbonController.target as string,
             interface: this._contracts.carbonController.interface,
             methodName: 'strategiesByPair',
             methodParameters: [pair[0], pair[1], 0, chunkSize],
@@ -244,10 +243,11 @@ export default class Reader implements Fetcher {
     }
   }
 
-  public tradingFeePPM(): Promise<number> {
+  public async tradingFeePPM(): Promise<number> {
     logger.debug('tradingFeePPM called');
     try {
-      return this._contracts.carbonController.tradingFeePPM();
+      const result = await this._contracts.carbonController.tradingFeePPM();
+      return Number(result);
     } catch (error) {
       logger.error('tradingFeePPM error', error);
       throw error;
@@ -256,20 +256,21 @@ export default class Reader implements Fetcher {
 
   public onTradingFeePPMUpdated(
     listener: (prevFeePPM: number, newFeePPM: number) => void
-  ) {
+  ): Promise<CarbonController> {
     return this._contracts.carbonController.on(
-      'TradingFeePPMUpdated',
-      function (prevFeePPM: number, newFeePPM: number) {
-        logger.debug('TradingFeePPMUpdated fired with', arguments);
-        listener(prevFeePPM, newFeePPM);
+      this._contracts.carbonController.getEvent('TradingFeePPMUpdated'),
+      (prevFeePPM: bigint, newFeePPM: bigint, _event) => {
+        logger.debug('TradingFeePPMUpdated fired with', { prevFeePPM, newFeePPM });
+        listener(Number(prevFeePPM), Number(newFeePPM));
       }
     );
   }
 
-  public pairTradingFeePPM(token0: string, token1: string): Promise<number> {
+  public async pairTradingFeePPM(token0: string, token1: string): Promise<number> {
     logger.debug('pairTradingFeePPM called', token0, token1);
     try {
-      return this._contracts.carbonController.pairTradingFeePPM(token0, token1);
+      const result = await this._contracts.carbonController.pairTradingFeePPM(token0, token1);
+      return Number(result);
     } catch (error) {
       logger.error('pairTradingFeePPM error', error);
       throw error;
@@ -283,7 +284,7 @@ export default class Reader implements Fetcher {
     try {
       const results = await this._multicall(
         pairs.map((pair) => ({
-          contractAddress: this._contracts.carbonController.address,
+          contractAddress: this._contracts.carbonController.target as string,
           interface: this._contracts.carbonController.interface,
           methodName: 'pairTradingFeePPM',
           methodParameters: [pair[0], pair[1]],
@@ -309,24 +310,20 @@ export default class Reader implements Fetcher {
     ) => void
   ) {
     return this._contracts.carbonController.on(
-      'PairTradingFeePPMUpdated',
-      function (
-        token0: string,
-        token1: string,
-        prevFeePPM: number,
-        newFeePPM: number
-      ) {
-        logger.debug('PairTradingFeePPMUpdated fired with', arguments);
-        listener(token0, token1, prevFeePPM, newFeePPM);
+      this._contracts.carbonController.getEvent('PairTradingFeePPMUpdated'),
+      (token0: string, token1: string, prevFeePPM: bigint, newFeePPM: bigint, _event) => {
+        logger.debug('PairTradingFeePPMUpdated fired with', { token0, token1, prevFeePPM, newFeePPM });
+        listener(token0, token1, Number(prevFeePPM), Number(newFeePPM));
       }
     );
   }
 
-  public getDecimalsByAddress = async (address: string) => {
+  public getDecimalsByAddress = async (address: string): Promise<number> => {
     if (isETHAddress(address)) {
-      return 18 as number;
+      return 18;
     }
-    return this._contracts.token(address).decimals();
+    const result = await this._contracts.token(address).decimals();
+    return Number(result);
   };
 
   public getBlockNumber = async (): Promise<number> => {
@@ -334,7 +331,14 @@ export default class Reader implements Fetcher {
   };
 
   public getBlock = async (blockNumber: number): Promise<BlockMetadata> => {
-    return this._contracts.provider.getBlock(blockNumber);
+    const block = await this._contracts.provider.getBlock(blockNumber);
+    if (!block) {
+      throw new Error(`Block ${blockNumber} not found`);
+    }
+    return {
+      number: block.number,
+      hash: block.hash ?? '',
+    };
   };
 
   /**
@@ -364,7 +368,7 @@ export default class Reader implements Fetcher {
     const chunkResults = await Promise.all(
       chunks.map(async ({ start, end }) => {
         const logs = await this._contracts.provider.getLogs({
-          address: this._contracts.carbonController.address,
+          address: this._contracts.carbonController.target as string,
           fromBlock: start,
           toBlock: end,
         });
@@ -410,7 +414,7 @@ export default class Reader implements Fetcher {
             return {
               type: eventType,
               blockNumber: log.blockNumber,
-              logIndex: log.logIndex,
+              logIndex: log.index,
               data: eventData,
             } as const;
           }
@@ -419,7 +423,7 @@ export default class Reader implements Fetcher {
             return {
               type: eventType,
               blockNumber: log.blockNumber,
-              logIndex: log.logIndex,
+              logIndex: log.index,
               data: eventData,
             } as const;
           }
@@ -432,7 +436,7 @@ export default class Reader implements Fetcher {
             return {
               type: eventType,
               blockNumber: log.blockNumber,
-              logIndex: log.logIndex,
+              logIndex: log.index,
               data: eventData,
             } as const;
           }
