@@ -29,7 +29,7 @@ export const encodeFloat = (value: bigint): bigint => {
 };
 
 export const decodeFloat = (value: bigint): bigint => {
-  return (value % ONE) << BigInt(Number(value / ONE));
+  return value % ONE << BigInt(Number(value / ONE));
 };
 
 export const encodeOrders = ([order0, order1]: [DecodedOrder, DecodedOrder]): [
@@ -92,10 +92,7 @@ export const areScaledRatesEqual = (x: string, y: string): boolean => {
   return xScaled === yScaled;
 };
 
-export const encodeOrder = (
-  order: DecodedOrder,
-  z?: bigint
-): EncodedOrder => {
+export const encodeOrder = (order: DecodedOrder, z?: bigint): EncodedOrder => {
   const liquidity = new Decimal(order.liquidity);
   const lowestRate = new Decimal(order.lowestRate);
   const highestRate = new Decimal(order.highestRate);
@@ -114,15 +111,11 @@ export const encodeOrder = (
     );
   }
 
-  const HDec = BnToDec(H);
-  const MDec = BnToDec(M);
-  const LDec = BnToDec(L);
-
   if (
     !(
-      (HDec.gte(MDec) && MDec.gt(LDec)) ||
-      (HDec.eq(MDec) && MDec.eq(LDec)) ||
-      (HDec.gt(MDec) && MDec.eq(LDec) && y === 0n)
+      (H >= M && M > L) ||
+      (H === M && M === L) ||
+      (H > M && M === L && y === 0n)
     )
   )
     throw new Error(
@@ -135,12 +128,7 @@ export const encodeOrder = (
 
   return {
     y,
-    z:
-      z !== undefined
-        ? z
-        : H === M || y === 0n
-        ? y
-        : (y * (H - L)) / (M - L),
+    z: z !== undefined ? z : H === M || y === 0n ? y : (y * (H - L)) / (M - L),
     A: encodeFloat(H - L),
     B: encodeFloat(L),
   };
