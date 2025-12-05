@@ -1,12 +1,10 @@
 import { expect } from 'chai';
-import { BigNumber } from '../src/utils/numerics';
 import Reader from '../src/contracts-api/Reader';
 import { Contracts } from '../src/contracts-api/Contracts';
 import { MulticallService, MultiCall } from '../src/contracts-api/utils';
 import { Multicall } from '../src/abis/types';
 import {
   EncodedStrategy,
-  TradeData,
   TradingFeeUpdate,
   TokenPair,
 } from '../src/common/types';
@@ -36,31 +34,21 @@ describe('Reader', () => {
   let mockMulticallService: MockMulticallService;
 
   const mockEncodedStrategy: EncodedStrategy = {
-    id: BigNumber.from(1),
+    id: 1n,
     token0: '0x123',
     token1: '0x456',
     order0: {
-      y: BigNumber.from(100),
-      z: BigNumber.from(200),
-      A: BigNumber.from(300),
-      B: BigNumber.from(400),
+      y: 100n,
+      z: 200n,
+      A: 300n,
+      B: 400n,
     },
     order1: {
-      y: BigNumber.from(500),
-      z: BigNumber.from(600),
-      A: BigNumber.from(700),
-      B: BigNumber.from(800),
+      y: 500n,
+      z: 600n,
+      A: 700n,
+      B: 800n,
     },
-  };
-
-  const mockTradeData: TradeData = {
-    trader: '0x789',
-    sourceToken: '0x123',
-    targetToken: '0x456',
-    sourceAmount: '1000',
-    targetAmount: '2000',
-    tradingFeeAmount: '10',
-    byTargetAmount: true,
   };
 
   const mockTradingFeeUpdate: TradingFeeUpdate = ['0x123', '0x456', 100];
@@ -69,7 +57,7 @@ describe('Reader', () => {
     // Create mock contracts with necessary methods
     mockContracts = {
       carbonController: {
-        address: '0x123',
+        target: '0x123',
         interface: {
           parseLog: (log: { topics: string[]; data: string }) => {
             // Mock event parsing based on topics
@@ -79,11 +67,6 @@ describe('Reader', () => {
                 return {
                   name: 'StrategyCreated',
                   args: mockEncodedStrategy,
-                };
-              case '0x456': // TokensTraded
-                return {
-                  name: 'TokensTraded',
-                  args: mockTradeData,
                 };
               case '0x789': // TradingFeePPMUpdated
                 return {
@@ -104,7 +87,8 @@ describe('Reader', () => {
             }
           },
         },
-      },
+        strategiesByPair: async () => [] as any,
+      } as any,
       provider: {
         getLogs: async ({
           fromBlock,
@@ -114,23 +98,13 @@ describe('Reader', () => {
           toBlock: number;
         }) => {
           // Mock logs based on block range
-          const logs: {
-            blockNumber: number;
-            logIndex: number;
-            topics: string[];
-            data: string;
-            blockHash: string;
-            transactionIndex: number;
-            removed: boolean;
-            address: string;
-            transactionHash: string;
-          }[] = [];
+          const logs: any[] = [];
           for (let block = fromBlock; block <= toBlock; block++) {
             // Add multiple events per block with different log indices
             logs.push(
               {
                 blockNumber: block,
-                logIndex: 0,
+                index: 0,
                 topics: ['0x123'], // StrategyCreated
                 data: '0x',
                 blockHash: '0x123',
@@ -141,18 +115,7 @@ describe('Reader', () => {
               },
               {
                 blockNumber: block,
-                logIndex: 1,
-                topics: ['0x456'], // TokensTraded
-                data: '0x',
-                blockHash: '0x123',
-                transactionIndex: 1,
-                removed: false,
-                address: '0x123',
-                transactionHash: '0x456',
-              },
-              {
-                blockNumber: block,
-                logIndex: 2,
+                index: 1,
                 topics: ['0x789'], // TradingFeePPMUpdated
                 data: '0x',
                 blockHash: '0x123',
@@ -163,7 +126,18 @@ describe('Reader', () => {
               },
               {
                 blockNumber: block,
-                logIndex: 3,
+                index: 2,
+                topics: ['0x789'], // TradingFeePPMUpdated
+                data: '0x',
+                blockHash: '0x123',
+                transactionIndex: 2,
+                removed: false,
+                address: '0x123',
+                transactionHash: '0x456',
+              },
+              {
+                blockNumber: block,
+                index: 3,
                 topics: ['0xabc'], // PairTradingFeePPMUpdated
                 data: '0x',
                 blockHash: '0x123',
@@ -225,9 +199,6 @@ describe('Reader', () => {
       expect(events[0].type).to.equal('StrategyCreated');
       expect(events[0].data).to.deep.equal(mockEncodedStrategy);
 
-      expect(events[1].type).to.equal('TokensTraded');
-      expect(events[1].data).to.deep.equal(mockTradeData);
-
       expect(events[2].type).to.equal('TradingFeePPMUpdated');
       expect(events[2].data).to.equal(100);
 
@@ -246,7 +217,7 @@ describe('Reader', () => {
         return [
           {
             blockNumber: 1,
-            logIndex: 0,
+            index: 0,
             topics: ['0xinvalid'], // Invalid event type
             data: '0x',
             blockHash: '0x123',
@@ -257,7 +228,7 @@ describe('Reader', () => {
           },
           {
             blockNumber: 1,
-            logIndex: 1,
+            index: 1,
             topics: ['0x123'], // Valid event
             data: '0x',
             blockHash: '0x123',
@@ -266,7 +237,7 @@ describe('Reader', () => {
             address: '0x123',
             transactionHash: '0x456',
           },
-        ];
+        ] as any;
       };
 
       const events = await reader.getEvents(1, 1, 1);
@@ -293,7 +264,7 @@ describe('Reader', () => {
   describe('strategiesByPair', () => {
     it('should return empty array when no strategies are found', async () => {
       // Override the mock contracts to return empty array
-      mockContracts.carbonController.strategiesByPair = async () => [];
+      (mockContracts.carbonController as any).strategiesByPair = async () => [];
 
       const strategies = await reader.strategiesByPair('0x123', '0x456');
       expect(strategies.length).to.equal(0);
@@ -303,47 +274,47 @@ describe('Reader', () => {
       // Create mock strategies in the correct format
       const mockStrategies: StrategyStructOutput[] = [
         [
-          BigNumber.from(1),
+          1n,
           '0xowner',
           ['0x123', '0x456'],
           [
             [
-              BigNumber.from(100),
-              BigNumber.from(200),
-              BigNumber.from(300),
-              BigNumber.from(400),
+              100n,
+              200n,
+              300n,
+              400n,
             ] as OrderStructOutput,
             [
-              BigNumber.from(500),
-              BigNumber.from(600),
-              BigNumber.from(700),
-              BigNumber.from(800),
+              500n,
+              600n,
+              700n,
+              800n,
             ] as OrderStructOutput,
           ],
         ] as StrategyStructOutput,
         [
-          BigNumber.from(2),
+          2n,
           '0xowner',
           ['0x123', '0x456'],
           [
             [
-              BigNumber.from(900),
-              BigNumber.from(1000),
-              BigNumber.from(1100),
-              BigNumber.from(1200),
+              900n,
+              1000n,
+              1100n,
+              1200n,
             ] as OrderStructOutput,
             [
-              BigNumber.from(1300),
-              BigNumber.from(1400),
-              BigNumber.from(1500),
-              BigNumber.from(1600),
+              1300n,
+              1400n,
+              1500n,
+              1600n,
             ] as OrderStructOutput,
           ],
         ] as StrategyStructOutput,
       ];
 
       // Override the mock contracts to return mock strategies
-      mockContracts.carbonController.strategiesByPair = async () =>
+      (mockContracts.carbonController as any).strategiesByPair = async () =>
         mockStrategies;
 
       const strategies = await reader.strategiesByPair('0x123', '0x456');
@@ -374,21 +345,21 @@ describe('Reader', () => {
         { length: 1500 },
         (_, i) =>
           [
-            BigNumber.from(i + 1),
+            BigInt(i + 1),
             '0xowner',
             ['0x123', '0x456'],
             [
               [
-                BigNumber.from(100),
-                BigNumber.from(200),
-                BigNumber.from(300),
-                BigNumber.from(400),
+                100n,
+                200n,
+                300n,
+                400n,
               ] as OrderStructOutput,
               [
-                BigNumber.from(500),
-                BigNumber.from(600),
-                BigNumber.from(700),
-                BigNumber.from(800),
+                500n,
+                600n,
+                700n,
+                800n,
               ] as OrderStructOutput,
             ],
           ] as StrategyStructOutput
@@ -398,11 +369,11 @@ describe('Reader', () => {
       let callCount = 0;
 
       // Override the mock contracts to return chunks of strategies
-      mockContracts.carbonController.strategiesByPair = async (
-        _,
-        __,
-        startIndex,
-        endIndex
+      (mockContracts.carbonController as any).strategiesByPair = async (
+        _: any,
+        __: any,
+        startIndex: any,
+        endIndex: any
       ) => {
         callCount++;
         return mockStrategies.slice(Number(startIndex), Number(endIndex));
@@ -448,21 +419,21 @@ describe('Reader', () => {
       token1: string
     ): StrategyStructOutput {
       return [
-        BigNumber.from(id),
+        BigInt(id),
         '0xowner',
         [token0, token1],
         [
           [
-            BigNumber.from(100),
-            BigNumber.from(200),
-            BigNumber.from(300),
-            BigNumber.from(400),
+            100n,
+            200n,
+            300n,
+            400n,
           ] as OrderStructOutput,
           [
-            BigNumber.from(500),
-            BigNumber.from(600),
-            BigNumber.from(700),
-            BigNumber.from(800),
+            500n,
+            600n,
+            700n,
+            800n,
           ] as OrderStructOutput,
         ],
       ] as StrategyStructOutput;
@@ -508,11 +479,11 @@ describe('Reader', () => {
       mockMulticallService.setResponses(firstChunkResponses);
 
       // Set up mock for subsequent chunks
-      mockContracts.carbonController.strategiesByPair = async (
-        token0: string,
-        token1: string,
-        startIndex: number,
-        endIndex: number
+      (mockContracts.carbonController as any).strategiesByPair = async (
+        token0: any,
+        token1: any,
+        startIndex: any,
+        endIndex: any
       ) => {
         const key = `${token0}-${token1}`;
         return mockStrategies[key].slice(Number(startIndex), Number(endIndex));
@@ -530,30 +501,26 @@ describe('Reader', () => {
       // Verify pair with single chunk (500 strategies)
       expect(results[1].pair).to.deep.equal(['0x789', '0xabc']);
       expect(results[1].strategies).to.have.length(500);
-      expect(results[1].strategies[0].id).to.deep.equal(BigNumber.from(1));
-      expect(results[1].strategies[499].id).to.deep.equal(BigNumber.from(500));
+      expect(results[1].strategies[0].id).to.deep.equal(1n);
+      expect(results[1].strategies[499].id).to.deep.equal(500n);
 
       // Verify pair with exactly one chunk (1000 strategies)
       expect(results[2].pair).to.deep.equal(['0xdef', '0xghi']);
       expect(results[2].strategies).to.have.length(1000);
-      expect(results[2].strategies[0].id).to.deep.equal(BigNumber.from(1));
-      expect(results[2].strategies[999].id).to.deep.equal(BigNumber.from(1000));
+      expect(results[2].strategies[0].id).to.deep.equal(1n);
+      expect(results[2].strategies[999].id).to.deep.equal(1000n);
 
       // Verify pair with two chunks (1500 strategies)
       expect(results[3].pair).to.deep.equal(['0xjkl', '0xmno']);
       expect(results[3].strategies).to.have.length(1500);
-      expect(results[3].strategies[0].id).to.deep.equal(BigNumber.from(1));
-      expect(results[3].strategies[1499].id).to.deep.equal(
-        BigNumber.from(1500)
-      );
+      expect(results[3].strategies[0].id).to.deep.equal(1n);
+      expect(results[3].strategies[1499].id).to.deep.equal(1500n);
 
       // Verify pair with three chunks (2500 strategies)
       expect(results[4].pair).to.deep.equal(['0xpqr', '0xstu']);
       expect(results[4].strategies).to.have.length(2500);
-      expect(results[4].strategies[0].id).to.deep.equal(BigNumber.from(1));
-      expect(results[4].strategies[2499].id).to.deep.equal(
-        BigNumber.from(2500)
-      );
+      expect(results[4].strategies[0].id).to.deep.equal(1n);
+      expect(results[4].strategies[2499].id).to.deep.equal(2500n);
     });
 
     it('should handle empty pairs array', async () => {

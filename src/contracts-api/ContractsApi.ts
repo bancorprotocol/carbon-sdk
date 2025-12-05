@@ -1,4 +1,4 @@
-import { Provider } from '@ethersproject/providers';
+import { Provider } from 'ethers';
 import { ContractsConfig } from './types';
 import Composer from './Composer';
 import { Contracts } from './Contracts';

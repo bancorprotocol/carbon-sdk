@@ -1,6 +1,6 @@
-import { BigNumber, BigNumberish } from '../utils/numerics';
-import { PayableOverrides } from 'ethers';
-import { Interface } from '@ethersproject/abi';
+import { BigIntish } from '../utils/numerics';
+import { PayableOverrides } from '../common/types';
+import { Interface } from 'ethers';
 import { Multicall } from '../abis/types';
 import { TradeAction } from '../common/types';
 
@@ -67,7 +67,7 @@ export const multicall = async (
   return service.execute(calls, blockHeight);
 };
 
-export const isETHAddress = (address: string) => {
+export const isETHAddress = (address: string): boolean => {
   return address.toLowerCase() === ETH_ADDRESS;
 };
 
@@ -75,18 +75,19 @@ export const buildTradeOverrides = (
   sourceToken: string,
   tradeActions: TradeAction[],
   byTarget: boolean,
-  maxInput: BigNumberish,
+  maxInput: BigIntish,
   overrides?: PayableOverrides
 ): PayableOverrides => {
   const customOverrides = { ...overrides };
   if (isETHAddress(sourceToken)) {
     if (byTarget) {
-      customOverrides.value = BigNumber.from(maxInput);
+      customOverrides.value = BigInt(maxInput);
     } else {
-      customOverrides.value = tradeActions.reduce(
-        (acc, cur) => acc.add(cur.amount as BigNumberish),
-        BigNumber.from(0)
+      const total = tradeActions.reduce(
+        (acc, cur) => acc + cur.amount,
+        0n
       );
+      customOverrides.value = total;
     }
   }
   return customOverrides;

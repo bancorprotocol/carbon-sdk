@@ -29,7 +29,7 @@ async function demonstrateCarbonIntegration() {
   console.log('Starting Carbon integration demo...');
 
   // Initialize provider with proper error handling
-  const provider = new ethers.providers.StaticJsonRpcProvider(PROVIDER_URL);
+  const provider = new ethers.JsonRpcProvider(PROVIDER_URL);
 
   // Initialize Carbon contracts
   const contracts = new Contracts(provider, {
