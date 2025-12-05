@@ -2,7 +2,7 @@
   "name": "@bancor/carbon-sdk",
   "type": "module",
   "source": "src/index.ts",
-  "version": "1.0.0",
+  "version": "0.0.126-TEST",
   "description": "The SDK is a READ-ONLY tool, intended to facilitate working with Carbon contracts. It's a convenient wrapper around our matching algorithm, allowing programs and users get a ready to use transaction data that will allow them to manage strategies and fulfill trades",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -109,6 +109,7 @@
     "@typescript-eslint/parser": "^8.32.1",
     "chai": "^5.2.0",
     "eslint": "^9.26.0",
+    "ethers": "^6.15.0",
     "mocha": "^11.1.0",
     "rollup": "^4.40.2",
     "rollup-plugin-terser": "^7.0.2",
@@ -120,7 +121,9 @@
   },
   "dependencies": {
     "decimal.js": "^10.5.0",
-    "ethers": "^6.15.0",
     "events": "^3.3.0"
+  },
+  "peerDependencies": {
+    "ethers": "^6.15.0"
   }
 }
