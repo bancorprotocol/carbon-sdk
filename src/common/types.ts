@@ -1,5 +1,8 @@
-export { PayableOverrides, PopulatedTransaction } from 'ethers';
-import { BigNumber } from '../utils/numerics';
+import type { TransactionRequest } from 'ethers';
+
+// Type aliases for ethers v6 compatibility
+export type PopulatedTransaction = TransactionRequest;
+export type PayableOverrides = TransactionRequest;
 
 export type RetypeProps<T, From, To> = {
   [K in keyof T]: T[K] extends From
@@ -9,28 +12,28 @@ export type RetypeProps<T, From, To> = {
     : T[K];
 };
 
-export type RetypeBigNumberToString<T> = RetypeProps<T, BigNumber, string>;
+export type RetypeBigIntToString<T> = RetypeProps<T, bigint, string>;
 
 export type Rate = {
-  input: BigNumber;
-  output: BigNumber;
+  input: bigint;
+  output: bigint;
 };
 
-export type RateBNStr = RetypeBigNumberToString<Rate>;
+export type RateBNStr = RetypeBigIntToString<Rate>;
 
 export type Quote = {
-  id: BigNumber;
+  id: bigint;
   rate: Rate;
 };
 
-export type QuoteBNStr = RetypeBigNumberToString<Quote>;
+export type QuoteBNStr = RetypeBigIntToString<Quote>;
 
 export type TradeAction = {
-  strategyId: BigNumber;
-  amount: BigNumber;
+  strategyId: bigint;
+  amount: bigint;
 };
 
-export type TradeActionBNStr = RetypeBigNumberToString<TradeAction>;
+export type TradeActionBNStr = RetypeBigIntToString<TradeAction>;
 
 export type Filter = (rate: Rate) => boolean;
 
@@ -40,29 +43,29 @@ export enum MatchType {
 }
 
 export type MatchAction = {
-  id: BigNumber;
-  input: BigNumber;
-  output: BigNumber;
+  id: bigint;
+  input: bigint;
+  output: bigint;
 };
 
-export type MatchActionBNStr = RetypeBigNumberToString<MatchAction>;
+export type MatchActionBNStr = RetypeBigIntToString<MatchAction>;
 
 export type MatchOptions = {
   [key in MatchType]?: MatchAction[];
 };
 
-export type MatchOptionsBNStr = RetypeBigNumberToString<MatchOptions>;
+export type MatchOptionsBNStr = RetypeBigIntToString<MatchOptions>;
 
 export type TokenPair = [string, string];
 
 export type EncodedOrder = {
-  y: BigNumber;
-  z: BigNumber;
-  A: BigNumber;
-  B: BigNumber;
+  y: bigint;
+  z: bigint;
+  A: bigint;
+  B: bigint;
 };
 
-export type EncodedOrderBNStr = RetypeBigNumberToString<EncodedOrder>;
+export type EncodedOrderBNStr = RetypeBigIntToString<EncodedOrder>;
 
 export type DecodedOrder = {
   liquidity: string;
@@ -75,33 +78,23 @@ export type OrdersMap = {
   [orderId: string]: EncodedOrder;
 };
 
-export type OrdersMapBNStr = RetypeBigNumberToString<OrdersMap>;
+export type OrdersMapBNStr = RetypeBigIntToString<OrdersMap>;
 
 export type EncodedStrategy = {
-  id: BigNumber;
+  id: bigint;
   token0: string;
   token1: string;
   order0: EncodedOrder;
   order1: EncodedOrder;
 };
 
-export type EncodedStrategyBNStr = RetypeBigNumberToString<EncodedStrategy>;
+export type EncodedStrategyBNStr = RetypeBigIntToString<EncodedStrategy>;
 
 export type DecodedStrategy = {
   token0: string;
   token1: string;
   order0: DecodedOrder;
   order1: DecodedOrder;
-};
-
-export type TradeData = {
-  trader: string;
-  sourceToken: string;
-  targetToken: string;
-  sourceAmount: string;
-  targetAmount: string;
-  tradingFeeAmount: string;
-  byTargetAmount: boolean;
 };
 
 export type TradingFeeUpdate = [string, string, number];
@@ -159,12 +152,6 @@ export type SyncedEvent =
       blockNumber: number;
       logIndex: number;
       data: EncodedStrategy;
-    }
-  | {
-      type: 'TokensTraded';
-      blockNumber: number;
-      logIndex: number;
-      data: TradeData;
     }
   | {
       type: 'TradingFeePPMUpdated';

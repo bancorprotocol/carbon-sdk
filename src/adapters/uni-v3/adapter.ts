@@ -1,4 +1,4 @@
-import { BigNumber, Decimal, ONE } from '../../utils/numerics';
+import { Decimal, ONE } from '../../utils/numerics';
 import { EncodedOrder, EncodedStrategy } from '../../common/types';
 import { UniV3CastStrategy, UniV3Pool, UniV3Position } from './types';
 import { decodeFloat, decodeOrder } from '../../utils/encoders';
@@ -27,10 +27,10 @@ function calculateImpliedTick(rate: Decimal, roundUp: boolean): number {
  * @returns {string} The calculated liquidity value
  */
 function calculateLConstant(order: EncodedOrder): string {
-  if (order.A.isZero()) {
+  if (order.A === 0n) {
     return Infinity.toString();
   }
-  return order.z.mul(ONE).div(decodeFloat(order.A)).toString();
+  return ((order.z * ONE) / decodeFloat(order.A)).toString();
 }
 
 function calculateSqrtPriceX96(marginal: Decimal, roundUp: boolean): string {
@@ -86,10 +86,10 @@ function calculatePositionInformation(
 export function castToUniV3(strategy: EncodedStrategy): UniV3CastStrategy {
   // use the token addresses to define which is the base token and which is the quote token. Base token is the token with the lowest address.
 
-  const addr0 = BigNumber.from(strategy.token0);
-  const addr1 = BigNumber.from(strategy.token1);
+  const addr0 = BigInt(strategy.token0);
+  const addr1 = BigInt(strategy.token1);
 
-  const isToken0XAxis = addr0.lt(addr1);
+  const isToken0XAxis = addr0 < addr1;
 
   const pool: UniV3Pool = {
     xAxisToken: isToken0XAxis ? strategy.token0 : strategy.token1,

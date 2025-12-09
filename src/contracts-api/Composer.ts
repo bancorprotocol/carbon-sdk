@@ -1,6 +1,6 @@
-import { BigNumber, BigNumberish } from '../utils/numerics';
+import { BigIntish } from '../utils/numerics';
 import { Contracts } from './Contracts';
-import { PayableOverrides, PopulatedTransaction } from 'ethers';
+import { PayableOverrides, PopulatedTransaction } from '../common/types';
 import { buildTradeOverrides, isETHAddress } from './utils';
 import { Logger } from '../common/logger';
 import { EncodedOrder, TradeAction } from '../common/types';
@@ -21,8 +21,8 @@ export default class Composer {
    * @param {string} sourceToken - The address of the token to be traded.
    * @param {string} targetToken - The address of the token to be received.
    * @param {TradeAction[]} tradeActions - The list of trade actions to be executed.
-   * @param {BigNumberish} deadline - The deadline for the trade.
-   * @param {BigNumberish} maxInput - The maximum amount of source token to be traded.
+   * @param {BigIntish} deadline - The deadline for the trade.
+   * @param {BigIntish} maxInput - The maximum amount of source token to be traded.
    * @param {PayableOverrides} overrides - The overrides for the transaction.
    * @returns {Promise<PopulatedTransaction>} - The populated transaction.
    */
@@ -30,8 +30,8 @@ export default class Composer {
     sourceToken: string,
     targetToken: string,
     tradeActions: TradeAction[],
-    deadline: BigNumberish,
-    maxInput: BigNumberish,
+    deadline: BigIntish,
+    maxInput: BigIntish,
     overrides?: PayableOverrides
   ): Promise<PopulatedTransaction> {
     logger.debug('tradeByTargetAmount called', arguments);
@@ -46,12 +46,12 @@ export default class Composer {
 
     logger.debug('tradeByTargetAmount overrides', customOverrides);
 
-    return this._contracts.carbonController.populateTransaction.tradeByTargetAmount(
+    return this._contracts.carbonController.tradeByTargetAmount.populateTransaction(
       sourceToken,
       targetToken,
       tradeActions,
-      deadline,
-      maxInput,
+      BigInt(deadline),
+      BigInt(maxInput),
       customOverrides
     );
   }
@@ -61,8 +61,8 @@ export default class Composer {
    * @param {string} sourceToken - The address of the token to be traded.
    * @param {string} targetToken - The address of the token to be received.
    * @param {TradeAction[]} tradeActions - The list of trade actions to be executed.
-   * @param {BigNumberish} deadline - The deadline for the trade.
-   * @param {BigNumberish} minReturn - The minimum amount of target token to be received.
+   * @param {BigIntish} deadline - The deadline for the trade.
+   * @param {BigIntish} minReturn - The minimum amount of target token to be received.
    * @param {PayableOverrides} overrides - The overrides for the transaction.
    * @returns {Promise<PopulatedTransaction>} - The populated transaction.
    */
@@ -70,8 +70,8 @@ export default class Composer {
     sourceToken: string,
     targetToken: string,
     tradeActions: TradeAction[],
-    deadline: BigNumberish,
-    minReturn: BigNumberish,
+    deadline: BigIntish,
+    minReturn: BigIntish,
     overrides?: PayableOverrides
   ) {
     logger.debug('tradeBySourceAmount called', arguments);
@@ -86,12 +86,12 @@ export default class Composer {
 
     logger.debug('tradeBySourceAmount overrides', customOverrides);
 
-    return this._contracts.carbonController.populateTransaction.tradeBySourceAmount(
+    return this._contracts.carbonController.tradeBySourceAmount.populateTransaction(
       sourceToken,
       targetToken,
       tradeActions,
-      deadline,
-      minReturn,
+      BigInt(deadline),
+      BigInt(minReturn),
       customOverrides
     );
   }
@@ -114,7 +114,7 @@ export default class Composer {
 
     logger.debug('createStrategy overrides', customOverrides);
 
-    return this._contracts.carbonController.populateTransaction.createStrategy(
+    return this._contracts.carbonController.createStrategy.populateTransaction(
       token0,
       token1,
       [order0, order1],
@@ -134,22 +134,22 @@ export default class Composer {
     logger.debug('batchCreateStrategies called', arguments);
 
     const customOverrides = { ...overrides };
-    let nativeTokenValue = BigNumber.from(0);
+    let nativeTokenValue = 0n;
     // for each order using native token, sum the its y value into customOverrides.value
     for (const strategy of strategies) {
       if (isETHAddress(strategy.token0)) {
-        nativeTokenValue = nativeTokenValue.add(strategy.order0.y);
+        nativeTokenValue = nativeTokenValue + strategy.order0.y;
       } else if (isETHAddress(strategy.token1)) {
-        nativeTokenValue = nativeTokenValue.add(strategy.order1.y);
+        nativeTokenValue = nativeTokenValue + strategy.order1.y;
       }
     }
-    if (nativeTokenValue.gt(0)) {
+    if (nativeTokenValue > 0n) {
       customOverrides.value = nativeTokenValue;
     }
 
     logger.debug('batchCreateStrategies overrides', customOverrides);
 
-    return this._contracts.carbonBatcher.populateTransaction.batchCreate(
+    return this._contracts.carbonBatcher.batchCreate.populateTransaction(
       strategies.map((s) => ({
         tokens: [s.token0, s.token1],
         orders: [s.order0, s.order1],
@@ -158,14 +158,14 @@ export default class Composer {
     );
   }
 
-  public deleteStrategy(id: BigNumber) {
-    return this._contracts.carbonController.populateTransaction.deleteStrategy(
+  public deleteStrategy(id: bigint) {
+    return this._contracts.carbonController.deleteStrategy.populateTransaction(
       id
     );
   }
 
   public updateStrategy(
-    strategyId: BigNumber,
+    strategyId: bigint,
     token0: string,
     token1: string,
     currentOrders: [EncodedOrder, EncodedOrder],
@@ -173,15 +173,17 @@ export default class Composer {
     overrides?: PayableOverrides
   ) {
     const customOverrides = { ...overrides };
-    if (isETHAddress(token0) && newOrders[0].y.gt(currentOrders[0].y)) {
-      customOverrides.value = newOrders[0].y.sub(currentOrders[0].y);
-    } else if (isETHAddress(token1) && newOrders[1].y.gt(currentOrders[1].y)) {
-      customOverrides.value = newOrders[1].y.sub(currentOrders[1].y);
+    if (isETHAddress(token0) && newOrders[0].y > currentOrders[0].y) {
+      const diff = newOrders[0].y - currentOrders[0].y;
+      customOverrides.value = diff;
+    } else if (isETHAddress(token1) && newOrders[1].y > currentOrders[1].y) {
+      const diff = newOrders[1].y - currentOrders[1].y;
+      customOverrides.value = diff;
     }
 
     logger.debug('updateStrategy overrides', customOverrides);
 
-    return this._contracts.carbonController.populateTransaction.updateStrategy(
+    return this._contracts.carbonController.updateStrategy.populateTransaction(
       strategyId,
       currentOrders,
       newOrders,

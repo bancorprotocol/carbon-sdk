@@ -2,13 +2,7 @@ import { expect } from 'chai';
 import sinon from 'sinon';
 import { ChainSync } from '../src/chain-cache/ChainSync';
 import { ChainCache } from '../src/chain-cache/ChainCache';
-import { BigNumber } from '../src/utils/numerics';
-import {
-  EncodedStrategy,
-  Fetcher,
-  TokenPair,
-  TradeData,
-} from '../src/common/types';
+import { EncodedStrategy, Fetcher, TokenPair } from '../src/common/types';
 
 describe('ChainSync', () => {
   let chainSync: ChainSync;
@@ -16,31 +10,21 @@ describe('ChainSync', () => {
   let mockFetcher: Fetcher;
 
   const mockEncodedStrategy: EncodedStrategy = {
-    id: BigNumber.from(1),
+    id: 1n,
     token0: '0x123',
     token1: '0x456',
     order0: {
-      y: BigNumber.from(100),
-      z: BigNumber.from(200),
-      A: BigNumber.from(300),
-      B: BigNumber.from(400),
+      y: 100n,
+      z: 200n,
+      A: 300n,
+      B: 400n,
     },
     order1: {
-      y: BigNumber.from(500),
-      z: BigNumber.from(600),
-      A: BigNumber.from(700),
-      B: BigNumber.from(800),
+      y: 500n,
+      z: 600n,
+      A: 700n,
+      B: 800n,
     },
-  };
-
-  const mockTradeData: TradeData = {
-    trader: '0x789',
-    sourceToken: '0x123',
-    targetToken: '0x456',
-    sourceAmount: '1000',
-    targetAmount: '2000',
-    tradingFeeAmount: '10',
-    byTargetAmount: true,
   };
 
   beforeEach(() => {
@@ -61,15 +45,15 @@ describe('ChainSync', () => {
         ['0x123', '0x456'],
       ],
       strategiesByPair: async (_token0: string, _token1: string) => [
-        { ...mockEncodedStrategy, id: BigNumber.from(2) },
-        { ...mockEncodedStrategy, id: BigNumber.from(3) },
+        { ...mockEncodedStrategy, id: 2n },
+        { ...mockEncodedStrategy, id: 3n },
       ],
       strategiesByPairs: async (_pairs: TokenPair[]) => [
         {
           pair: ['0x123', '0x456'],
           strategies: [
-            { ...mockEncodedStrategy, id: BigNumber.from(2) },
-            { ...mockEncodedStrategy, id: BigNumber.from(3) },
+            { ...mockEncodedStrategy, id: 2n },
+            { ...mockEncodedStrategy, id: 3n },
           ],
         },
       ],
@@ -115,10 +99,10 @@ describe('ChainSync', () => {
 
       const updatedStrategy = {
         ...mockEncodedStrategy,
-        id: BigNumber.from(2),
+        id: 2n,
         order0: {
           ...mockEncodedStrategy.order0,
-          y: BigNumber.from(150),
+          y: 150n,
         },
       };
       // Then update the second strategy
@@ -156,13 +140,13 @@ describe('ChainSync', () => {
           type: 'StrategyDeleted',
           blockNumber: chainCache.getLatestBlockNumber() + 1,
           logIndex: 0,
-          data: { ...mockEncodedStrategy, id: BigNumber.from(2) },
+          data: { ...mockEncodedStrategy, id: 2n },
         },
         {
           type: 'StrategyDeleted',
           blockNumber: chainCache.getLatestBlockNumber() + 1,
           logIndex: 1,
-          data: { ...mockEncodedStrategy, id: BigNumber.from(3) },
+          data: { ...mockEncodedStrategy, id: 3n },
         },
       ];
 
@@ -179,30 +163,6 @@ describe('ChainSync', () => {
       expect(strategies).to.have.length(0);
     });
 
-    it('should process TokensTraded events correctly', async () => {
-      mockFetcher.getEvents = async () => [
-        {
-          type: 'TokensTraded',
-          blockNumber: chainCache.getLatestBlockNumber() + 1,
-          logIndex: 0,
-          data: mockTradeData,
-        },
-      ];
-
-      await chainSync.startDataSync();
-
-      // wait until chainCache emits onPairDataChanged
-      await new Promise((resolve) => {
-        chainCache.on('onPairDataChanged', resolve);
-      });
-
-      const trade = await chainCache.getLatestTradeByPair(
-        mockTradeData.targetToken,
-        mockTradeData.sourceToken
-      );
-      expect(trade).to.deep.equal(mockTradeData);
-    });
-
     it('should process TradingFeePPMUpdated events correctly', async () => {
       mockFetcher.getEvents = async () => [
         {
@@ -213,10 +173,10 @@ describe('ChainSync', () => {
         },
         // this is just to have the event to emit onPairDataChanged
         {
-          type: 'TokensTraded',
+          type: 'StrategyCreated',
           blockNumber: chainCache.getLatestBlockNumber() + 1,
           logIndex: 1,
-          data: mockTradeData,
+          data: mockEncodedStrategy,
         },
       ];
 
@@ -247,10 +207,10 @@ describe('ChainSync', () => {
         },
         // this is just to have the event to emit onPairDataChanged
         {
-          type: 'TokensTraded',
+          type: 'StrategyCreated',
           blockNumber: chainCache.getLatestBlockNumber() + 1,
           logIndex: 1,
-          data: mockTradeData,
+          data: mockEncodedStrategy,
         },
       ];
 
@@ -277,10 +237,10 @@ describe('ChainSync', () => {
           logIndex: 0,
           data: {
             ...mockEncodedStrategy,
-            id: BigNumber.from(2),
+            id: 2n,
             order0: {
               ...mockEncodedStrategy.order0,
-              y: BigNumber.from(150),
+              y: 150n,
             },
           },
         },
@@ -290,10 +250,10 @@ describe('ChainSync', () => {
           logIndex: 1,
           data: {
             ...mockEncodedStrategy,
-            id: BigNumber.from(2),
+            id: 2n,
             order0: {
               ...mockEncodedStrategy.order0,
-              y: BigNumber.from(200),
+              y: 200n,
             },
           },
         },

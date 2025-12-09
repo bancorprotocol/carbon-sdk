@@ -1,4 +1,4 @@
-import { BigNumber, PayableOverrides } from 'ethers';
+import { PayableOverrides } from '../src/common/types';
 import { expect } from 'chai';
 import { buildTradeOverrides } from '../src/contracts-api/utils';
 import { TradeAction } from '../src/common/types';
@@ -8,9 +8,9 @@ describe('buildTradeOverrides', () => {
     const token = '0x123';
     const tokenEth = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
     const tradeActions = [
-      { amount: BigNumber.from(1) },
-      { amount: BigNumber.from(2) },
-      { amount: BigNumber.from(3) },
+      { amount: 1n },
+      { amount: 2n },
+      { amount: 3n },
     ];
     const overrides: PayableOverrides = { gasLimit: 1000000 };
     expect(

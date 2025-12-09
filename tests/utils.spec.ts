@@ -2,7 +2,6 @@ import { expect } from 'chai';
 import {
   formatUnits,
   parseUnits,
-  BigNumber,
   Decimal,
 } from '../src/utils/numerics';
 import {
@@ -343,7 +342,7 @@ describe('utils', () => {
   });
   describe('addFee', () => {
     it('should correctly add the fee', () => {
-      const amount = BigNumber.from(1000);
+      const amount = 1000n;
       const tradingFeePPM = 50000;
       const expected = '1053';
 
@@ -353,7 +352,7 @@ describe('utils', () => {
     });
 
     it('should return zero for zero amount', () => {
-      const amount = BigNumber.from(0);
+      const amount = 0n;
       const tradingFeePPM = 50000;
       const expected = '0';
 
@@ -363,7 +362,7 @@ describe('utils', () => {
     });
 
     it('should return the same amount for zero tradingFeePPM', () => {
-      const amount = BigNumber.from(1000);
+      const amount = 1000n;
       const tradingFeePPM = 0;
       const expected = '1000';
 
@@ -375,7 +374,7 @@ describe('utils', () => {
 
   describe('subtractFee', () => {
     it('subtracts fee correctly', () => {
-      const amount = BigNumber.from(10000000);
+      const amount = 10000000n;
       const tradingFeePPM = 5000;
       const result = subtractFee(amount, tradingFeePPM);
 
@@ -383,7 +382,7 @@ describe('utils', () => {
     });
 
     it('returns 0 when amount is 0', () => {
-      const amount = BigNumber.from(0);
+      const amount = 0n;
       const tradingFeePPM = 10000;
       const result = subtractFee(amount, tradingFeePPM);
 
@@ -391,7 +390,7 @@ describe('utils', () => {
     });
 
     it('returns the same amount when tradingFeePPM is 0', () => {
-      const amount = BigNumber.from(1000000000000000000n);
+      const amount = 1000000000000000000n;
       const tradingFeePPM = 0;
       const result = subtractFee(amount, tradingFeePPM);
 

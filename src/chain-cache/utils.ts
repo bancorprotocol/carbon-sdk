@@ -4,7 +4,7 @@ import { EncodedOrder, TokenPair } from '../common/types';
 const compareTokens = (token0: string, token1: string): number =>
   token0.localeCompare(token1);
 
-const SEPARATOR = '->-<-';
+const SEPARATOR = '_';
 
 // Convert two tokens to a string key
 const toKey = (tokens: string[]): string => {
@@ -40,5 +40,5 @@ export const toDirectionKey = (token0: string, token1: string): string => {
 };
 
 export function isOrderTradable(order: EncodedOrder): boolean {
-  return order.y.gt(0) && (order.A.gt(0) || order.B.gt(0));
+  return order.y > 0n && (order.A > 0n || order.B > 0n);
 }

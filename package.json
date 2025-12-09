@@ -2,7 +2,7 @@
   "name": "@bancor/carbon-sdk",
   "type": "module",
   "source": "src/index.ts",
-  "version": "0.0.125-DEV",
+  "version": "0.0.126-DEV",
   "description": "The SDK is a READ-ONLY tool, intended to facilitate working with Carbon contracts. It's a convenient wrapper around our matching algorithm, allowing programs and users get a ready to use transaction data that will allow them to manage strategies and fulfill trades",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -67,7 +67,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "clean": "rm -rf dist && rm -rf src/abis/types",
-    "compile-abis": "typechain --target ethers-v5 --out-dir 'src/abis/types' 'src/abis/**/*.json'",
+    "compile-abis": "typechain --target ethers-v6 --out-dir 'src/abis/types' 'src/abis/**/*.json'",
     "prebuild": "yarn clean && yarn compile-abis",
     "build": "yarn lint && rollup -c",
     "test": "yarn lint && mocha",
@@ -100,7 +100,7 @@
     "@rollup/plugin-commonjs": "^28.0.2",
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-typescript": "^12.1.2",
-    "@typechain/ethers-v5": "^11.1.2",
+    "@typechain/ethers-v6": "^0.5.1",
     "@types/chai": "^5.2.2",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.13.10",
@@ -109,6 +109,7 @@
     "@typescript-eslint/parser": "^8.32.1",
     "chai": "^5.2.0",
     "eslint": "^9.26.0",
+    "ethers": "^6.15.0",
     "mocha": "^11.1.0",
     "rollup": "^4.40.2",
     "rollup-plugin-terser": "^7.0.2",
@@ -119,13 +120,10 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
-    "@ethersproject/abi": "^5.7.0",
-    "@ethersproject/bignumber": "^5.7.0",
-    "@ethersproject/contracts": "^5.8.0",
-    "@ethersproject/providers": "^5.7.2",
-    "@ethersproject/units": "^5.8.0",
     "decimal.js": "^10.5.0",
-    "ethers": "^5.8.0",
     "events": "^3.3.0"
+  },
+  "peerDependencies": {
+    "ethers": "^6.15.0"
   }
 }

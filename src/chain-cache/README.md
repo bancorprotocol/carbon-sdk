@@ -8,6 +8,6 @@ This folder contains the implementation of a blockchain data synchronization sys
 2.  `Fetcher`: The `Fetcher` is an interface of the contracts Reader, which is responsible for fetching data from the blockchain. It contains methods for fetching block numbers, token pairs, trading fees, strategies, and events related to strategies and token trades.
 3.  `ChainCache.ts`: This file defines the `ChainCache` class, which is responsible for managing the local cache of the blockchain data. It contains methods for adding, updating, and deleting data in the cache, as well as methods for querying the cache.
 4.  `utils.ts`: This file contains utility functions that are used by the other classes in this folder. These utility functions include helpers for handling arrays, generating unique keys for token pairs, and other general-purpose functions.
-5.  `types.ts`: This file contains the type definitions for the data structures used in the system, such as `TokenPair`, `EncodedStrategy`, and `TradeData`.
+5.  `types.ts`: This file contains the type definitions for the data structures used in the system, such as `TokenPair`, and `EncodedStrategy`.
 
 To use this system, you need to create instances of the `Fetcher` and `ChainCache` classes and pass them to the constructor of the `ChainSync` class. Then, you can call the `startDataSync()` method of the `ChainSync` instance to start the synchronization process.
