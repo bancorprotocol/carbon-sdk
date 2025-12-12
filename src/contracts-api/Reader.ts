@@ -1,4 +1,7 @@
-import { StrategyStructOutput, CarbonController } from '../abis/types/CarbonController';
+import {
+  StrategyStructOutput,
+  CarbonController,
+} from '../abis/types/CarbonController';
 import { Contracts } from './Contracts';
 import {
   isETHAddress,
@@ -104,10 +107,13 @@ export default class Reader implements Fetcher {
     }
   }
 
-  public pairs(): Promise<TokenPair[]> {
+  public async pairs(): Promise<TokenPair[]> {
     logger.debug('pairs called');
     try {
-      return this._contracts.carbonController.pairs();
+      const pairs = await this._contracts.carbonController.pairs();
+      return pairs.map(
+        (pair) => [pair[0].toString(), pair[1].toString()] as TokenPair
+      );
     } catch (error) {
       logger.error('pairs error', error);
       throw error;
@@ -236,7 +242,8 @@ export default class Reader implements Fetcher {
     logger.debug('tokensByOwner called', owner);
     if (!owner) return [];
     try {
-      return this._contracts.voucher.tokensByOwner(owner, 0, 0);
+      const result = await this._contracts.voucher.tokensByOwner(owner, 0, 0);
+      return result.map((r) => r.toString());
     } catch (error) {
       logger.error('tokensByOwner error', error);
       throw error;
@@ -260,16 +267,25 @@ export default class Reader implements Fetcher {
     return this._contracts.carbonController.on(
       this._contracts.carbonController.getEvent('TradingFeePPMUpdated'),
       (prevFeePPM: bigint, newFeePPM: bigint, _event) => {
-        logger.debug('TradingFeePPMUpdated fired with', { prevFeePPM, newFeePPM });
+        logger.debug('TradingFeePPMUpdated fired with', {
+          prevFeePPM,
+          newFeePPM,
+        });
         listener(Number(prevFeePPM), Number(newFeePPM));
       }
     );
   }
 
-  public async pairTradingFeePPM(token0: string, token1: string): Promise<number> {
+  public async pairTradingFeePPM(
+    token0: string,
+    token1: string
+  ): Promise<number> {
     logger.debug('pairTradingFeePPM called', token0, token1);
     try {
-      const result = await this._contracts.carbonController.pairTradingFeePPM(token0, token1);
+      const result = await this._contracts.carbonController.pairTradingFeePPM(
+        token0,
+        token1
+      );
       return Number(result);
     } catch (error) {
       logger.error('pairTradingFeePPM error', error);
@@ -311,8 +327,19 @@ export default class Reader implements Fetcher {
   ) {
     return this._contracts.carbonController.on(
       this._contracts.carbonController.getEvent('PairTradingFeePPMUpdated'),
-      (token0: string, token1: string, prevFeePPM: bigint, newFeePPM: bigint, _event) => {
-        logger.debug('PairTradingFeePPMUpdated fired with', { token0, token1, prevFeePPM, newFeePPM });
+      (
+        token0: string,
+        token1: string,
+        prevFeePPM: bigint,
+        newFeePPM: bigint,
+        _event
+      ) => {
+        logger.debug('PairTradingFeePPMUpdated fired with', {
+          token0,
+          token1,
+          prevFeePPM,
+          newFeePPM,
+        });
         listener(token0, token1, Number(prevFeePPM), Number(newFeePPM));
       }
     );
