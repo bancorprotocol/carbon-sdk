@@ -243,7 +243,7 @@ export default class Reader implements Fetcher {
     if (!owner) return [];
     try {
       const result = await this._contracts.voucher.tokensByOwner(owner, 0, 0);
-      return result.map((r) => r.toString());
+      return result.map((r) => BigInt(r));
     } catch (error) {
       logger.error('tokensByOwner error', error);
       throw error;
