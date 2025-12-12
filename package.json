@@ -111,7 +111,7 @@
     "eslint": "^9.26.0",
     "ethers": "^6.15.0",
     "mocha": "^11.1.0",
-    "rollup": "^4.40.2",
+    "rollup": "^4.52.5",
     "rollup-plugin-terser": "^7.0.2",
     "sinon": "^19.0.2",
     "ts-node": "^10.9.2",
