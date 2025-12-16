@@ -71,7 +71,7 @@ export const encodeOrders = ([order0, order1]: [DecodedOrder, DecodedOrder]): [
 
 export const isOrderEncodable = (order: DecodedOrder): boolean => {
   try {
-    return encodeOrder(order).B > 0;
+    return encodeOrder(order).B > 0n;
   } catch {
     return false;
   }
