@@ -9,6 +9,7 @@ describe('ChainSync', () => {
   let chainSync: ChainSync;
   let chainCache: ChainCache;
   let mockFetcher: Fetcher;
+  let extraStopHandles: Array<() => void>;
 
   const mockEncodedStrategy: EncodedStrategy = {
     id: 1n,
@@ -44,6 +45,7 @@ describe('ChainSync', () => {
   };
 
   beforeEach(() => {
+    extraStopHandles = [];
     chainCache = new ChainCache();
     chainCache.applyEvents([], 10);
     mockFetcher = {
@@ -90,6 +92,8 @@ describe('ChainSync', () => {
 
   afterEach(() => {
     chainSync.stop();
+    extraStopHandles.forEach((stop) => stop());
+    extraStopHandles = [];
     sinon.restore();
   });
 
@@ -388,11 +392,12 @@ describe('ChainSync', () => {
         ...mockFetcher,
         strategiesByPair: sinon.stub().rejects(new Error('should not be called')),
       };
-      const { cache, startDataSync } = initSyncedCache({
+      const { cache, startDataSync, stopDataSync } = initSyncedCache({
         mode: 'polling',
         cacheSyncApi: async () => buildSerializedCache('0xowner', 15),
         pollingIntervalMs: 1000,
       });
+      extraStopHandles.push(stopDataSync);
 
       expect(await cache.getStrategiesByPair('0x123', '0x456')).to.be.undefined;
 

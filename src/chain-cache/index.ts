@@ -33,7 +33,11 @@ export * from './types';
  */
 export function initSyncedCache(
   config: InitSyncedCacheConfig
-): { cache: ChainCache; startDataSync: () => Promise<void> };
+): {
+  cache: ChainCache;
+  startDataSync: () => Promise<void>;
+  stopDataSync: () => void;
+};
 export function initSyncedCache(
   fetcher: Fetcher,
   cachedData?: string,
@@ -42,7 +46,11 @@ export function initSyncedCache(
   chunkSize?: number,
   cacheSyncApi?: CacheSyncApi,
   pollingIntervalMs?: number
-): { cache: ChainCache; startDataSync: () => Promise<void> };
+): {
+  cache: ChainCache;
+  startDataSync: () => Promise<void>;
+  stopDataSync: () => void;
+};
 export function initSyncedCache(
   fetcherOrConfig: Fetcher | InitSyncedCacheConfig,
   cachedDataOrOptions?: string | LegacyInitSyncedCacheOptions,
@@ -51,7 +59,11 @@ export function initSyncedCache(
   chunkSize?: number,
   cacheSyncApi?: CacheSyncApi,
   pollingIntervalMs?: number
-): { cache: ChainCache; startDataSync: () => Promise<void> } {
+): {
+  cache: ChainCache;
+  startDataSync: () => Promise<void>;
+  stopDataSync: () => void;
+} {
   const config =
     typeof fetcherOrConfig === 'object' && 'mode' in fetcherOrConfig
       ? fetcherOrConfig
@@ -106,5 +118,9 @@ export function initSyncedCache(
   if (config.mode === 'chain') {
     cache.setCacheMissHandler(syncer.syncPairData.bind(syncer));
   }
-  return { cache, startDataSync: syncer.startDataSync.bind(syncer) };
+  return {
+    cache,
+    startDataSync: syncer.startDataSync.bind(syncer),
+    stopDataSync: syncer.stop.bind(syncer),
+  };
 }
