@@ -84,6 +84,7 @@ export type EncodedStrategy = {
   id: bigint;
   token0: string;
   token1: string;
+  owner?: string;
   order0: EncodedOrder;
   order1: EncodedOrder;
 };
@@ -93,6 +94,7 @@ export type EncodedStrategyBNStr = RetypeBigIntToString<EncodedStrategy>;
 export type DecodedStrategy = {
   token0: string;
   token1: string;
+  owner?: string;
   order0: DecodedOrder;
   order1: DecodedOrder;
 };
@@ -112,6 +114,7 @@ export type Strategy = {
   id: string;
   baseToken: string;
   quoteToken: string;
+  owner?: string;
   buyPriceLow: string; // in quote tkn per 1 base tkn
   buyPriceMarginal: string; // in quote tkn per 1 base tkn
   buyPriceHigh: string; // in quote tkn per 1 base tkn
@@ -136,6 +139,7 @@ export type StrategyUpdate = AtLeastOneOf<
     | 'encoded'
     | 'baseToken'
     | 'quoteToken'
+    | 'owner'
     | 'buyPriceMarginal'
     | 'sellPriceMarginal'
   >

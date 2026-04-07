@@ -1,11 +1,6 @@
 import { expect } from 'chai';
 import { ChainCache } from '../src/chain-cache/ChainCache';
-import {
-  EncodedOrder,
-  EncodedStrategy,
-  TokenPair,
-  TradingFeeUpdate,
-} from '../src/common/types';
+import { EncodedOrder, EncodedStrategy, TokenPair } from '../src/common/types';
 const encodedOrder1: EncodedOrder = {
   y: 1n,
   z: 2n,
@@ -24,6 +19,7 @@ const encodedStrategy1: EncodedStrategy = {
   id: 1n,
   token0: 'abc',
   token1: 'xyz',
+  owner: undefined,
   order0: encodedOrder1,
   order1: encodedOrder2,
 };
@@ -32,8 +28,18 @@ const encodedStrategy2: EncodedStrategy = {
   id: 2n,
   token0: 'xyz',
   token1: 'abc',
+  owner: undefined,
   order0: encodedOrder2,
   order1: encodedOrder1,
+};
+
+const encodedStrategy3: EncodedStrategy = {
+  id: 3n,
+  token0: 'foo',
+  token1: 'bar',
+  owner: undefined,
+  order0: encodedOrder1,
+  order1: encodedOrder2,
 };
 
 describe('ChainCache', () => {
@@ -77,6 +83,15 @@ describe('ChainCache', () => {
     it('strategy by id should match', async () => {
       expect(deserialized.getStrategyById('1')).to.deep.equal(encodedStrategy1);
     });
+    it('should preserve strategy owner when deserialized', async () => {
+      const cacheWithOwner = new ChainCache();
+      const strategyWithOwner = { ...encodedStrategy1, owner: '0xowner' };
+      cacheWithOwner.addPair('abc', 'xyz', [strategyWithOwner]);
+      cacheWithOwner.applyEvents([], 7);
+
+      const hydrated = ChainCache.fromSerialized(cacheWithOwner.serialize());
+      expect(hydrated.getStrategyById('1')?.owner).to.equal('0xowner');
+    });
     it('last block number should match', async () => {
       expect(deserialized.getLatestBlockNumber()).to.equal(7);
     });
@@ -106,6 +121,109 @@ describe('ChainCache', () => {
       // assert that the cache was created empty
       const emptyCache = ChainCache.fromSerialized(invalidSerialized);
       expect(emptyCache.getCachedPairs()).to.deep.equal([]);
+    });
+  });
+  describe('replaceFromSerialized', () => {
+    it('should update the cache in place from serialized data', async () => {
+      const cache = new ChainCache();
+      cache.bulkAddPairs([
+        { pair: ['abc', 'xyz'], strategies: [encodedStrategy1] },
+      ]);
+      cache.applyEvents([], 1);
+
+      const nextCache = new ChainCache();
+      const strategyWithOwner = { ...encodedStrategy2, owner: '0xowner' };
+      nextCache.addPair('abc', 'xyz', [strategyWithOwner]);
+      nextCache.applyEvents([], 2);
+
+      let affectedPairs: TokenPair[] = [];
+      cache.on('onPairDataChanged', (pairs) => {
+        affectedPairs = pairs;
+      });
+
+      expect(cache.replaceFromSerialized(nextCache.serialize())).to.be.true;
+      expect(cache.getLatestBlockNumber()).to.equal(2);
+      expect(cache.getStrategyById('2')).to.deep.equal(strategyWithOwner);
+      expect(affectedPairs).to.deep.equal([['abc', 'xyz']]);
+    });
+
+    it('should emit onPairAddedToCache only for newly added pairs', async () => {
+      const cache = new ChainCache();
+      cache.bulkAddPairs([
+        { pair: ['abc', 'xyz'], strategies: [encodedStrategy1] },
+      ]);
+      cache.applyEvents([], 1);
+
+      const nextCache = new ChainCache();
+      nextCache.bulkAddPairs([
+        { pair: ['abc', 'xyz'], strategies: [encodedStrategy1] },
+        { pair: ['foo', 'bar'], strategies: [encodedStrategy3] },
+      ]);
+      nextCache.applyEvents([], 2);
+
+      const addedPairs: TokenPair[] = [];
+      cache.on('onPairAddedToCache', (pair) => {
+        addedPairs.push(pair);
+      });
+
+      expect(cache.replaceFromSerialized(nextCache.serialize())).to.be.true;
+      expect(addedPairs).to.deep.equal([['bar', 'foo']]);
+    });
+
+    it('should emit onPairDataChanged only for pairs whose strategies changed', async () => {
+      const cache = new ChainCache();
+      cache.bulkAddPairs([
+        { pair: ['abc', 'xyz'], strategies: [encodedStrategy1] },
+        { pair: ['foo', 'bar'], strategies: [encodedStrategy3] },
+      ]);
+      cache.applyEvents([], 1);
+
+      const nextCache = new ChainCache();
+      nextCache.bulkAddPairs([
+        {
+          pair: ['abc', 'xyz'],
+          strategies: [
+            {
+              ...encodedStrategy1,
+              owner: '0xowner',
+            },
+          ],
+        },
+        { pair: ['foo', 'bar'], strategies: [encodedStrategy3] },
+      ]);
+      nextCache.applyEvents([], 2);
+
+      let affectedPairs: TokenPair[] = [];
+      cache.on('onPairDataChanged', (pairs) => {
+        affectedPairs = pairs;
+      });
+
+      expect(cache.replaceFromSerialized(nextCache.serialize())).to.be.true;
+      expect(affectedPairs).to.deep.equal([['abc', 'xyz']]);
+    });
+
+    it('should not emit onPairDataChanged when only fees change', async () => {
+      const cache = new ChainCache();
+      cache.bulkAddPairs([
+        { pair: ['abc', 'xyz'], strategies: [encodedStrategy1] },
+      ]);
+      cache.addPairFees('abc', 'xyz', 10);
+      cache.applyEvents([], 1);
+
+      const nextCache = new ChainCache();
+      nextCache.bulkAddPairs([
+        { pair: ['abc', 'xyz'], strategies: [encodedStrategy1] },
+      ]);
+      nextCache.addPairFees('abc', 'xyz', 11);
+      nextCache.applyEvents([], 2);
+
+      let eventCount = 0;
+      cache.on('onPairDataChanged', () => {
+        eventCount += 1;
+      });
+
+      expect(cache.replaceFromSerialized(nextCache.serialize())).to.be.true;
+      expect(eventCount).to.equal(0);
     });
   });
   describe('onChange', () => {

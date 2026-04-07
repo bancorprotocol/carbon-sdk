@@ -1,4 +1,4 @@
-import { TokenPair } from '../common/types';
+import { EncodedStrategyBNStr, Fetcher, TokenPair } from '../common/types';
 
 export type EventMap = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -10,6 +10,52 @@ export type CacheEvents = {
   onPairAddedToCache: (addedPair: TokenPair) => void;
   onCacheInitialized: () => void;
   onCacheCleared: () => void;
+};
+
+export type SerializedChainCache = {
+  schemeVersion: number;
+  strategiesByPair: { [key: string]: EncodedStrategyBNStr[] };
+  tradingFeePPMByPair: { [key: string]: number };
+  latestBlockNumber: number;
+};
+
+export type CacheSyncApi = string | (() => Promise<string | SerializedChainCache>);
+
+export type ChainSyncChainConfig = {
+  mode: 'chain';
+  fetcher: Fetcher;
+  numOfPairsToBatch?: number;
+  msToWaitBetweenSyncs?: number;
+  chunkSize?: number;
+};
+
+export type ChainSyncPollingConfig = {
+  mode: 'polling';
+  cacheSyncApi: CacheSyncApi;
+  pollingIntervalMs?: number;
+};
+
+export type ChainSyncConfig = ChainSyncChainConfig | ChainSyncPollingConfig;
+
+export type InitSyncedCacheChainConfig = ChainSyncChainConfig & {
+  cachedData?: string;
+};
+
+export type InitSyncedCachePollingConfig = ChainSyncPollingConfig & {
+  cachedData?: string;
+};
+
+export type InitSyncedCacheConfig =
+  | InitSyncedCacheChainConfig
+  | InitSyncedCachePollingConfig;
+
+export type LegacyInitSyncedCacheOptions = {
+  cachedData?: string;
+  numOfPairsToBatch?: number;
+  msToWaitBetweenSyncs?: number;
+  chunkSize?: number;
+  cacheSyncApi?: CacheSyncApi;
+  pollingIntervalMs?: number;
 };
 
 export interface TypedEventEmitter<Events extends EventMap> {

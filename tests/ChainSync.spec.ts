@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import sinon from 'sinon';
 import { ChainSync } from '../src/chain-cache/ChainSync';
 import { ChainCache } from '../src/chain-cache/ChainCache';
+import { initSyncedCache } from '../src/chain-cache';
 import { EncodedStrategy, Fetcher, TokenPair } from '../src/common/types';
 
 describe('ChainSync', () => {
@@ -13,6 +14,7 @@ describe('ChainSync', () => {
     id: 1n,
     token0: '0x123',
     token1: '0x456',
+    owner: undefined,
     order0: {
       y: 100n,
       z: 200n,
@@ -25,6 +27,20 @@ describe('ChainSync', () => {
       A: 700n,
       B: 800n,
     },
+  };
+
+  const buildSerializedCache = (
+    owner: string,
+    blockNumber: number,
+    strategyId: bigint = 1n
+  ) => {
+    const cache = new ChainCache();
+    cache.addPair(mockEncodedStrategy.token0, mockEncodedStrategy.token1, [
+      { ...mockEncodedStrategy, id: strategyId, owner },
+    ]);
+    cache.addPairFees(mockEncodedStrategy.token0, mockEncodedStrategy.token1, 7);
+    cache.applyEvents([], blockNumber);
+    return cache.serialize();
   };
 
   beforeEach(() => {
@@ -66,7 +82,10 @@ describe('ChainSync', () => {
       }),
       pairsTradingFeePPM: sinon.stub().resolves([]),
     };
-    chainSync = new ChainSync(mockFetcher, chainCache);
+    chainSync = new ChainSync(chainCache, {
+      mode: 'chain',
+      fetcher: mockFetcher,
+    });
   });
 
   afterEach(() => {
@@ -301,6 +320,86 @@ describe('ChainSync', () => {
         mockEncodedStrategy.token1
       );
       expect(strategies).to.have.length(2);
+    });
+  });
+
+  describe('API polling mode', () => {
+    it('should hydrate the cache from the polling API without reading from the chain', async () => {
+      const fetcherSpies = {
+        getBlockNumber: sinon.stub().resolves(999),
+        getEvents: sinon.stub().resolves([]),
+        pairs: sinon.stub().resolves([]),
+        strategiesByPair: sinon.stub().resolves([]),
+        strategiesByPairs: sinon.stub().resolves([]),
+        pairTradingFeePPM: sinon.stub().resolves(0),
+        tradingFeePPM: sinon.stub().resolves(0),
+        onTradingFeePPMUpdated: sinon.stub(),
+        getBlock: sinon.stub().resolves({ number: 0, hash: '0x0' }),
+        pairsTradingFeePPM: sinon.stub().resolves([]),
+      };
+      chainSync = new ChainSync(chainCache, {
+        mode: 'polling',
+        cacheSyncApi: async () => buildSerializedCache('0xowner', 12),
+        pollingIntervalMs: 1000,
+      });
+
+      await chainSync.startDataSync();
+
+      expect(fetcherSpies.getBlockNumber.called).to.be.false;
+      expect(fetcherSpies.pairs.called).to.be.false;
+      expect(await chainCache.getStrategiesByPair('0x123', '0x456')).to.deep
+        .equal([{ ...mockEncodedStrategy, owner: '0xowner' }]);
+      expect(chainCache.getStrategyById(1n)?.owner).to.equal('0xowner');
+    });
+
+    it('should keep polling and refresh the cache snapshot', async () => {
+      const clock = sinon.useFakeTimers();
+      let pollCount = 0;
+      chainSync = new ChainSync(chainCache, {
+        mode: 'polling',
+        cacheSyncApi: async () => {
+          pollCount += 1;
+          return buildSerializedCache(
+            pollCount === 1 ? '0xowner1' : '0xowner2',
+            10 + pollCount
+          );
+        },
+        pollingIntervalMs: 50,
+      });
+
+      let onPairDataChangedCalls = 0;
+      chainCache.on('onPairDataChanged', () => {
+        onPairDataChangedCalls += 1;
+      });
+
+      await chainSync.startDataSync();
+      expect(chainCache.getStrategyById(1n)?.owner).to.equal('0xowner1');
+      expect(onPairDataChangedCalls).to.equal(1);
+
+      await clock.tickAsync(50);
+
+      expect(chainCache.getStrategyById(1n)?.owner).to.equal('0xowner2');
+      expect(onPairDataChangedCalls).to.equal(2);
+      clock.restore();
+    });
+
+    it('should not configure blockchain cache misses when initialized in polling mode', async () => {
+      const missFetcher = {
+        ...mockFetcher,
+        strategiesByPair: sinon.stub().rejects(new Error('should not be called')),
+      };
+      const { cache, startDataSync } = initSyncedCache({
+        mode: 'polling',
+        cacheSyncApi: async () => buildSerializedCache('0xowner', 15),
+        pollingIntervalMs: 1000,
+      });
+
+      expect(await cache.getStrategiesByPair('0x123', '0x456')).to.be.undefined;
+
+      await startDataSync();
+
+      expect(missFetcher.strategiesByPair.called).to.be.false;
+      expect(cache.getStrategyById(1n)?.owner).to.equal('0xowner');
     });
   });
 });

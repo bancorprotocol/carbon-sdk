@@ -765,6 +765,7 @@ describe('encoders', () => {
         id: '0',
         baseToken: '0x6b175474e89094c44da98b954eedeac495271d0f',
         quoteToken: '0x57ab1e02fee23774580c119740129eac7081e9d3',
+        owner: undefined,
         buyPriceLow: '1.5',
         buyPriceMarginal: '2',
         buyPriceHigh: '2',
@@ -808,6 +809,7 @@ describe('encoders', () => {
       expect(Strategy.id.toString()).to.equal(expectedStrategy.id);
       expect(Strategy.baseToken).to.equal(expectedStrategy.baseToken);
       expect(Strategy.quoteToken).to.equal(expectedStrategy.quoteToken);
+      expect(Strategy.owner).to.equal(expectedStrategy.owner);
       expect(Strategy.buyPriceLow).to.equal(expectedStrategy.buyPriceLow);
       expect(Strategy.buyPriceMarginal).to.equal(
         expectedStrategy.buyPriceMarginal

@@ -1,5 +1,9 @@
 import EventEmitter from 'events';
-import { CacheEvents, TypedEventEmitter } from './types';
+import {
+  CacheEvents,
+  SerializedChainCache,
+  TypedEventEmitter,
+} from './types';
 import {
   fromPairKey,
   toDirectionKey,
@@ -31,13 +35,6 @@ type PairToStrategiesMap = { [key: string]: EncodedStrategy[] };
 type StrategyById = { [key: string]: EncodedStrategy };
 type PairToDirectedOrdersMap = { [key: string]: OrdersMap };
 
-type SerializableDump = {
-  schemeVersion: number;
-  strategiesByPair: RetypeBigIntToString<PairToStrategiesMap>;
-  tradingFeePPMByPair: { [key: string]: number };
-  latestBlockNumber: number;
-};
-
 export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<CacheEvents>) {
   //#region private members
   private _strategiesByPair: PairToStrategiesMap = {};
@@ -64,8 +61,64 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     return new ChainCache();
   }
 
-  private _deserialize(serializedCache: string): void {
-    const parsedCache = JSON.parse(serializedCache) as SerializableDump;
+  public replaceFromSerialized(serializedCache: string): boolean {
+    try {
+      const nextCache = new ChainCache();
+      if (!nextCache._deserialize(serializedCache)) {
+        return false;
+      }
+
+      const wasInitialized = this._isCacheInitialized;
+      const currentPairKeys = new Set(Object.keys(this._strategiesByPair));
+      const nextPairKeys = new Set(Object.keys(nextCache._strategiesByPair));
+      const addedPairKeys = [...nextPairKeys].filter(
+        (pairKey) => !currentPairKeys.has(pairKey)
+      );
+      const changedPairKeys = [...new Set([
+        ...currentPairKeys,
+        ...nextPairKeys,
+      ])].filter((pairKey) =>
+        this._didPairStrategiesChange(
+          this._strategiesByPair[pairKey] ?? [],
+          nextCache._strategiesByPair[pairKey] ?? []
+        )
+      );
+
+      this._strategiesByPair = nextCache._strategiesByPair;
+      this._strategiesById = nextCache._strategiesById;
+      this._ordersByDirectedPair = nextCache._ordersByDirectedPair;
+      this._latestBlockNumber = nextCache._latestBlockNumber;
+      this._blocksMetadata = nextCache._blocksMetadata;
+      this._tradingFeePPMByPair = nextCache._tradingFeePPMByPair;
+      this._isCacheInitialized = nextCache._isCacheInitialized;
+
+      if (!wasInitialized && this._isCacheInitialized) {
+        logger.debug('Emitting onCacheInitialized');
+        this.emit('onCacheInitialized');
+      }
+
+      for (const pairKey of addedPairKeys) {
+        logger.debug('Emitting onPairAddedToCache after serialized refresh');
+        this.emit('onPairAddedToCache', fromPairKey(pairKey));
+      }
+
+      if (changedPairKeys.length > 0) {
+        logger.debug('Emitting onPairDataChanged after serialized refresh');
+        this.emit(
+          'onPairDataChanged',
+          changedPairKeys.map(fromPairKey)
+        );
+      }
+
+      return true;
+    } catch (e) {
+      logger.error('Failed to replace cache from serialized data', e);
+      return false;
+    }
+  }
+
+  private _deserialize(serializedCache: string): boolean {
+    const parsedCache = JSON.parse(serializedCache) as SerializedChainCache;
     const { schemeVersion: version } = parsedCache;
     if (version !== schemeVersion) {
       logger.log(
@@ -75,7 +128,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
         version,
         'This may be due to a breaking change in the cache format since it was last persisted.'
       );
-      return;
+      return false;
     }
 
     // if, due to a bug, the cached latest block number isn't a number, print an error and return
@@ -83,7 +136,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
       logger.error(
         'Cached latest block number is not a number, ignoring cache'
       );
-      return;
+      return false;
     }
 
     // iterate over the pairs and their strategies and populate this._strategiesByPair, this._strategiesById and this._ordersByDirectedPair
@@ -98,10 +151,11 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     this._latestBlockNumber = parsedCache.latestBlockNumber;
     this._isCacheInitialized = true;
     logger.debug('Cache initialized from serialized data');
+    return true;
   }
 
   public serialize(): string {
-    const dump: SerializableDump = {
+    const dump: SerializedChainCache = {
       schemeVersion,
       strategiesByPair: Object.entries(this._strategiesByPair).reduce(
         (acc, [key, strategies]) => {
@@ -410,6 +464,40 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
 
   private _setLatestBlockNumber(blockNumber: number): void {
     this._latestBlockNumber = blockNumber;
+  }
+
+  private _didPairStrategiesChange(
+    currentStrategies: EncodedStrategy[],
+    nextStrategies: EncodedStrategy[]
+  ): boolean {
+    if (currentStrategies.length !== nextStrategies.length) {
+      return true;
+    }
+
+    const currentById = new Map(
+      currentStrategies.map((strategy) => [
+        strategy.id.toString(),
+        JSON.stringify(encodedStrategyBigIntToStr(strategy)),
+      ])
+    );
+    const nextById = new Map(
+      nextStrategies.map((strategy) => [
+        strategy.id.toString(),
+        JSON.stringify(encodedStrategyBigIntToStr(strategy)),
+      ])
+    );
+
+    if (currentById.size !== nextById.size) {
+      return true;
+    }
+
+    for (const [id, currentStrategy] of currentById.entries()) {
+      if (nextById.get(id) !== currentStrategy) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private _addStrategyOrders(strategy: EncodedStrategy): void {

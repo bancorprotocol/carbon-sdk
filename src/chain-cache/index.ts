@@ -1,6 +1,11 @@
 import { Fetcher } from '../common/types';
 import { ChainCache } from './ChainCache';
 import { ChainSync } from './ChainSync';
+import {
+  CacheSyncApi,
+  InitSyncedCacheConfig,
+  LegacyInitSyncedCacheOptions,
+} from './types';
 
 export { ChainCache, ChainSync };
 export * from './types';
@@ -9,40 +14,97 @@ export * from './types';
  * Initializes a cache and a syncer for the cache - this default initialization logic
  * can be used in most cases. If you need to customize the initialization logic, you can
  * use the ChainCache and ChainSync classes directly.
- * @param {Fetcher} fetcher - fetcher to use for syncing the cache
- * @param {string} cachedData - serialized cache data to initialize the cache with
- * @param {number} numOfPairsToBatch - number of pairs to fetch in a single batch - adapt this value based on the RPC limits and testing
- * @param {number} msToWaitBetweenSyncs - number of milliseconds to wait between syncs
- * @param {number} chunkSize - number of blocks to fetch in a single chunk
+ * @param {InitSyncedCacheConfig} config - config describing either chain sync or polling sync
  * @returns an object with the initialized cache and a function to start syncing the cache
  * @example
- * const { cache, startDataSync } = initSyncedCache(fetcher, cachedData);
+ * const { cache, startDataSync } = initSyncedCache({
+ *   mode: 'chain',
+ *   fetcher,
+ *   cachedData,
+ * });
+ * const { cache, startDataSync } = initSyncedCache({
+ *   mode: 'polling',
+ *   cachedData,
+ *   cacheSyncApi: 'https://example.com/cache',
+ *   pollingIntervalMs: 5_000,
+ * });
  * await startDataSync();
  * // cache is now synced
  */
-export const initSyncedCache = (
+export function initSyncedCache(
+  config: InitSyncedCacheConfig
+): { cache: ChainCache; startDataSync: () => Promise<void> };
+export function initSyncedCache(
   fetcher: Fetcher,
   cachedData?: string,
   numOfPairsToBatch?: number,
   msToWaitBetweenSyncs?: number,
-  chunkSize?: number
-): { cache: ChainCache; startDataSync: () => Promise<void> } => {
+  chunkSize?: number,
+  cacheSyncApi?: CacheSyncApi,
+  pollingIntervalMs?: number
+): { cache: ChainCache; startDataSync: () => Promise<void> };
+export function initSyncedCache(
+  fetcherOrConfig: Fetcher | InitSyncedCacheConfig,
+  cachedDataOrOptions?: string | LegacyInitSyncedCacheOptions,
+  numOfPairsToBatch?: number,
+  msToWaitBetweenSyncs?: number,
+  chunkSize?: number,
+  cacheSyncApi?: CacheSyncApi,
+  pollingIntervalMs?: number
+): { cache: ChainCache; startDataSync: () => Promise<void> } {
+  const config =
+    typeof fetcherOrConfig === 'object' && 'mode' in fetcherOrConfig
+      ? fetcherOrConfig
+      : cacheSyncApi
+      ? {
+          mode: 'polling' as const,
+          cachedData:
+            typeof cachedDataOrOptions === 'string'
+              ? cachedDataOrOptions
+              : cachedDataOrOptions?.cachedData,
+          cacheSyncApi,
+          pollingIntervalMs:
+            pollingIntervalMs ??
+            (typeof cachedDataOrOptions === 'object'
+              ? cachedDataOrOptions.pollingIntervalMs
+              : undefined),
+        }
+      : {
+          mode: 'chain' as const,
+          fetcher: fetcherOrConfig as Fetcher,
+          cachedData:
+            typeof cachedDataOrOptions === 'string'
+              ? cachedDataOrOptions
+              : cachedDataOrOptions?.cachedData,
+          numOfPairsToBatch:
+            numOfPairsToBatch ??
+            (typeof cachedDataOrOptions === 'object'
+              ? cachedDataOrOptions.numOfPairsToBatch
+              : undefined),
+          msToWaitBetweenSyncs:
+            msToWaitBetweenSyncs ??
+            (typeof cachedDataOrOptions === 'object'
+              ? cachedDataOrOptions.msToWaitBetweenSyncs
+              : undefined),
+          chunkSize:
+            chunkSize ??
+            (typeof cachedDataOrOptions === 'object'
+              ? cachedDataOrOptions.chunkSize
+              : undefined),
+        };
+
   let cache: ChainCache | undefined;
-  if (cachedData) {
-    cache = ChainCache.fromSerialized(cachedData);
+  if (config.cachedData) {
+    cache = ChainCache.fromSerialized(config.cachedData);
   }
   // either serialized data was bad or it was not provided
   if (!cache) {
     cache = new ChainCache();
   }
 
-  const syncer = new ChainSync(
-    fetcher,
-    cache,
-    numOfPairsToBatch,
-    msToWaitBetweenSyncs,
-    chunkSize
-  );
-  cache.setCacheMissHandler(syncer.syncPairData.bind(syncer));
+  const syncer = new ChainSync(cache, config);
+  if (config.mode === 'chain') {
+    cache.setCacheMissHandler(syncer.syncPairData.bind(syncer));
+  }
   return { cache, startDataSync: syncer.startDataSync.bind(syncer) };
-};
+}

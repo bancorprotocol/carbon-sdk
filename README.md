@@ -42,7 +42,6 @@ let sdkCache: ChainCache;
 let carbonSDK: Toolkit;
 let isInitialized = false;
 let isInitializing = false;
-const MAX_BLOCK_AGE = 2000; // past this many blocks, the SDK won't attempt to catch up by processing events and instead call the contracts for strategy info.
 
 const init = async (
   rpcUrl: string,
@@ -57,7 +56,12 @@ const init = async (
     1
   );
   api = new ContractsApi(provider, config);
-  const { cache, startDataSync } = initSyncedCache(api.reader, cachedData, MAX_BLOCK_AGE);
+  const { cache, startDataSync } = initSyncedCache({
+    mode: 'polling',
+    cachedData,
+    cacheSyncApi: 'https://example.com/carbon-cache',
+    pollingIntervalMs: 5_000,
+  });
   sdkCache = cache;
   carbonSDK = new Toolkit(
     api,
@@ -77,6 +81,8 @@ const init = async (
   isInitializing = false;
 };
 ```
+
+If `cacheSyncApi` is provided, the SDK polls that endpoint instead of reading cache data from the blockchain. The endpoint should return the same JSON schema produced by `ChainCache.serialize()`.
 
 ## Notes
 
