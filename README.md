@@ -84,6 +84,32 @@ const init = async (
 
 If `cacheSyncApi` is provided, the SDK polls that endpoint instead of reading cache data from the blockchain. The endpoint should return the same JSON schema produced by `ChainCache.serialize()`.
 
+## Testing
+
+The default unit-test lane remains deterministic and does not hit live backends:
+
+```bash
+yarn test
+```
+
+Live backend coverage is opt-in and uses environment variables instead of hardcoded infrastructure:
+
+- `CARBON_SDK_TEST_POLLING_API_URL` for polling-mode tests against a real cache server
+- `CARBON_SDK_TEST_TENDERLY_RPC_URL` for RPC-mode tests against a Tenderly virtual testnet that forks Ethereum mainnet
+
+The live test scripts automatically read `.env.test`. A sample file is included at [`.env.test.sample`](/Users/zavelevsky/devel/carbon-sdk/.env.test.sample).
+
+Run the live suites with:
+
+```bash
+cp .env.test.sample .env.test
+yarn test:integration:polling
+yarn test:integration:rpc
+yarn test:integration
+```
+
+Shell environment variables still take precedence over `.env.test`. If either variable is still missing, its corresponding live suite is skipped.
+
 ## Notes
 
 ### 1. The SDK Logger supports 3 verbosity levels:

@@ -71,6 +71,9 @@
     "prebuild": "yarn clean && yarn compile-abis",
     "build": "yarn lint && rollup -c",
     "test": "yarn lint && mocha",
+    "test:integration": "mocha --config .mocharc.integration.json \"tests/integration/*.live.spec.ts\"",
+    "test:integration:polling": "mocha --config .mocharc.integration.json \"tests/integration/polling.live.spec.ts\"",
+    "test:integration:rpc": "mocha --config .mocharc.integration.json \"tests/integration/rpc.live.spec.ts\"",
     "lint": "eslint src --ext .ts"
   },
   "publishConfig": {
