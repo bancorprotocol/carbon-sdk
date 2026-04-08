@@ -3,7 +3,7 @@ import sinon from 'sinon';
 import { MarginalPriceOptions, Toolkit } from '../src/strategy-management';
 import { ChainCache } from '../src/chain-cache';
 import { EncodedStrategy, Strategy } from '../src/common/types';
-import { encodedStrategyBigIntToStr } from '../src/utils';
+import { encodedStrategyBigIntToStr, ordersMapBNToStr } from '../src/utils';
 
 const encodedStrategies: EncodedStrategy[] = [
   {
@@ -648,6 +648,82 @@ describe('Toolkit', () => {
       expect(cacheMock.getOrdersByPair.calledWith('sourceToken', 'targetToken'))
         .to.be.true;
       expect(liquidity).to.equal('0');
+    });
+  });
+
+  describe('getTradeDataStatic', () => {
+    it('should match instance getTradeData for source-amount trades', async () => {
+      cacheMock.getOrdersByPair.resolves(orderMap);
+      cacheMock.getTradingFeePPMByPair.resolves(0);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      const amount = '0.000000000000000001';
+
+      const instanceResult = await toolkit.getTradeData(
+        'sourceToken',
+        'targetToken',
+        amount,
+        false
+      );
+      const staticResult = Toolkit.getTradeDataStatic({
+        amount,
+        tradeByTargetAmount: false,
+        orders: ordersMapBNToStr(orderMap),
+        sourceDecimals: 18,
+        targetDecimals: 18,
+        tradingFeePPM: 0,
+      });
+
+      expect(staticResult).to.deep.equal(instanceResult);
+    });
+
+    it('should match instance getTradeData for target-amount trades', async () => {
+      cacheMock.getOrdersByPair.resolves(orderMap);
+      cacheMock.getTradingFeePPMByPair.resolves(100000);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      const amount = '0.000000000000000001';
+
+      const instanceResult = await toolkit.getTradeData(
+        'sourceToken',
+        'targetToken',
+        amount,
+        true
+      );
+      const staticResult = Toolkit.getTradeDataStatic({
+        amount,
+        tradeByTargetAmount: true,
+        orders: ordersMapBNToStr(orderMap),
+        sourceDecimals: 18,
+        targetDecimals: 18,
+        tradingFeePPM: 100000,
+      });
+
+      expect(staticResult.actionsWei).to.not.be.empty;
+      expect(staticResult).to.deep.equal(instanceResult);
+    });
+  });
+
+  describe('getTradeDataFromActions', () => {
+    it('should match getTradeDataStatic when using its matched actions', () => {
+      const tradeData = Toolkit.getTradeDataStatic({
+        amount: '0.000000000000000001',
+        tradeByTargetAmount: true,
+        orders: ordersMapBNToStr(orderMap),
+        sourceDecimals: 18,
+        targetDecimals: 18,
+        tradingFeePPM: 100000,
+      });
+
+      const fromActions = Toolkit.getTradeDataFromActions({
+        tradeByTargetAmount: true,
+        actionsWei: tradeData.actionsWei,
+        sourceDecimals: 18,
+        targetDecimals: 18,
+        tradingFeePPM: 100000,
+      });
+
+      expect(fromActions).to.deep.equal(tradeData);
     });
   });
 

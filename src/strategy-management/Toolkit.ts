@@ -89,6 +89,34 @@ export function isMarginalPriceValue(
   );
 }
 
+export type TradeData = {
+  tradeActions: TradeActionBNStr[];
+  actionsTokenRes: Action[];
+  totalSourceAmount: string;
+  totalTargetAmount: string;
+  effectiveRate: string;
+  actionsWei: MatchActionBNStr[];
+};
+
+export type StaticTradeDataParams = {
+  amount: string;
+  tradeByTargetAmount: boolean;
+  orders: OrdersMapBNStr;
+  sourceDecimals: number;
+  targetDecimals: number;
+  tradingFeePPM: number;
+  matchType?: MatchType;
+  filter?: Filter;
+};
+
+export type StaticTradeDataFromActionsParams = {
+  tradeByTargetAmount: boolean;
+  actionsWei: MatchActionBNStr[];
+  sourceDecimals: number;
+  targetDecimals: number;
+  tradingFeePPM: number;
+};
+
 export class Toolkit {
   private _api: ContractsApi;
   private _decimals: Decimals;
@@ -159,6 +187,180 @@ export class Toolkit {
       );
     }
     return result[matchType]?.map(matchActionBNToStr) ?? [];
+  }
+
+  /**
+   * Static variant of `getTradeDataFromActions` that performs no cache lookups or RPC calls.
+   * The caller must provide the matched actions, token decimals and trading fee.
+   */
+  public static getTradeDataFromActions({
+    tradeByTargetAmount,
+    actionsWei,
+    sourceDecimals,
+    targetDecimals,
+    tradingFeePPM,
+  }: StaticTradeDataFromActionsParams): TradeData {
+    const tradeActions: TradeActionBNStr[] = [];
+    const actionsTokenRes: Action[] = [];
+    let totalOutput = 0n;
+    let totalInput = 0n;
+
+    actionsWei.forEach((action) => {
+      tradeActions.push({
+        strategyId: action.id,
+        amount: action.input,
+      });
+      if (tradeByTargetAmount) {
+        actionsTokenRes.push({
+          id: action.id,
+          sourceAmount: formatUnits(
+            addFee(action.output, tradingFeePPM).floor().toFixed(0),
+            sourceDecimals
+          ),
+          targetAmount: formatUnits(action.input, targetDecimals),
+        });
+      } else {
+        actionsTokenRes.push({
+          id: action.id,
+          sourceAmount: formatUnits(action.input, sourceDecimals),
+          targetAmount: formatUnits(
+            subtractFee(action.output, tradingFeePPM).floor().toFixed(0),
+            targetDecimals
+          ),
+        });
+      }
+
+      totalInput = totalInput + BigInt(action.input);
+      totalOutput = totalOutput + BigInt(action.output);
+    });
+
+    let totalSourceAmount: string, totalTargetAmount: string;
+
+    if (tradeByTargetAmount) {
+      totalSourceAmount = addFee(totalOutput, tradingFeePPM)
+        .floor()
+        .toFixed(0);
+      totalTargetAmount = totalInput.toString();
+    } else {
+      totalSourceAmount = totalInput.toString();
+      totalTargetAmount = subtractFee(totalOutput, tradingFeePPM)
+        .floor()
+        .toFixed(0);
+    }
+
+    let res: TradeData;
+
+    if (
+      new Decimal(totalSourceAmount).isZero() ||
+      new Decimal(totalTargetAmount).isZero()
+    ) {
+      res = {
+        tradeActions,
+        actionsTokenRes,
+        totalSourceAmount: '0',
+        totalTargetAmount: '0',
+        effectiveRate: '0',
+        actionsWei,
+      };
+    } else {
+      const effectiveRate = new Decimal(totalTargetAmount)
+        .div(totalSourceAmount)
+        .times(tenPow(sourceDecimals, targetDecimals))
+        .toString();
+
+      res = {
+        tradeActions,
+        actionsTokenRes,
+        totalSourceAmount: formatUnits(totalSourceAmount, sourceDecimals),
+        totalTargetAmount: formatUnits(totalTargetAmount, targetDecimals),
+        effectiveRate,
+        actionsWei,
+      };
+    }
+
+    logger.debug('getTradeDataFromActions info:', {
+      sourceDecimals,
+      targetDecimals,
+      actionsWei,
+      totalInput,
+      totalOutput,
+      tradingFeePPM,
+      res,
+    });
+
+    return res;
+  }
+
+  /**
+   * Static variant of `getTradeData` that performs no cache lookups or RPC calls.
+   * The caller must provide the order book, token decimals and trading fee.
+   *
+   * To build the `orders` argument from a list of encoded strategies for a pair,
+   * follow the same directed-pair selection logic used by `ChainCache`:
+   * - For a trade from `sourceToken` to `targetToken`, create an entry per strategy
+   *   keyed by `strategy.id.toString()`.
+   * - If `sourceToken === strategy.token0` and `targetToken === strategy.token1`,
+   *   use `strategy.order1`.
+   * - If `sourceToken === strategy.token1` and `targetToken === strategy.token0`,
+   *   use `strategy.order0`.
+   *
+   * Example:
+   * ```ts
+   * const orders = Object.fromEntries(
+   *   strategies.map((strategy) => [
+   *     strategy.id.toString(),
+   *     sourceToken === strategy.token0 ? strategy.order1 : strategy.order0,
+   *   ])
+   * );
+   * ```
+   *
+   * This assumes `strategies` already belong to the same unordered pair
+   * `{sourceToken, targetToken}`.
+   */
+  public static getTradeDataStatic({
+    amount,
+    tradeByTargetAmount,
+    orders,
+    sourceDecimals,
+    targetDecimals,
+    tradingFeePPM,
+    matchType = MatchType.Fast,
+    filter,
+  }: StaticTradeDataParams): TradeData {
+    logger.debug('getTradeDataStatic called', arguments);
+
+    const amountWei = parseUnits(
+      amount,
+      tradeByTargetAmount ? targetDecimals : sourceDecimals
+    ).toString();
+
+    const actionsWei: MatchActionBNStr[] = Toolkit.getMatchActions(
+      amountWei,
+      tradeByTargetAmount,
+      orders,
+      matchType,
+      filter
+    );
+
+    const res = Toolkit.getTradeDataFromActions({
+      tradeByTargetAmount,
+      actionsWei,
+      sourceDecimals,
+      targetDecimals,
+      tradingFeePPM,
+    });
+
+    logger.debug('getTradeDataStatic info:', {
+      orders,
+      amount,
+      amountWei,
+      sourceDecimals,
+      targetDecimals,
+      tradingFeePPM,
+      res,
+    });
+
+    return res;
   }
 
   /**
@@ -554,62 +756,15 @@ export class Toolkit {
     tradeByTargetAmount: boolean,
     matchType: MatchType = MatchType.Fast,
     filter?: Filter
-  ): Promise<{
-    tradeActions: TradeActionBNStr[];
-    actionsTokenRes: Action[];
-    totalSourceAmount: string;
-    totalTargetAmount: string;
-    effectiveRate: string;
-    actionsWei: MatchActionBNStr[];
-  }> {
+  ): Promise<TradeData> {
     logger.debug('getTradeData called', arguments);
-    const { orders, amountWei } = await this.getMatchParams(
-      sourceToken,
-      targetToken,
-      amount,
-      tradeByTargetAmount
-    );
-
-    const actionsWei: MatchActionBNStr[] = Toolkit.getMatchActions(
-      amountWei,
-      tradeByTargetAmount,
-      orders,
-      matchType,
-      filter
-    );
-
-    const res = await this.getTradeDataFromActions(
-      sourceToken,
-      targetToken,
-      tradeByTargetAmount,
-      actionsWei
-    );
-
-    logger.debug('getTradeData info:', {
-      orders,
-      amount,
-      amountWei,
-      res,
-    });
-
-    return res;
-  }
-
-  public async getTradeDataFromActions(
-    sourceToken: string,
-    targetToken: string,
-    tradeByTargetAmount: boolean,
-    actionsWei: MatchActionBNStr[]
-  ): Promise<{
-    tradeActions: TradeActionBNStr[];
-    actionsTokenRes: Action[];
-    totalSourceAmount: string;
-    totalTargetAmount: string;
-    effectiveRate: string;
-    actionsWei: MatchActionBNStr[];
-  }> {
-    logger.debug('getTradeDataFromActions called', arguments);
-
+    const { orders, amountWei, sourceDecimals, targetDecimals } =
+      await this.getMatchParams(
+        sourceToken,
+        targetToken,
+        amount,
+        tradeByTargetAmount
+      );
     const feePPM = await this._cache.getTradingFeePPMByPair(
       sourceToken,
       targetToken
@@ -620,90 +775,21 @@ export class Toolkit {
         `tradingFeePPM is undefined for this pair: ${sourceToken}-${targetToken}`
       );
 
-    const decimals = this._decimals;
-    const sourceDecimals = await decimals.fetchDecimals(sourceToken);
-    const targetDecimals = await decimals.fetchDecimals(targetToken);
-    const tradeActions: TradeActionBNStr[] = [];
-    const actionsTokenRes: Action[] = [];
-    let totalOutput = 0n;
-    let totalInput = 0n;
-
-    actionsWei.forEach((action) => {
-      tradeActions.push({
-        strategyId: action.id,
-        amount: action.input,
-      });
-      if (tradeByTargetAmount) {
-        actionsTokenRes.push({
-          id: action.id,
-          sourceAmount: formatUnits(
-            addFee(action.output, feePPM).floor().toFixed(0),
-            sourceDecimals
-          ),
-          targetAmount: formatUnits(action.input, targetDecimals),
-        });
-      } else {
-        actionsTokenRes.push({
-          id: action.id,
-          sourceAmount: formatUnits(action.input, sourceDecimals),
-          targetAmount: formatUnits(
-            subtractFee(action.output, feePPM).floor().toFixed(0),
-            targetDecimals
-          ),
-        });
-      }
-
-      totalInput = totalInput + BigInt(action.input);
-      totalOutput = totalOutput + BigInt(action.output);
-    });
-
-    let totalSourceAmount: string, totalTargetAmount: string;
-
-    if (tradeByTargetAmount) {
-      totalSourceAmount = addFee(totalOutput, feePPM).floor().toFixed(0);
-      totalTargetAmount = totalInput.toString();
-    } else {
-      totalSourceAmount = totalInput.toString();
-      totalTargetAmount = subtractFee(totalOutput, feePPM).floor().toFixed(0);
-    }
-
-    let res;
-
-    if (
-      new Decimal(totalSourceAmount).isZero() ||
-      new Decimal(totalTargetAmount).isZero()
-    ) {
-      res = {
-        tradeActions,
-        actionsTokenRes,
-        totalSourceAmount: '0',
-        totalTargetAmount: '0',
-        effectiveRate: '0',
-        actionsWei,
-      };
-    } else {
-      const effectiveRate = new Decimal(totalTargetAmount)
-        .div(totalSourceAmount)
-        .times(tenPow(sourceDecimals, targetDecimals))
-        .toString();
-
-      res = {
-        tradeActions,
-        actionsTokenRes,
-        totalSourceAmount: formatUnits(totalSourceAmount, sourceDecimals),
-        totalTargetAmount: formatUnits(totalTargetAmount, targetDecimals),
-        effectiveRate,
-        actionsWei,
-      };
-    }
-
-    logger.debug('getTradeDataFromActions info:', {
+    const res = Toolkit.getTradeDataStatic({
+      amount,
+      tradeByTargetAmount,
+      orders,
       sourceDecimals,
       targetDecimals,
-      actionsWei,
-      totalInput,
-      totalOutput,
       tradingFeePPM: feePPM,
+      matchType,
+      filter,
+    });
+
+    logger.debug('getTradeData info:', {
+      orders,
+      amount,
+      amountWei,
       res,
     });
 
