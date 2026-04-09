@@ -191,9 +191,17 @@ export class Toolkit {
 
   /**
    * Static variant of `getTradeDataFromActions` that performs no cache lookups or RPC calls.
-   * The caller must provide the matched actions, token decimals and trading fee.
+   *
+   * The caller must provide:
+   * - `actionsWei`: matched actions in wei, typically from `Toolkit.getMatchActions`
+   *   or from a previous `getTradeDataStatic` result.
+   * - `sourceDecimals` / `targetDecimals`: decimals of the traded tokens.
+   * - `tradingFeePPM`: the pair trading fee in parts-per-million.
+   *
+   * The method applies the same fee adjustment and token-resolution formatting as
+   * the instance `getTradeDataFromActions`.
    */
-  public static getTradeDataFromActions({
+  public static getTradeDataFromActionsStatic({
     tradeByTargetAmount,
     actionsWei,
     sourceDecimals,
@@ -237,9 +245,7 @@ export class Toolkit {
     let totalSourceAmount: string, totalTargetAmount: string;
 
     if (tradeByTargetAmount) {
-      totalSourceAmount = addFee(totalOutput, tradingFeePPM)
-        .floor()
-        .toFixed(0);
+      totalSourceAmount = addFee(totalOutput, tradingFeePPM).floor().toFixed(0);
       totalTargetAmount = totalInput.toString();
     } else {
       totalSourceAmount = totalInput.toString();
@@ -278,7 +284,7 @@ export class Toolkit {
       };
     }
 
-    logger.debug('getTradeDataFromActions info:', {
+    logger.debug('getTradeDataFromActionsStatic info:', {
       sourceDecimals,
       targetDecimals,
       actionsWei,
@@ -342,7 +348,7 @@ export class Toolkit {
       filter
     );
 
-    const res = Toolkit.getTradeDataFromActions({
+    const res = Toolkit.getTradeDataFromActionsStatic({
       tradeByTargetAmount,
       actionsWei,
       sourceDecimals,
@@ -790,6 +796,50 @@ export class Toolkit {
       orders,
       amount,
       amountWei,
+      res,
+    });
+
+    return res;
+  }
+
+  public async getTradeDataFromActions(
+    sourceToken: string,
+    targetToken: string,
+    tradeByTargetAmount: boolean,
+    actionsWei: MatchActionBNStr[]
+  ): Promise<TradeData> {
+    logger.debug('getTradeDataFromActions called', arguments);
+
+    const feePPM = await this._cache.getTradingFeePPMByPair(
+      sourceToken,
+      targetToken
+    );
+
+    if (feePPM === undefined)
+      throw new Error(
+        `tradingFeePPM is undefined for this pair: ${sourceToken}-${targetToken}`
+      );
+
+    const decimals = this._decimals;
+    const sourceDecimals = await decimals.fetchDecimals(sourceToken);
+    const targetDecimals = await decimals.fetchDecimals(targetToken);
+
+    const res = Toolkit.getTradeDataFromActionsStatic({
+      tradeByTargetAmount,
+      actionsWei,
+      sourceDecimals,
+      targetDecimals,
+      tradingFeePPM: feePPM,
+    });
+
+    logger.debug('getTradeDataFromActions info:', {
+      sourceToken,
+      targetToken,
+      tradeByTargetAmount,
+      actionsWei,
+      sourceDecimals,
+      targetDecimals,
+      tradingFeePPM: feePPM,
       res,
     });
 

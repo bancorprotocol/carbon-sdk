@@ -705,7 +705,7 @@ describe('Toolkit', () => {
   });
 
   describe('getTradeDataFromActions', () => {
-    it('should match getTradeDataStatic when using its matched actions', () => {
+    it('should match getTradeDataStatic when using static matched actions', () => {
       const tradeData = Toolkit.getTradeDataStatic({
         amount: '0.000000000000000001',
         tradeByTargetAmount: true,
@@ -715,13 +715,36 @@ describe('Toolkit', () => {
         tradingFeePPM: 100000,
       });
 
-      const fromActions = Toolkit.getTradeDataFromActions({
+      const fromActions = Toolkit.getTradeDataFromActionsStatic({
         tradeByTargetAmount: true,
         actionsWei: tradeData.actionsWei,
         sourceDecimals: 18,
         targetDecimals: 18,
         tradingFeePPM: 100000,
       });
+
+      expect(fromActions).to.deep.equal(tradeData);
+    });
+
+    it('should preserve the instance getTradeDataFromActions API', async () => {
+      cacheMock.getTradingFeePPMByPair.resolves(100000);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      const tradeData = Toolkit.getTradeDataStatic({
+        amount: '0.000000000000000001',
+        tradeByTargetAmount: true,
+        orders: ordersMapBNToStr(orderMap),
+        sourceDecimals: 18,
+        targetDecimals: 18,
+        tradingFeePPM: 100000,
+      });
+
+      const fromActions = await toolkit.getTradeDataFromActions(
+        'sourceToken',
+        'targetToken',
+        true,
+        tradeData.actionsWei
+      );
 
       expect(fromActions).to.deep.equal(tradeData);
     });
