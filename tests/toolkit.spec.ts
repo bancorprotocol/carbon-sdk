@@ -703,7 +703,7 @@ describe('Toolkit', () => {
       expect(staticResult).to.deep.equal(instanceResult);
     });
 
-    it('should derive directed tradable orders from strategies', () => {
+    it('should derive directed tradable orders from strategies', async () => {
       const strategies: EncodedStrategy[] = [
         {
           id: 10n,
@@ -758,6 +758,14 @@ describe('Toolkit', () => {
         },
       ];
 
+      cacheMock.getOrdersByPair.resolves({
+        '11': strategies[1].order1,
+        '12': strategies[2].order0,
+      });
+      cacheMock.getTradingFeePPMByPair.resolves(0);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, () => 0);
+
       const withStrategies = Toolkit.getTradeDataStatic({
         amount: '2',
         tradeByTargetAmount: true,
@@ -780,9 +788,16 @@ describe('Toolkit', () => {
         targetDecimals: 0,
         tradingFeePPM: 0,
       });
+      const instanceResult = await toolkit.getTradeData(
+        'sourceToken',
+        'targetToken',
+        '2',
+        true
+      );
 
       expect(withStrategies.actionsWei).to.not.be.empty;
       expect(withStrategies).to.deep.equal(withOrders);
+      expect(withStrategies).to.deep.equal(instanceResult);
     });
   });
 
