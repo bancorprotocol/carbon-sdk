@@ -725,6 +725,24 @@ describe('Toolkit', () => {
         .to.be.true;
       expect(liquidity).to.equal('0');
     });
+
+    it('should match the static strategies-based companion', async () => {
+      cacheMock.getOrdersByPair.resolves(directedOrdersFixture);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, () => 0);
+      const liquidity = await toolkit.getLiquidityByPair(
+        'sourceToken',
+        'targetToken'
+      );
+      const staticLiquidity = Toolkit.getLiquidityByPairStatic({
+        sourceToken: 'sourceToken',
+        targetToken: 'targetToken',
+        strategies: directedStrategiesFixture.map(encodedStrategyBigIntToStr),
+        targetDecimals: 0,
+      });
+
+      expect(staticLiquidity).to.equal(liquidity);
+    });
   });
 
   describe('getTradeDataStatic', () => {
@@ -867,6 +885,24 @@ describe('Toolkit', () => {
   });
 
   describe('pair statics', () => {
+    it('should match static getMaxSourceAmountByPair with the instance method', async () => {
+      cacheMock.getOrdersByPair.resolves(directedOrdersFixture);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, () => 0);
+      const instanceResult = await toolkit.getMaxSourceAmountByPair(
+        'sourceToken',
+        'targetToken'
+      );
+      const staticResult = Toolkit.getMaxSourceAmountByPairStatic({
+        sourceToken: 'sourceToken',
+        targetToken: 'targetToken',
+        strategies: directedStrategiesFixture.map(encodedStrategyBigIntToStr),
+        sourceDecimals: 0,
+      });
+
+      expect(staticResult).to.equal(instanceResult);
+    });
+
     it('should match static getMinRateByPair with the instance method', async () => {
       cacheMock.getOrdersByPair.resolves(directedOrdersFixture);
 

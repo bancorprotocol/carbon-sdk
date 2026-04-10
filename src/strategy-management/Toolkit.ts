@@ -138,6 +138,14 @@ export type StaticRateLiquidityDepthsByPairParams = StaticPairRatesParams & {
   rates: string[];
 };
 
+export type StaticLiquidityByPairParams = StaticDirectedOrdersParams & {
+  targetDecimals: number;
+};
+
+export type StaticMaxSourceAmountByPairParams = StaticDirectedOrdersParams & {
+  sourceDecimals: number;
+};
+
 export type StaticTradeDataFromActionsParams = {
   tradeByTargetAmount: boolean;
   actionsWei: MatchActionBNStr[];
@@ -385,6 +393,38 @@ export class Toolkit {
   }
 
   /**
+   * Static variant of `getLiquidityByPair` that performs no cache lookups or RPC calls.
+   * Accepts either an `orders` map or `sourceToken`/`targetToken` plus `strategies`.
+   */
+  public static getLiquidityByPairStatic({
+    targetDecimals,
+    ...params
+  }: StaticLiquidityByPairParams): string {
+    const orders = ordersMapStrToBN(Toolkit.resolveTradeOrders(params));
+    const liquidityWei = Object.values(orders).reduce(
+      (acc, { y }) => acc + y,
+      0n
+    );
+    return formatUnits(liquidityWei, targetDecimals);
+  }
+
+  /**
+   * Static variant of `getMaxSourceAmountByPair` that performs no cache lookups or RPC calls.
+   * Accepts either an `orders` map or `sourceToken`/`targetToken` plus `strategies`.
+   */
+  public static getMaxSourceAmountByPairStatic({
+    sourceDecimals,
+    ...params
+  }: StaticMaxSourceAmountByPairParams): string {
+    const orders = ordersMapStrToBN(Toolkit.resolveTradeOrders(params));
+    const maxSourceAmountWei = Object.values(orders).reduce(
+      (acc, order) => acc + getEncodedTradeSourceAmount(order.y, order),
+      0n
+    );
+    return formatUnits(maxSourceAmountWei, sourceDecimals);
+  }
+
+  /**
    * Static variant of `getMinRateByPair` that performs no cache lookups or RPC calls.
    * Accepts either an `orders` map or `sourceToken`/`targetToken` plus `strategies`.
    */
@@ -561,16 +601,13 @@ export class Toolkit {
     logger.debug('getLiquidityByPair called', arguments);
 
     const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
-    const liquidityWei = Object.values(orders).reduce(
-      (acc, { y }) => acc + y,
-      0n
-    );
     const decimals = await this._decimals.fetchDecimals(targetToken);
-
-    const liquidity = formatUnits(liquidityWei, decimals);
+    const liquidity = Toolkit.getLiquidityByPairStatic({
+      orders: ordersMapBNToStr(orders),
+      targetDecimals: decimals,
+    });
     logger.debug('getLiquidityByPair info:', {
       orders,
-      liquidityWei,
       targetToken,
       decimals,
       liquidity,
@@ -596,16 +633,13 @@ export class Toolkit {
     logger.debug('getMaxSourceAmountByPair called', arguments);
 
     const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
-    const maxSourceAmountWei = Object.values(orders).reduce(
-      (acc, order) => acc + getEncodedTradeSourceAmount(order.y, order),
-      0n
-    );
     const decimals = await this._decimals.fetchDecimals(sourceToken);
-
-    const maxSourceAmount = formatUnits(maxSourceAmountWei, decimals);
+    const maxSourceAmount = Toolkit.getMaxSourceAmountByPairStatic({
+      orders: ordersMapBNToStr(orders),
+      sourceDecimals: decimals,
+    });
     logger.debug('getMaxSourceAmountByPair info:', {
       orders,
-      maxSourceAmountWei,
       sourceToken,
       decimals,
       maxSourceAmount,
