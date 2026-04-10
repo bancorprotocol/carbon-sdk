@@ -13,7 +13,6 @@ import {
 import { ChainCache } from '../chain-cache';
 import { ContractsApi } from '../contracts-api';
 import {
-  DecodedOrder,
   DecodedStrategy,
   EncodedStrategy,
   OrdersMap,
@@ -119,6 +118,25 @@ export type StaticTradeDataParams =
       targetToken: string;
       strategies: EncodedStrategyBNStr[];
     });
+
+type StaticDirectedOrdersParams =
+  | {
+      orders: OrdersMapBNStr;
+    }
+  | {
+      sourceToken: string;
+      targetToken: string;
+      strategies: EncodedStrategyBNStr[];
+    };
+
+export type StaticPairRatesParams = StaticDirectedOrdersParams & {
+  sourceDecimals: number;
+  targetDecimals: number;
+};
+
+export type StaticRateLiquidityDepthsByPairParams = StaticPairRatesParams & {
+  rates: string[];
+};
 
 export type StaticTradeDataFromActionsParams = {
   tradeByTargetAmount: boolean;
@@ -343,6 +361,84 @@ export class Toolkit {
     return ordersMapBNToStr(orders);
   }
 
+  private static resolveTradeOrders(
+    params: StaticDirectedOrdersParams
+  ): OrdersMapBNStr {
+    return 'orders' in params
+      ? params.orders
+      : Toolkit.getTradeOrdersFromStrategies(
+          params.sourceToken,
+          params.targetToken,
+          params.strategies
+        );
+  }
+
+  /**
+   * Static variant of `hasLiquidityByPair` that performs no cache lookups or RPC calls.
+   * Accepts either an `orders` map or `sourceToken`/`targetToken` plus `strategies`.
+   */
+  public static hasLiquidityByPairStatic(
+    params: StaticDirectedOrdersParams
+  ): boolean {
+    const orders = Toolkit.resolveTradeOrders(params);
+    return Object.keys(orders).length > 0;
+  }
+
+  /**
+   * Static variant of `getMinRateByPair` that performs no cache lookups or RPC calls.
+   * Accepts either an `orders` map or `sourceToken`/`targetToken` plus `strategies`.
+   */
+  public static getMinRateByPairStatic({
+    sourceDecimals,
+    targetDecimals,
+    ...params
+  }: StaticPairRatesParams): string {
+    const orders = Object.values(
+      ordersMapStrToBN(Toolkit.resolveTradeOrders(params))
+    ).map(decodeOrder);
+    const minRate = getMinRate(orders).toString();
+    return normalizeRate(minRate, sourceDecimals, targetDecimals);
+  }
+
+  /**
+   * Static variant of `getMaxRateByPair` that performs no cache lookups or RPC calls.
+   * Accepts either an `orders` map or `sourceToken`/`targetToken` plus `strategies`.
+   */
+  public static getMaxRateByPairStatic({
+    sourceDecimals,
+    targetDecimals,
+    ...params
+  }: StaticPairRatesParams): string {
+    const orders = Object.values(
+      ordersMapStrToBN(Toolkit.resolveTradeOrders(params))
+    ).map(decodeOrder);
+    const maxRate = getMaxRate(orders).toString();
+    return normalizeRate(maxRate, sourceDecimals, targetDecimals);
+  }
+
+  /**
+   * Static variant of `getRateLiquidityDepthsByPair` that performs no cache lookups or RPC calls.
+   * Accepts either an `orders` map or `sourceToken`/`targetToken` plus `strategies`.
+   */
+  public static getRateLiquidityDepthsByPairStatic({
+    rates,
+    sourceDecimals,
+    targetDecimals,
+    ...params
+  }: StaticRateLiquidityDepthsByPairParams): string[] {
+    const orders = Object.values(
+      ordersMapStrToBN(Toolkit.resolveTradeOrders(params))
+    ).map(decodeOrder);
+    const parsedRates = rates.map(
+      (rate) => new Decimal(normalizeRate(rate, targetDecimals, sourceDecimals))
+    );
+    const depthsWei: string[] = getDepths(orders, parsedRates).map((rate) =>
+      rate.floor().toFixed(0)
+    );
+
+    return depthsWei.map((depthWei) => formatUnits(depthWei, targetDecimals));
+  }
+
   /**
    * Static variant of `getTradeData` that performs no cache lookups or RPC calls.
    * The caller must provide token decimals and trading fee, plus either:
@@ -385,14 +481,7 @@ export class Toolkit {
       filter,
     } = params;
 
-    const orders =
-      'orders' in params
-        ? params.orders
-        : Toolkit.getTradeOrdersFromStrategies(
-            params.sourceToken,
-            params.targetToken,
-            params.strategies
-          );
+    const orders = Toolkit.resolveTradeOrders(params);
 
     const amountWei = parseUnits(
       amount,
@@ -445,11 +534,15 @@ export class Toolkit {
     logger.debug('hasLiquidityByPair called', arguments);
 
     const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
+    const hasLiquidity = Toolkit.hasLiquidityByPairStatic({
+      orders: ordersMapBNToStr(orders),
+    });
 
     logger.debug('hasLiquidityByPair info:', {
       orders,
+      hasLiquidity,
     });
-    return Object.keys(orders).length > 0;
+    return hasLiquidity;
   }
 
   /**
@@ -1488,30 +1581,20 @@ export class Toolkit {
   ): Promise<string[]> {
     logger.debug('getRateLiquidityDepthByPair called', arguments);
 
-    const orders: DecodedOrder[] = Object.values(
-      await this._cache.getOrdersByPair(sourceToken, targetToken)
-    ).map(decodeOrder);
-
-    // convert the rate to the decimal difference between the source and target tokens
+    const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
     const decimals = this._decimals;
     const sourceDecimals = await decimals.fetchDecimals(sourceToken);
     const targetDecimals = await decimals.fetchDecimals(targetToken);
-    const parsedRates = rates.map(
-      (rate) => new Decimal(normalizeRate(rate, targetDecimals, sourceDecimals))
-    );
-
-    const depthsWei: string[] = getDepths(orders, parsedRates).map((rate) =>
-      rate.floor().toFixed(0)
-    );
-
-    // convert the depth to the target token decimals
-    const depthsInTargetDecimals = depthsWei.map((depthWei) =>
-      formatUnits(depthWei, targetDecimals)
-    );
+    const depthsInTargetDecimals = Toolkit.getRateLiquidityDepthsByPairStatic({
+      rates,
+      orders: ordersMapBNToStr(orders),
+      sourceDecimals,
+      targetDecimals,
+    });
 
     logger.debug('getRateLiquidityDepthByPair info:', {
       orders,
-      depthsWei,
+      sourceDecimals,
       targetDecimals,
       depthsInTargetDecimals,
     });
@@ -1525,25 +1608,18 @@ export class Toolkit {
   ): Promise<string> {
     logger.debug('getMinRateByPair called', arguments);
 
-    const orders = Object.values(
-      await this._cache.getOrdersByPair(sourceToken, targetToken)
-    ).map(decodeOrder);
-
-    const minRate = getMinRate(orders).toString();
-
-    // get the decimals of the source and target tokens and convert the rate to factor out the decimals
+    const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
     const decimals = this._decimals;
     const sourceDecimals = await decimals.fetchDecimals(sourceToken);
     const targetDecimals = await decimals.fetchDecimals(targetToken);
-    const normalizedRate = normalizeRate(
-      minRate,
+    const normalizedRate = Toolkit.getMinRateByPairStatic({
+      orders: ordersMapBNToStr(orders),
       sourceDecimals,
-      targetDecimals
-    );
+      targetDecimals,
+    });
 
     logger.debug('getMinRateByPair info:', {
       orders,
-      minRate,
       sourceDecimals,
       targetDecimals,
       normalizedRate,
@@ -1558,25 +1634,18 @@ export class Toolkit {
   ): Promise<string> {
     logger.debug('getMaxRateByPair called', arguments);
 
-    const orders = Object.values(
-      await this._cache.getOrdersByPair(sourceToken, targetToken)
-    ).map(decodeOrder);
-
-    const maxRate = getMaxRate(orders).toString();
-
-    // get the decimals of the source and target tokens and convert the rate to factor out the decimals
+    const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
     const decimals = this._decimals;
     const sourceDecimals = await decimals.fetchDecimals(sourceToken);
     const targetDecimals = await decimals.fetchDecimals(targetToken);
-    const normalizedRate = normalizeRate(
-      maxRate,
+    const normalizedRate = Toolkit.getMaxRateByPairStatic({
+      orders: ordersMapBNToStr(orders),
       sourceDecimals,
-      targetDecimals
-    );
+      targetDecimals,
+    });
 
     logger.debug('getMaxRateByPair info:', {
       orders,
-      maxRate,
       sourceDecimals,
       targetDecimals,
       normalizedRate,

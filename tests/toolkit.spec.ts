@@ -81,6 +81,65 @@ const orderMap = {
   [encodedStrategies[1].id.toString()]: encodedStrategies[1].order0,
 };
 
+const directedStrategiesFixture: EncodedStrategy[] = [
+  {
+    id: 10n,
+    token0: 'sourceToken',
+    token1: 'targetToken',
+    order0: {
+      y: 100n,
+      z: 100n,
+      A: 9n,
+      B: 9n,
+    },
+    order1: {
+      y: 5n,
+      z: 5n,
+      A: 0n,
+      B: 0n,
+    },
+  },
+  {
+    id: 11n,
+    token0: 'sourceToken',
+    token1: 'targetToken',
+    order0: {
+      y: 100n,
+      z: 100n,
+      A: 7n,
+      B: 7n,
+    },
+    order1: {
+      y: 7n,
+      z: 7n,
+      A: 2n,
+      B: 3n,
+    },
+  },
+  {
+    id: 12n,
+    token0: 'targetToken',
+    token1: 'sourceToken',
+    order0: {
+      y: 9n,
+      z: 9n,
+      A: 4n,
+      B: 5n,
+    },
+    order1: {
+      y: 100n,
+      z: 100n,
+      A: 8n,
+      B: 8n,
+    },
+  },
+];
+
+const directedOrdersFixture = {
+  '11': directedStrategiesFixture[1].order1,
+  '12': directedStrategiesFixture[2].order0,
+};
+
 describe('Toolkit', () => {
   let apiMock: any;
   let cacheMock: any;
@@ -618,6 +677,23 @@ describe('Toolkit', () => {
         .to.be.true;
       expect(hasLiquidity).to.be.false;
     });
+
+    it('should match the static strategies-based companion', async () => {
+      cacheMock.getOrdersByPair.resolves(directedOrdersFixture);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      const hasLiquidity = await toolkit.hasLiquidityByPair(
+        'sourceToken',
+        'targetToken'
+      );
+      const staticHasLiquidity = Toolkit.hasLiquidityByPairStatic({
+        sourceToken: 'sourceToken',
+        targetToken: 'targetToken',
+        strategies: directedStrategiesFixture.map(encodedStrategyBigIntToStr),
+      });
+
+      expect(staticHasLiquidity).to.equal(hasLiquidity);
+    });
   });
 
   describe('getLiquidityByPair', () => {
@@ -704,64 +780,7 @@ describe('Toolkit', () => {
     });
 
     it('should derive directed tradable orders from strategies', async () => {
-      const strategies: EncodedStrategy[] = [
-        {
-          id: 10n,
-          token0: 'sourceToken',
-          token1: 'targetToken',
-          order0: {
-            y: 100n,
-            z: 100n,
-            A: 9n,
-            B: 9n,
-          },
-          order1: {
-            y: 5n,
-            z: 5n,
-            A: 0n,
-            B: 0n,
-          },
-        },
-        {
-          id: 11n,
-          token0: 'sourceToken',
-          token1: 'targetToken',
-          order0: {
-            y: 100n,
-            z: 100n,
-            A: 7n,
-            B: 7n,
-          },
-          order1: {
-            y: 7n,
-            z: 7n,
-            A: 2n,
-            B: 3n,
-          },
-        },
-        {
-          id: 12n,
-          token0: 'targetToken',
-          token1: 'sourceToken',
-          order0: {
-            y: 9n,
-            z: 9n,
-            A: 4n,
-            B: 5n,
-          },
-          order1: {
-            y: 100n,
-            z: 100n,
-            A: 8n,
-            B: 8n,
-          },
-        },
-      ];
-
-      cacheMock.getOrdersByPair.resolves({
-        '11': strategies[1].order1,
-        '12': strategies[2].order0,
-      });
+      cacheMock.getOrdersByPair.resolves(directedOrdersFixture);
       cacheMock.getTradingFeePPMByPair.resolves(0);
 
       const toolkit = new Toolkit(apiMock, cacheMock, () => 0);
@@ -771,7 +790,7 @@ describe('Toolkit', () => {
         tradeByTargetAmount: true,
         sourceToken: 'sourceToken',
         targetToken: 'targetToken',
-        strategies: strategies.map(encodedStrategyBigIntToStr),
+        strategies: directedStrategiesFixture.map(encodedStrategyBigIntToStr),
         sourceDecimals: 0,
         targetDecimals: 0,
         tradingFeePPM: 0,
@@ -781,8 +800,8 @@ describe('Toolkit', () => {
         amount: '2',
         tradeByTargetAmount: true,
         orders: ordersMapBNToStr({
-          '11': strategies[1].order1,
-          '12': strategies[2].order0,
+          '11': directedStrategiesFixture[1].order1,
+          '12': directedStrategiesFixture[2].order0,
         }),
         sourceDecimals: 0,
         targetDecimals: 0,
@@ -844,6 +863,68 @@ describe('Toolkit', () => {
       );
 
       expect(fromActions).to.deep.equal(tradeData);
+    });
+  });
+
+  describe('pair statics', () => {
+    it('should match static getMinRateByPair with the instance method', async () => {
+      cacheMock.getOrdersByPair.resolves(directedOrdersFixture);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, () => 0);
+      const instanceResult = await toolkit.getMinRateByPair(
+        'sourceToken',
+        'targetToken'
+      );
+      const staticResult = Toolkit.getMinRateByPairStatic({
+        sourceToken: 'sourceToken',
+        targetToken: 'targetToken',
+        strategies: directedStrategiesFixture.map(encodedStrategyBigIntToStr),
+        sourceDecimals: 0,
+        targetDecimals: 0,
+      });
+
+      expect(staticResult).to.equal(instanceResult);
+    });
+
+    it('should match static getMaxRateByPair with the instance method', async () => {
+      cacheMock.getOrdersByPair.resolves(directedOrdersFixture);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, () => 0);
+      const instanceResult = await toolkit.getMaxRateByPair(
+        'sourceToken',
+        'targetToken'
+      );
+      const staticResult = Toolkit.getMaxRateByPairStatic({
+        sourceToken: 'sourceToken',
+        targetToken: 'targetToken',
+        strategies: directedStrategiesFixture.map(encodedStrategyBigIntToStr),
+        sourceDecimals: 0,
+        targetDecimals: 0,
+      });
+
+      expect(staticResult).to.equal(instanceResult);
+    });
+
+    it('should match static getRateLiquidityDepthsByPair with the instance method', async () => {
+      cacheMock.getOrdersByPair.resolves(directedOrdersFixture);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, () => 0);
+      const rates = ['1', '2', '3'];
+      const instanceResult = await toolkit.getRateLiquidityDepthsByPair(
+        'sourceToken',
+        'targetToken',
+        rates
+      );
+      const staticResult = Toolkit.getRateLiquidityDepthsByPairStatic({
+        rates,
+        sourceToken: 'sourceToken',
+        targetToken: 'targetToken',
+        strategies: directedStrategiesFixture.map(encodedStrategyBigIntToStr),
+        sourceDecimals: 0,
+        targetDecimals: 0,
+      });
+
+      expect(staticResult).to.deep.equal(instanceResult);
     });
   });
 
