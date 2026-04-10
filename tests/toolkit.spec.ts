@@ -702,6 +702,88 @@ describe('Toolkit', () => {
       expect(staticResult.actionsWei).to.not.be.empty;
       expect(staticResult).to.deep.equal(instanceResult);
     });
+
+    it('should derive directed tradable orders from strategies', () => {
+      const strategies: EncodedStrategy[] = [
+        {
+          id: 10n,
+          token0: 'sourceToken',
+          token1: 'targetToken',
+          order0: {
+            y: 100n,
+            z: 100n,
+            A: 9n,
+            B: 9n,
+          },
+          order1: {
+            y: 5n,
+            z: 5n,
+            A: 0n,
+            B: 0n,
+          },
+        },
+        {
+          id: 11n,
+          token0: 'sourceToken',
+          token1: 'targetToken',
+          order0: {
+            y: 100n,
+            z: 100n,
+            A: 7n,
+            B: 7n,
+          },
+          order1: {
+            y: 7n,
+            z: 7n,
+            A: 2n,
+            B: 3n,
+          },
+        },
+        {
+          id: 12n,
+          token0: 'targetToken',
+          token1: 'sourceToken',
+          order0: {
+            y: 9n,
+            z: 9n,
+            A: 4n,
+            B: 5n,
+          },
+          order1: {
+            y: 100n,
+            z: 100n,
+            A: 8n,
+            B: 8n,
+          },
+        },
+      ];
+
+      const withStrategies = Toolkit.getTradeDataStatic({
+        amount: '2',
+        tradeByTargetAmount: true,
+        sourceToken: 'sourceToken',
+        targetToken: 'targetToken',
+        strategies: strategies.map(encodedStrategyBigIntToStr),
+        sourceDecimals: 0,
+        targetDecimals: 0,
+        tradingFeePPM: 0,
+      });
+
+      const withOrders = Toolkit.getTradeDataStatic({
+        amount: '2',
+        tradeByTargetAmount: true,
+        orders: ordersMapBNToStr({
+          '11': strategies[1].order1,
+          '12': strategies[2].order0,
+        }),
+        sourceDecimals: 0,
+        targetDecimals: 0,
+        tradingFeePPM: 0,
+      });
+
+      expect(withStrategies.actionsWei).to.not.be.empty;
+      expect(withStrategies).to.deep.equal(withOrders);
+    });
   });
 
   describe('getTradeDataFromActions', () => {

@@ -16,6 +16,7 @@ import {
   DecodedOrder,
   DecodedStrategy,
   EncodedStrategy,
+  OrdersMap,
   Filter,
   Action,
   Strategy,
@@ -29,6 +30,7 @@ import {
   TokenPair,
 } from '../common/types';
 import { DecimalFetcher, Decimals } from '../utils/decimals';
+import { isOrderTradable } from '../chain-cache/utils';
 
 // Trade matcher utilities
 import {
@@ -98,16 +100,25 @@ export type TradeData = {
   actionsWei: MatchActionBNStr[];
 };
 
-export type StaticTradeDataParams = {
+type StaticTradeDataBaseParams = {
   amount: string;
   tradeByTargetAmount: boolean;
-  orders: OrdersMapBNStr;
   sourceDecimals: number;
   targetDecimals: number;
   tradingFeePPM: number;
   matchType?: MatchType;
   filter?: Filter;
 };
+
+export type StaticTradeDataParams =
+  | (StaticTradeDataBaseParams & {
+      orders: OrdersMapBNStr;
+    })
+  | (StaticTradeDataBaseParams & {
+      sourceToken: string;
+      targetToken: string;
+      strategies: EncodedStrategyBNStr[];
+    });
 
 export type StaticTradeDataFromActionsParams = {
   tradeByTargetAmount: boolean;
@@ -297,43 +308,91 @@ export class Toolkit {
     return res;
   }
 
+  private static getTradeOrdersFromStrategies(
+    sourceToken: string,
+    targetToken: string,
+    strategies: EncodedStrategyBNStr[]
+  ): OrdersMapBNStr {
+    const orders: OrdersMap = {};
+
+    for (const serializedStrategy of strategies) {
+      const strategy = encodedStrategyStrToBN(serializedStrategy);
+      let order;
+
+      if (
+        sourceToken === strategy.token0 &&
+        targetToken === strategy.token1
+      ) {
+        order = strategy.order1;
+      } else if (
+        sourceToken === strategy.token1 &&
+        targetToken === strategy.token0
+      ) {
+        order = strategy.order0;
+      } else {
+        continue;
+      }
+
+      if (!isOrderTradable(order)) {
+        continue;
+      }
+
+      orders[strategy.id.toString()] = order;
+    }
+
+    return ordersMapBNToStr(orders);
+  }
+
   /**
    * Static variant of `getTradeData` that performs no cache lookups or RPC calls.
-   * The caller must provide the order book, token decimals and trading fee.
+   * The caller must provide token decimals and trading fee, plus either:
+   * - `orders`, or
+   * - `sourceToken`, `targetToken` and `strategies`.
    *
-   * To build the `orders` argument from a list of encoded strategies for a pair,
-   * follow the same directed-pair selection logic used by `ChainCache`:
-   * - For a trade from `sourceToken` to `targetToken`, create an entry per strategy
-   *   keyed by `strategy.id.toString()`.
-   * - If `sourceToken === strategy.token0` and `targetToken === strategy.token1`,
-   *   use `strategy.order1`.
-   * - If `sourceToken === strategy.token1` and `targetToken === strategy.token0`,
-   *   use `strategy.order0`.
+   * When `strategies` are provided, the method derives `orders` exactly like
+   * `ChainCache` does:
+   * - it selects `strategy.order1` for the directed pair
+   *   `(sourceToken=strategy.token0, targetToken=strategy.token1)`,
+   * - it selects `strategy.order0` for the reverse direction,
+   * - it skips strategies that do not belong to that unordered pair,
+   * - and it filters out non-tradable selected orders using the same rule as
+   *   `ChainCache.getOrdersByPair`, namely `order.y > 0 && (order.A > 0 || order.B > 0)`.
    *
    * Example:
    * ```ts
-   * const orders = Object.fromEntries(
-   *   strategies.map((strategy) => [
-   *     strategy.id.toString(),
-   *     sourceToken === strategy.token0 ? strategy.order1 : strategy.order0,
-   *   ])
-   * );
+   * const tradeData = Toolkit.getTradeDataStatic({
+   *   amount,
+   *   tradeByTargetAmount,
+   *   sourceToken,
+   *   targetToken,
+   *   strategies,
+   *   sourceDecimals,
+   *   targetDecimals,
+   *   tradingFeePPM,
+   * });
    * ```
-   *
-   * This assumes `strategies` already belong to the same unordered pair
-   * `{sourceToken, targetToken}`.
    */
-  public static getTradeDataStatic({
-    amount,
-    tradeByTargetAmount,
-    orders,
-    sourceDecimals,
-    targetDecimals,
-    tradingFeePPM,
-    matchType = MatchType.Fast,
-    filter,
-  }: StaticTradeDataParams): TradeData {
+  public static getTradeDataStatic(params: StaticTradeDataParams): TradeData {
     logger.debug('getTradeDataStatic called', arguments);
+
+    const {
+      amount,
+      tradeByTargetAmount,
+      sourceDecimals,
+      targetDecimals,
+      tradingFeePPM,
+      matchType = MatchType.Fast,
+      filter,
+    } = params;
+
+    const orders =
+      'orders' in params
+        ? params.orders
+        : Toolkit.getTradeOrdersFromStrategies(
+            params.sourceToken,
+            params.targetToken,
+            params.strategies
+          );
 
     const amountWei = parseUnits(
       amount,
