@@ -101,7 +101,7 @@ export type TradeData = {
 
 type StaticTradeDataBaseParams = {
   amount: string;
-  tradeByTargetAmount: boolean;
+  isTradeByTarget: boolean;
   sourceDecimals: number;
   targetDecimals: number;
   tradingFeePPM: number;
@@ -147,7 +147,7 @@ export type StaticMaxSourceAmountByPairParams = StaticDirectedOrdersParams & {
 };
 
 export type StaticTradeDataFromActionsParams = {
-  tradeByTargetAmount: boolean;
+  isTradeByTarget: boolean;
   actionsWei: MatchActionBNStr[];
   sourceDecimals: number;
   targetDecimals: number;
@@ -201,14 +201,14 @@ export class Toolkit {
 
   public static getMatchActions(
     amountWei: string,
-    tradeByTargetAmount: boolean,
+    isTradeByTarget: boolean,
     ordersMap: OrdersMapBNStr,
     matchType: MatchType = MatchType.Fast,
     filter?: Filter
   ): MatchActionBNStr[] {
     const orders = ordersMapStrToBN(ordersMap);
     let result: MatchOptions;
-    if (tradeByTargetAmount) {
+    if (isTradeByTarget) {
       result = matchByTargetAmount(
         BigInt(amountWei),
         orders,
@@ -239,7 +239,7 @@ export class Toolkit {
    * the instance `getTradeDataFromActions`.
    */
   public static getTradeDataFromActionsStatic({
-    tradeByTargetAmount,
+    isTradeByTarget,
     actionsWei,
     sourceDecimals,
     targetDecimals,
@@ -255,7 +255,7 @@ export class Toolkit {
         strategyId: action.id,
         amount: action.input,
       });
-      if (tradeByTargetAmount) {
+      if (isTradeByTarget) {
         actionsTokenRes.push({
           id: action.id,
           sourceAmount: formatUnits(
@@ -281,7 +281,7 @@ export class Toolkit {
 
     let totalSourceAmount: string, totalTargetAmount: string;
 
-    if (tradeByTargetAmount) {
+    if (isTradeByTarget) {
       totalSourceAmount = addFee(totalOutput, tradingFeePPM).floor().toFixed(0);
       totalTargetAmount = totalInput.toString();
     } else {
@@ -498,7 +498,7 @@ export class Toolkit {
    * ```ts
    * const tradeData = Toolkit.getTradeDataStatic({
    *   amount,
-   *   tradeByTargetAmount,
+   *   isTradeByTarget,
    *   sourceToken,
    *   targetToken,
    *   strategies,
@@ -513,7 +513,7 @@ export class Toolkit {
 
     const {
       amount,
-      tradeByTargetAmount,
+      isTradeByTarget,
       sourceDecimals,
       targetDecimals,
       tradingFeePPM,
@@ -525,19 +525,19 @@ export class Toolkit {
 
     const amountWei = parseUnits(
       amount,
-      tradeByTargetAmount ? targetDecimals : sourceDecimals
+      isTradeByTarget ? targetDecimals : sourceDecimals
     ).toString();
 
     const actionsWei: MatchActionBNStr[] = Toolkit.getMatchActions(
       amountWei,
-      tradeByTargetAmount,
+      isTradeByTarget,
       orders,
       matchType,
       filter
     );
 
     const res = Toolkit.getTradeDataFromActionsStatic({
-      tradeByTargetAmount,
+      isTradeByTarget,
       actionsWei,
       sourceDecimals,
       targetDecimals,
@@ -874,7 +874,7 @@ export class Toolkit {
    * @param {string} sourceToken - Address of the source token.
    * @param {string} targetToken - Address of the target token.
    * @param {string} amount - The amount of tokens to trade.
-   * @param {boolean} tradeByTargetAmount - Whether to trade by target amount (`true`) or source amount (`false`).
+   * @param {boolean} isTradeByTarget - Whether to trade by target amount (`true`) or source amount (`false`).
    *
    * @returns {Promise<Object>} An object containing the necessary data to process a trade.
    * @property {OrdersMap} orders - The orders mapped by their IDs.
@@ -886,7 +886,7 @@ export class Toolkit {
     sourceToken: string,
     targetToken: string,
     amount: string,
-    tradeByTargetAmount: boolean
+    isTradeByTarget: boolean
   ): Promise<{
     orders: OrdersMapBNStr;
     amountWei: string;
@@ -901,7 +901,7 @@ export class Toolkit {
     const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
     const amountWei = parseUnits(
       amount,
-      tradeByTargetAmount ? targetDecimals : sourceDecimals
+      isTradeByTarget ? targetDecimals : sourceDecimals
     );
 
     return {
@@ -918,7 +918,7 @@ export class Toolkit {
    * and the input amount to place for this order.
    *
    * The `getTradeData` method will match the specified `amount` of source tokens or target tokens
-   * with available orders from the blockchain, depending on the value of `tradeByTargetAmount`.
+   * with available orders from the blockchain, depending on the value of `isTradeByTarget`.
    * It uses the provided `filter` function to filter the available orders. The resulting trade
    * actions will be returned in an object, along with the unsigned transaction that can be used
    * to execute the trade.
@@ -927,8 +927,8 @@ export class Toolkit {
    *
    * @param {string} sourceToken - The source token for the trade.
    * @param {string} targetToken - The target token for the trade.
-   * @param {string} amount - The amount of source tokens or target tokens to trade, depending on the value of `tradeByTargetAmount`.
-   * @param {boolean} tradeByTargetAmount - Whether to trade by target amount (`true`) or source amount (`false`).
+   * @param {string} amount - The amount of source tokens or target tokens to trade, depending on the value of `isTradeByTarget`.
+   * @param {boolean} isTradeByTarget - Whether to trade by target amount (`true`) or source amount (`false`).
    * @param {MatchType} [matchType] - The type of match to perform. Defaults to `MatchType.Fast`.
    * @param {(rate: Rate) => boolean} [filter] - Optional function to filter the available orders.
    *
@@ -945,7 +945,7 @@ export class Toolkit {
     sourceToken: string,
     targetToken: string,
     amount: string,
-    tradeByTargetAmount: boolean,
+    isTradeByTarget: boolean,
     matchType: MatchType = MatchType.Fast,
     filter?: Filter
   ): Promise<TradeData> {
@@ -955,7 +955,7 @@ export class Toolkit {
         sourceToken,
         targetToken,
         amount,
-        tradeByTargetAmount
+        isTradeByTarget
       );
     const feePPM = await this._cache.getTradingFeePPMByPair(
       sourceToken,
@@ -969,7 +969,7 @@ export class Toolkit {
 
     const res = Toolkit.getTradeDataStatic({
       amount,
-      tradeByTargetAmount,
+      isTradeByTarget,
       orders,
       sourceDecimals,
       targetDecimals,
@@ -991,7 +991,7 @@ export class Toolkit {
   public async getTradeDataFromActions(
     sourceToken: string,
     targetToken: string,
-    tradeByTargetAmount: boolean,
+    isTradeByTarget: boolean,
     actionsWei: MatchActionBNStr[]
   ): Promise<TradeData> {
     logger.debug('getTradeDataFromActions called', arguments);
@@ -1011,7 +1011,7 @@ export class Toolkit {
     const targetDecimals = await decimals.fetchDecimals(targetToken);
 
     const res = Toolkit.getTradeDataFromActionsStatic({
-      tradeByTargetAmount,
+      isTradeByTarget,
       actionsWei,
       sourceDecimals,
       targetDecimals,
@@ -1021,7 +1021,7 @@ export class Toolkit {
     logger.debug('getTradeDataFromActions info:', {
       sourceToken,
       targetToken,
-      tradeByTargetAmount,
+      isTradeByTarget,
       actionsWei,
       sourceDecimals,
       targetDecimals,

@@ -368,7 +368,6 @@ describe('Toolkit', () => {
       expect(updateArgs[4][0].z.toString()).to.equal(encodedStrategy.order0.z);
     });
 
-
     it('should only modify y and z values if only budget is provided', async () => {
       const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
       await toolkit.updateStrategy(
@@ -761,7 +760,7 @@ describe('Toolkit', () => {
       );
       const staticResult = Toolkit.getTradeDataStatic({
         amount,
-        tradeByTargetAmount: false,
+        isTradeByTarget: false,
         orders: ordersMapBNToStr(orderMap),
         sourceDecimals: 18,
         targetDecimals: 18,
@@ -786,7 +785,7 @@ describe('Toolkit', () => {
       );
       const staticResult = Toolkit.getTradeDataStatic({
         amount,
-        tradeByTargetAmount: true,
+        isTradeByTarget: true,
         orders: ordersMapBNToStr(orderMap),
         sourceDecimals: 18,
         targetDecimals: 18,
@@ -805,7 +804,7 @@ describe('Toolkit', () => {
 
       const withStrategies = Toolkit.getTradeDataStatic({
         amount: '2',
-        tradeByTargetAmount: true,
+        isTradeByTarget: true,
         sourceToken: 'sourceToken',
         targetToken: 'targetToken',
         strategies: directedStrategiesFixture.map(encodedStrategyBigIntToStr),
@@ -816,7 +815,7 @@ describe('Toolkit', () => {
 
       const withOrders = Toolkit.getTradeDataStatic({
         amount: '2',
-        tradeByTargetAmount: true,
+        isTradeByTarget: true,
         orders: ordersMapBNToStr({
           '11': directedStrategiesFixture[1].order1,
           '12': directedStrategiesFixture[2].order0,
@@ -842,7 +841,7 @@ describe('Toolkit', () => {
     it('should match getTradeDataStatic when using static matched actions', () => {
       const tradeData = Toolkit.getTradeDataStatic({
         amount: '0.000000000000000001',
-        tradeByTargetAmount: true,
+        isTradeByTarget: true,
         orders: ordersMapBNToStr(orderMap),
         sourceDecimals: 18,
         targetDecimals: 18,
@@ -850,7 +849,7 @@ describe('Toolkit', () => {
       });
 
       const fromActions = Toolkit.getTradeDataFromActionsStatic({
-        tradeByTargetAmount: true,
+        isTradeByTarget: true,
         actionsWei: tradeData.actionsWei,
         sourceDecimals: 18,
         targetDecimals: 18,
@@ -866,7 +865,7 @@ describe('Toolkit', () => {
       const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
       const tradeData = Toolkit.getTradeDataStatic({
         amount: '0.000000000000000001',
-        tradeByTargetAmount: true,
+        isTradeByTarget: true,
         orders: ordersMapBNToStr(orderMap),
         sourceDecimals: 18,
         targetDecimals: 18,
@@ -983,8 +982,7 @@ describe('Toolkit', () => {
       const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
       const strategies = await toolkit.getStrategyById('0');
 
-      expect(apiMock.reader.strategy.calledWith(0n)).to.be
-        .true;
+      expect(apiMock.reader.strategy.calledWith(0n)).to.be.true;
       expect(strategies).to.deep.equal(expectedStrategies[0]);
     });
   });
