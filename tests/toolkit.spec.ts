@@ -3,7 +3,7 @@ import sinon from 'sinon';
 import { MarginalPriceOptions, Toolkit } from '../src/strategy-management';
 import { ChainCache } from '../src/chain-cache';
 import { EncodedStrategy, Strategy } from '../src/common/types';
-import { encodedStrategyBigIntToStr } from '../src/utils';
+import { encodedStrategyBigIntToStr, ordersMapBNToStr } from '../src/utils';
 
 const encodedStrategies: EncodedStrategy[] = [
   {
@@ -79,6 +79,65 @@ const expectedStrategies: Strategy[] = [
 const orderMap = {
   [encodedStrategies[0].id.toString()]: encodedStrategies[0].order0,
   [encodedStrategies[1].id.toString()]: encodedStrategies[1].order0,
+};
+
+const directedStrategiesFixture: EncodedStrategy[] = [
+  {
+    id: 10n,
+    token0: 'sourceToken',
+    token1: 'targetToken',
+    order0: {
+      y: 100n,
+      z: 100n,
+      A: 9n,
+      B: 9n,
+    },
+    order1: {
+      y: 5n,
+      z: 5n,
+      A: 0n,
+      B: 0n,
+    },
+  },
+  {
+    id: 11n,
+    token0: 'sourceToken',
+    token1: 'targetToken',
+    order0: {
+      y: 100n,
+      z: 100n,
+      A: 7n,
+      B: 7n,
+    },
+    order1: {
+      y: 7n,
+      z: 7n,
+      A: 2n,
+      B: 3n,
+    },
+  },
+  {
+    id: 12n,
+    token0: 'targetToken',
+    token1: 'sourceToken',
+    order0: {
+      y: 9n,
+      z: 9n,
+      A: 4n,
+      B: 5n,
+    },
+    order1: {
+      y: 100n,
+      z: 100n,
+      A: 8n,
+      B: 8n,
+    },
+  },
+];
+
+const directedOrdersFixture = {
+  '11': directedStrategiesFixture[1].order1,
+  '12': directedStrategiesFixture[2].order0,
 };
 
 describe('Toolkit', () => {
@@ -308,7 +367,6 @@ describe('Toolkit', () => {
       expect(updateArgs[4][0].y.toString()).to.equal(encodedStrategy.order0.y);
       expect(updateArgs[4][0].z.toString()).to.equal(encodedStrategy.order0.z);
     });
-
 
     it('should only modify y and z values if only budget is provided', async () => {
       const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
@@ -618,6 +676,23 @@ describe('Toolkit', () => {
         .to.be.true;
       expect(hasLiquidity).to.be.false;
     });
+
+    it('should match the static strategies-based companion', async () => {
+      cacheMock.getOrdersByPair.resolves(directedOrdersFixture);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      const hasLiquidity = await toolkit.hasLiquidityByPair(
+        'sourceToken',
+        'targetToken'
+      );
+      const staticHasLiquidity = Toolkit.hasLiquidityByPairStatic({
+        sourceToken: 'sourceToken',
+        targetToken: 'targetToken',
+        strategies: directedStrategiesFixture.map(encodedStrategyBigIntToStr),
+      });
+
+      expect(staticHasLiquidity).to.equal(hasLiquidity);
+    });
   });
 
   describe('getLiquidityByPair', () => {
@@ -649,6 +724,243 @@ describe('Toolkit', () => {
         .to.be.true;
       expect(liquidity).to.equal('0');
     });
+
+    it('should match the static strategies-based companion', async () => {
+      cacheMock.getOrdersByPair.resolves(directedOrdersFixture);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, () => 0);
+      const liquidity = await toolkit.getLiquidityByPair(
+        'sourceToken',
+        'targetToken'
+      );
+      const staticLiquidity = Toolkit.getLiquidityByPairStatic({
+        sourceToken: 'sourceToken',
+        targetToken: 'targetToken',
+        strategies: directedStrategiesFixture.map(encodedStrategyBigIntToStr),
+        targetDecimals: 0,
+      });
+
+      expect(staticLiquidity).to.equal(liquidity);
+    });
+  });
+
+  describe('getTradeDataStatic', () => {
+    it('should match instance getTradeData for source-amount trades', async () => {
+      cacheMock.getOrdersByPair.resolves(orderMap);
+      cacheMock.getTradingFeePPMByPair.resolves(0);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      const amount = '0.000000000000000001';
+
+      const instanceResult = await toolkit.getTradeData(
+        'sourceToken',
+        'targetToken',
+        amount,
+        false
+      );
+      const staticResult = Toolkit.getTradeDataStatic({
+        amount,
+        isTradeByTarget: false,
+        orders: ordersMapBNToStr(orderMap),
+        sourceDecimals: 18,
+        targetDecimals: 18,
+        tradingFeePPM: 0,
+      });
+
+      expect(staticResult).to.deep.equal(instanceResult);
+    });
+
+    it('should match instance getTradeData for target-amount trades', async () => {
+      cacheMock.getOrdersByPair.resolves(orderMap);
+      cacheMock.getTradingFeePPMByPair.resolves(100000);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      const amount = '0.000000000000000001';
+
+      const instanceResult = await toolkit.getTradeData(
+        'sourceToken',
+        'targetToken',
+        amount,
+        true
+      );
+      const staticResult = Toolkit.getTradeDataStatic({
+        amount,
+        isTradeByTarget: true,
+        orders: ordersMapBNToStr(orderMap),
+        sourceDecimals: 18,
+        targetDecimals: 18,
+        tradingFeePPM: 100000,
+      });
+
+      expect(staticResult.actionsWei).to.not.be.empty;
+      expect(staticResult).to.deep.equal(instanceResult);
+    });
+
+    it('should derive directed tradable orders from strategies', async () => {
+      cacheMock.getOrdersByPair.resolves(directedOrdersFixture);
+      cacheMock.getTradingFeePPMByPair.resolves(0);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, () => 0);
+
+      const withStrategies = Toolkit.getTradeDataStatic({
+        amount: '2',
+        isTradeByTarget: true,
+        sourceToken: 'sourceToken',
+        targetToken: 'targetToken',
+        strategies: directedStrategiesFixture.map(encodedStrategyBigIntToStr),
+        sourceDecimals: 0,
+        targetDecimals: 0,
+        tradingFeePPM: 0,
+      });
+
+      const withOrders = Toolkit.getTradeDataStatic({
+        amount: '2',
+        isTradeByTarget: true,
+        orders: ordersMapBNToStr({
+          '11': directedStrategiesFixture[1].order1,
+          '12': directedStrategiesFixture[2].order0,
+        }),
+        sourceDecimals: 0,
+        targetDecimals: 0,
+        tradingFeePPM: 0,
+      });
+      const instanceResult = await toolkit.getTradeData(
+        'sourceToken',
+        'targetToken',
+        '2',
+        true
+      );
+
+      expect(withStrategies.actionsWei).to.not.be.empty;
+      expect(withStrategies).to.deep.equal(withOrders);
+      expect(withStrategies).to.deep.equal(instanceResult);
+    });
+  });
+
+  describe('getTradeDataFromActions', () => {
+    it('should match getTradeDataStatic when using static matched actions', () => {
+      const tradeData = Toolkit.getTradeDataStatic({
+        amount: '0.000000000000000001',
+        isTradeByTarget: true,
+        orders: ordersMapBNToStr(orderMap),
+        sourceDecimals: 18,
+        targetDecimals: 18,
+        tradingFeePPM: 100000,
+      });
+
+      const fromActions = Toolkit.getTradeDataFromActionsStatic({
+        isTradeByTarget: true,
+        actionsWei: tradeData.actionsWei,
+        sourceDecimals: 18,
+        targetDecimals: 18,
+        tradingFeePPM: 100000,
+      });
+
+      expect(fromActions).to.deep.equal(tradeData);
+    });
+
+    it('should preserve the instance getTradeDataFromActions API', async () => {
+      cacheMock.getTradingFeePPMByPair.resolves(100000);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
+      const tradeData = Toolkit.getTradeDataStatic({
+        amount: '0.000000000000000001',
+        isTradeByTarget: true,
+        orders: ordersMapBNToStr(orderMap),
+        sourceDecimals: 18,
+        targetDecimals: 18,
+        tradingFeePPM: 100000,
+      });
+
+      const fromActions = await toolkit.getTradeDataFromActions(
+        'sourceToken',
+        'targetToken',
+        true,
+        tradeData.actionsWei
+      );
+
+      expect(fromActions).to.deep.equal(tradeData);
+    });
+  });
+
+  describe('pair statics', () => {
+    it('should match static getMaxSourceAmountByPair with the instance method', async () => {
+      cacheMock.getOrdersByPair.resolves(directedOrdersFixture);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, () => 0);
+      const instanceResult = await toolkit.getMaxSourceAmountByPair(
+        'sourceToken',
+        'targetToken'
+      );
+      const staticResult = Toolkit.getMaxSourceAmountByPairStatic({
+        sourceToken: 'sourceToken',
+        targetToken: 'targetToken',
+        strategies: directedStrategiesFixture.map(encodedStrategyBigIntToStr),
+        sourceDecimals: 0,
+      });
+
+      expect(staticResult).to.equal(instanceResult);
+    });
+
+    it('should match static getMinRateByPair with the instance method', async () => {
+      cacheMock.getOrdersByPair.resolves(directedOrdersFixture);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, () => 0);
+      const instanceResult = await toolkit.getMinRateByPair(
+        'sourceToken',
+        'targetToken'
+      );
+      const staticResult = Toolkit.getMinRateByPairStatic({
+        sourceToken: 'sourceToken',
+        targetToken: 'targetToken',
+        strategies: directedStrategiesFixture.map(encodedStrategyBigIntToStr),
+        sourceDecimals: 0,
+        targetDecimals: 0,
+      });
+
+      expect(staticResult).to.equal(instanceResult);
+    });
+
+    it('should match static getMaxRateByPair with the instance method', async () => {
+      cacheMock.getOrdersByPair.resolves(directedOrdersFixture);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, () => 0);
+      const instanceResult = await toolkit.getMaxRateByPair(
+        'sourceToken',
+        'targetToken'
+      );
+      const staticResult = Toolkit.getMaxRateByPairStatic({
+        sourceToken: 'sourceToken',
+        targetToken: 'targetToken',
+        strategies: directedStrategiesFixture.map(encodedStrategyBigIntToStr),
+        sourceDecimals: 0,
+        targetDecimals: 0,
+      });
+
+      expect(staticResult).to.equal(instanceResult);
+    });
+
+    it('should match static getRateLiquidityDepthsByPair with the instance method', async () => {
+      cacheMock.getOrdersByPair.resolves(directedOrdersFixture);
+
+      const toolkit = new Toolkit(apiMock, cacheMock, () => 0);
+      const rates = ['1', '2', '3'];
+      const instanceResult = await toolkit.getRateLiquidityDepthsByPair(
+        'sourceToken',
+        'targetToken',
+        rates
+      );
+      const staticResult = Toolkit.getRateLiquidityDepthsByPairStatic({
+        rates,
+        sourceToken: 'sourceToken',
+        targetToken: 'targetToken',
+        strategies: directedStrategiesFixture.map(encodedStrategyBigIntToStr),
+        sourceDecimals: 0,
+        targetDecimals: 0,
+      });
+
+      expect(staticResult).to.deep.equal(instanceResult);
+    });
   });
 
   describe('getStrategyById', () => {
@@ -670,8 +982,7 @@ describe('Toolkit', () => {
       const toolkit = new Toolkit(apiMock, cacheMock, decimalFetcher);
       const strategies = await toolkit.getStrategyById('0');
 
-      expect(apiMock.reader.strategy.calledWith(0n)).to.be
-        .true;
+      expect(apiMock.reader.strategy.calledWith(0n)).to.be.true;
       expect(strategies).to.deep.equal(expectedStrategies[0]);
     });
   });

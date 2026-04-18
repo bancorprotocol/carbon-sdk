@@ -13,9 +13,9 @@ import {
 import { ChainCache } from '../chain-cache';
 import { ContractsApi } from '../contracts-api';
 import {
-  DecodedOrder,
   DecodedStrategy,
   EncodedStrategy,
+  OrdersMap,
   Filter,
   Action,
   Strategy,
@@ -29,6 +29,7 @@ import {
   TokenPair,
 } from '../common/types';
 import { DecimalFetcher, Decimals } from '../utils/decimals';
+import { isOrderTradable } from '../chain-cache/utils';
 
 // Trade matcher utilities
 import {
@@ -89,6 +90,70 @@ export function isMarginalPriceValue(
   );
 }
 
+export type TradeData = {
+  tradeActions: TradeActionBNStr[];
+  actionsTokenRes: Action[];
+  totalSourceAmount: string;
+  totalTargetAmount: string;
+  effectiveRate: string;
+  actionsWei: MatchActionBNStr[];
+};
+
+type StaticTradeDataBaseParams = {
+  amount: string;
+  isTradeByTarget: boolean;
+  sourceDecimals: number;
+  targetDecimals: number;
+  tradingFeePPM: number;
+  matchType?: MatchType;
+  filter?: Filter;
+};
+
+export type StaticTradeDataParams =
+  | (StaticTradeDataBaseParams & {
+      orders: OrdersMapBNStr;
+    })
+  | (StaticTradeDataBaseParams & {
+      sourceToken: string;
+      targetToken: string;
+      strategies: EncodedStrategyBNStr[];
+    });
+
+type StaticDirectedOrdersParams =
+  | {
+      orders: OrdersMapBNStr;
+    }
+  | {
+      sourceToken: string;
+      targetToken: string;
+      strategies: EncodedStrategyBNStr[];
+    };
+
+export type StaticPairRatesParams = StaticDirectedOrdersParams & {
+  sourceDecimals: number;
+  targetDecimals: number;
+};
+
+export type StaticRateLiquidityDepthsByPairParams = StaticPairRatesParams & {
+  rates: string[];
+};
+
+export type StaticLiquidityByPairParams = StaticDirectedOrdersParams & {
+  targetDecimals: number;
+};
+
+export type StaticMaxSourceAmountByPairParams = StaticDirectedOrdersParams & {
+  sourceDecimals: number;
+};
+
+export type StaticTradeDataFromActionsParams = {
+  isTradeByTarget: boolean;
+  actionsWei: MatchActionBNStr[];
+  sourceDecimals: number;
+  targetDecimals: number;
+  tradingFeePPM: number;
+};
+
 export class Toolkit {
   private _api: ContractsApi;
   private _decimals: Decimals;
@@ -136,14 +201,14 @@ export class Toolkit {
 
   public static getMatchActions(
     amountWei: string,
-    tradeByTargetAmount: boolean,
+    isTradeByTarget: boolean,
     ordersMap: OrdersMapBNStr,
     matchType: MatchType = MatchType.Fast,
     filter?: Filter
   ): MatchActionBNStr[] {
     const orders = ordersMapStrToBN(ordersMap);
     let result: MatchOptions;
-    if (tradeByTargetAmount) {
+    if (isTradeByTarget) {
       result = matchByTargetAmount(
         BigInt(amountWei),
         orders,
@@ -159,6 +224,337 @@ export class Toolkit {
       );
     }
     return result[matchType]?.map(matchActionBNToStr) ?? [];
+  }
+
+  /**
+   * Static variant of `getTradeDataFromActions` that performs no cache lookups or RPC calls.
+   *
+   * The caller must provide:
+   * - `actionsWei`: matched actions in wei, typically from `Toolkit.getMatchActions`
+   *   or from a previous `getTradeDataStatic` result.
+   * - `sourceDecimals` / `targetDecimals`: decimals of the traded tokens.
+   * - `tradingFeePPM`: the pair trading fee in parts-per-million.
+   *
+   * The method applies the same fee adjustment and token-resolution formatting as
+   * the instance `getTradeDataFromActions`.
+   */
+  public static getTradeDataFromActionsStatic({
+    isTradeByTarget,
+    actionsWei,
+    sourceDecimals,
+    targetDecimals,
+    tradingFeePPM,
+  }: StaticTradeDataFromActionsParams): TradeData {
+    const tradeActions: TradeActionBNStr[] = [];
+    const actionsTokenRes: Action[] = [];
+    let totalOutput = 0n;
+    let totalInput = 0n;
+
+    actionsWei.forEach((action) => {
+      tradeActions.push({
+        strategyId: action.id,
+        amount: action.input,
+      });
+      if (isTradeByTarget) {
+        actionsTokenRes.push({
+          id: action.id,
+          sourceAmount: formatUnits(
+            addFee(action.output, tradingFeePPM).floor().toFixed(0),
+            sourceDecimals
+          ),
+          targetAmount: formatUnits(action.input, targetDecimals),
+        });
+      } else {
+        actionsTokenRes.push({
+          id: action.id,
+          sourceAmount: formatUnits(action.input, sourceDecimals),
+          targetAmount: formatUnits(
+            subtractFee(action.output, tradingFeePPM).floor().toFixed(0),
+            targetDecimals
+          ),
+        });
+      }
+
+      totalInput = totalInput + BigInt(action.input);
+      totalOutput = totalOutput + BigInt(action.output);
+    });
+
+    let totalSourceAmount: string, totalTargetAmount: string;
+
+    if (isTradeByTarget) {
+      totalSourceAmount = addFee(totalOutput, tradingFeePPM).floor().toFixed(0);
+      totalTargetAmount = totalInput.toString();
+    } else {
+      totalSourceAmount = totalInput.toString();
+      totalTargetAmount = subtractFee(totalOutput, tradingFeePPM)
+        .floor()
+        .toFixed(0);
+    }
+
+    let res: TradeData;
+
+    if (
+      new Decimal(totalSourceAmount).isZero() ||
+      new Decimal(totalTargetAmount).isZero()
+    ) {
+      res = {
+        tradeActions,
+        actionsTokenRes,
+        totalSourceAmount: '0',
+        totalTargetAmount: '0',
+        effectiveRate: '0',
+        actionsWei,
+      };
+    } else {
+      const effectiveRate = new Decimal(totalTargetAmount)
+        .div(totalSourceAmount)
+        .times(tenPow(sourceDecimals, targetDecimals))
+        .toString();
+
+      res = {
+        tradeActions,
+        actionsTokenRes,
+        totalSourceAmount: formatUnits(totalSourceAmount, sourceDecimals),
+        totalTargetAmount: formatUnits(totalTargetAmount, targetDecimals),
+        effectiveRate,
+        actionsWei,
+      };
+    }
+
+    logger.debug('getTradeDataFromActionsStatic info:', {
+      sourceDecimals,
+      targetDecimals,
+      actionsWei,
+      totalInput,
+      totalOutput,
+      tradingFeePPM,
+      res,
+    });
+
+    return res;
+  }
+
+  private static getTradeOrdersFromStrategies(
+    sourceToken: string,
+    targetToken: string,
+    strategies: EncodedStrategyBNStr[]
+  ): OrdersMapBNStr {
+    const orders: OrdersMap = {};
+
+    for (const serializedStrategy of strategies) {
+      const strategy = encodedStrategyStrToBN(serializedStrategy);
+      let order;
+
+      if (
+        sourceToken === strategy.token0 &&
+        targetToken === strategy.token1
+      ) {
+        order = strategy.order1;
+      } else if (
+        sourceToken === strategy.token1 &&
+        targetToken === strategy.token0
+      ) {
+        order = strategy.order0;
+      } else {
+        continue;
+      }
+
+      if (!isOrderTradable(order)) {
+        continue;
+      }
+
+      orders[strategy.id.toString()] = order;
+    }
+
+    return ordersMapBNToStr(orders);
+  }
+
+  private static resolveTradeOrders(
+    params: StaticDirectedOrdersParams
+  ): OrdersMapBNStr {
+    return 'orders' in params
+      ? params.orders
+      : Toolkit.getTradeOrdersFromStrategies(
+          params.sourceToken,
+          params.targetToken,
+          params.strategies
+        );
+  }
+
+  /**
+   * Static variant of `hasLiquidityByPair` that performs no cache lookups or RPC calls.
+   * Accepts either an `orders` map or `sourceToken`/`targetToken` plus `strategies`.
+   */
+  public static hasLiquidityByPairStatic(
+    params: StaticDirectedOrdersParams
+  ): boolean {
+    const orders = Toolkit.resolveTradeOrders(params);
+    return Object.keys(orders).length > 0;
+  }
+
+  /**
+   * Static variant of `getLiquidityByPair` that performs no cache lookups or RPC calls.
+   * Accepts either an `orders` map or `sourceToken`/`targetToken` plus `strategies`.
+   */
+  public static getLiquidityByPairStatic({
+    targetDecimals,
+    ...params
+  }: StaticLiquidityByPairParams): string {
+    const orders = ordersMapStrToBN(Toolkit.resolveTradeOrders(params));
+    const liquidityWei = Object.values(orders).reduce(
+      (acc, { y }) => acc + y,
+      0n
+    );
+    return formatUnits(liquidityWei, targetDecimals);
+  }
+
+  /**
+   * Static variant of `getMaxSourceAmountByPair` that performs no cache lookups or RPC calls.
+   * Accepts either an `orders` map or `sourceToken`/`targetToken` plus `strategies`.
+   */
+  public static getMaxSourceAmountByPairStatic({
+    sourceDecimals,
+    ...params
+  }: StaticMaxSourceAmountByPairParams): string {
+    const orders = ordersMapStrToBN(Toolkit.resolveTradeOrders(params));
+    const maxSourceAmountWei = Object.values(orders).reduce(
+      (acc, order) => acc + getEncodedTradeSourceAmount(order.y, order),
+      0n
+    );
+    return formatUnits(maxSourceAmountWei, sourceDecimals);
+  }
+
+  /**
+   * Static variant of `getMinRateByPair` that performs no cache lookups or RPC calls.
+   * Accepts either an `orders` map or `sourceToken`/`targetToken` plus `strategies`.
+   */
+  public static getMinRateByPairStatic({
+    sourceDecimals,
+    targetDecimals,
+    ...params
+  }: StaticPairRatesParams): string {
+    const orders = Object.values(
+      ordersMapStrToBN(Toolkit.resolveTradeOrders(params))
+    ).map(decodeOrder);
+    const minRate = getMinRate(orders).toString();
+    return normalizeRate(minRate, sourceDecimals, targetDecimals);
+  }
+
+  /**
+   * Static variant of `getMaxRateByPair` that performs no cache lookups or RPC calls.
+   * Accepts either an `orders` map or `sourceToken`/`targetToken` plus `strategies`.
+   */
+  public static getMaxRateByPairStatic({
+    sourceDecimals,
+    targetDecimals,
+    ...params
+  }: StaticPairRatesParams): string {
+    const orders = Object.values(
+      ordersMapStrToBN(Toolkit.resolveTradeOrders(params))
+    ).map(decodeOrder);
+    const maxRate = getMaxRate(orders).toString();
+    return normalizeRate(maxRate, sourceDecimals, targetDecimals);
+  }
+
+  /**
+   * Static variant of `getRateLiquidityDepthsByPair` that performs no cache lookups or RPC calls.
+   * Accepts either an `orders` map or `sourceToken`/`targetToken` plus `strategies`.
+   */
+  public static getRateLiquidityDepthsByPairStatic({
+    rates,
+    sourceDecimals,
+    targetDecimals,
+    ...params
+  }: StaticRateLiquidityDepthsByPairParams): string[] {
+    const orders = Object.values(
+      ordersMapStrToBN(Toolkit.resolveTradeOrders(params))
+    ).map(decodeOrder);
+    const parsedRates = rates.map(
+      (rate) => new Decimal(normalizeRate(rate, targetDecimals, sourceDecimals))
+    );
+    const depthsWei: string[] = getDepths(orders, parsedRates).map((rate) =>
+      rate.floor().toFixed(0)
+    );
+
+    return depthsWei.map((depthWei) => formatUnits(depthWei, targetDecimals));
+  }
+
+  /**
+   * Static variant of `getTradeData` that performs no cache lookups or RPC calls.
+   * The caller must provide token decimals and trading fee, plus either:
+   * - `orders`, or
+   * - `sourceToken`, `targetToken` and `strategies`.
+   *
+   * When `strategies` are provided, the method derives `orders` exactly like
+   * `ChainCache` does:
+   * - it selects `strategy.order1` for the directed pair
+   *   `(sourceToken=strategy.token0, targetToken=strategy.token1)`,
+   * - it selects `strategy.order0` for the reverse direction,
+   * - it skips strategies that do not belong to that unordered pair,
+   * - and it filters out non-tradable selected orders using the same rule as
+   *   `ChainCache.getOrdersByPair`, namely `order.y > 0 && (order.A > 0 || order.B > 0)`.
+   *
+   * Example:
+   * ```ts
+   * const tradeData = Toolkit.getTradeDataStatic({
+   *   amount,
+   *   isTradeByTarget,
+   *   sourceToken,
+   *   targetToken,
+   *   strategies,
+   *   sourceDecimals,
+   *   targetDecimals,
+   *   tradingFeePPM,
+   * });
+   * ```
+   */
+  public static getTradeDataStatic(params: StaticTradeDataParams): TradeData {
+    logger.debug('getTradeDataStatic called', arguments);
+
+    const {
+      amount,
+      isTradeByTarget,
+      sourceDecimals,
+      targetDecimals,
+      tradingFeePPM,
+      matchType = MatchType.Fast,
+      filter,
+    } = params;
+
+    const orders = Toolkit.resolveTradeOrders(params);
+
+    const amountWei = parseUnits(
+      amount,
+      isTradeByTarget ? targetDecimals : sourceDecimals
+    ).toString();
+
+    const actionsWei: MatchActionBNStr[] = Toolkit.getMatchActions(
+      amountWei,
+      isTradeByTarget,
+      orders,
+      matchType,
+      filter
+    );
+
+    const res = Toolkit.getTradeDataFromActionsStatic({
+      isTradeByTarget,
+      actionsWei,
+      sourceDecimals,
+      targetDecimals,
+      tradingFeePPM,
+    });
+
+    logger.debug('getTradeDataStatic info:', {
+      orders,
+      amount,
+      amountWei,
+      sourceDecimals,
+      targetDecimals,
+      tradingFeePPM,
+      res,
+    });
+
+    return res;
   }
 
   /**
@@ -178,11 +574,15 @@ export class Toolkit {
     logger.debug('hasLiquidityByPair called', arguments);
 
     const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
+    const hasLiquidity = Toolkit.hasLiquidityByPairStatic({
+      orders: ordersMapBNToStr(orders),
+    });
 
     logger.debug('hasLiquidityByPair info:', {
       orders,
+      hasLiquidity,
     });
-    return Object.keys(orders).length > 0;
+    return hasLiquidity;
   }
 
   /**
@@ -201,16 +601,13 @@ export class Toolkit {
     logger.debug('getLiquidityByPair called', arguments);
 
     const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
-    const liquidityWei = Object.values(orders).reduce(
-      (acc, { y }) => acc + y,
-      0n
-    );
     const decimals = await this._decimals.fetchDecimals(targetToken);
-
-    const liquidity = formatUnits(liquidityWei, decimals);
+    const liquidity = Toolkit.getLiquidityByPairStatic({
+      orders: ordersMapBNToStr(orders),
+      targetDecimals: decimals,
+    });
     logger.debug('getLiquidityByPair info:', {
       orders,
-      liquidityWei,
       targetToken,
       decimals,
       liquidity,
@@ -236,16 +633,13 @@ export class Toolkit {
     logger.debug('getMaxSourceAmountByPair called', arguments);
 
     const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
-    const maxSourceAmountWei = Object.values(orders).reduce(
-      (acc, order) => acc + getEncodedTradeSourceAmount(order.y, order),
-      0n
-    );
     const decimals = await this._decimals.fetchDecimals(sourceToken);
-
-    const maxSourceAmount = formatUnits(maxSourceAmountWei, decimals);
+    const maxSourceAmount = Toolkit.getMaxSourceAmountByPairStatic({
+      orders: ordersMapBNToStr(orders),
+      sourceDecimals: decimals,
+    });
     logger.debug('getMaxSourceAmountByPair info:', {
       orders,
-      maxSourceAmountWei,
       sourceToken,
       decimals,
       maxSourceAmount,
@@ -480,7 +874,7 @@ export class Toolkit {
    * @param {string} sourceToken - Address of the source token.
    * @param {string} targetToken - Address of the target token.
    * @param {string} amount - The amount of tokens to trade.
-   * @param {boolean} tradeByTargetAmount - Whether to trade by target amount (`true`) or source amount (`false`).
+   * @param {boolean} isTradeByTarget - Whether to trade by target amount (`true`) or source amount (`false`).
    *
    * @returns {Promise<Object>} An object containing the necessary data to process a trade.
    * @property {OrdersMap} orders - The orders mapped by their IDs.
@@ -492,7 +886,7 @@ export class Toolkit {
     sourceToken: string,
     targetToken: string,
     amount: string,
-    tradeByTargetAmount: boolean
+    isTradeByTarget: boolean
   ): Promise<{
     orders: OrdersMapBNStr;
     amountWei: string;
@@ -507,7 +901,7 @@ export class Toolkit {
     const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
     const amountWei = parseUnits(
       amount,
-      tradeByTargetAmount ? targetDecimals : sourceDecimals
+      isTradeByTarget ? targetDecimals : sourceDecimals
     );
 
     return {
@@ -524,7 +918,7 @@ export class Toolkit {
    * and the input amount to place for this order.
    *
    * The `getTradeData` method will match the specified `amount` of source tokens or target tokens
-   * with available orders from the blockchain, depending on the value of `tradeByTargetAmount`.
+   * with available orders from the blockchain, depending on the value of `isTradeByTarget`.
    * It uses the provided `filter` function to filter the available orders. The resulting trade
    * actions will be returned in an object, along with the unsigned transaction that can be used
    * to execute the trade.
@@ -533,8 +927,8 @@ export class Toolkit {
    *
    * @param {string} sourceToken - The source token for the trade.
    * @param {string} targetToken - The target token for the trade.
-   * @param {string} amount - The amount of source tokens or target tokens to trade, depending on the value of `tradeByTargetAmount`.
-   * @param {boolean} tradeByTargetAmount - Whether to trade by target amount (`true`) or source amount (`false`).
+   * @param {string} amount - The amount of source tokens or target tokens to trade, depending on the value of `isTradeByTarget`.
+   * @param {boolean} isTradeByTarget - Whether to trade by target amount (`true`) or source amount (`false`).
    * @param {MatchType} [matchType] - The type of match to perform. Defaults to `MatchType.Fast`.
    * @param {(rate: Rate) => boolean} [filter] - Optional function to filter the available orders.
    *
@@ -551,39 +945,38 @@ export class Toolkit {
     sourceToken: string,
     targetToken: string,
     amount: string,
-    tradeByTargetAmount: boolean,
+    isTradeByTarget: boolean,
     matchType: MatchType = MatchType.Fast,
     filter?: Filter
-  ): Promise<{
-    tradeActions: TradeActionBNStr[];
-    actionsTokenRes: Action[];
-    totalSourceAmount: string;
-    totalTargetAmount: string;
-    effectiveRate: string;
-    actionsWei: MatchActionBNStr[];
-  }> {
+  ): Promise<TradeData> {
     logger.debug('getTradeData called', arguments);
-    const { orders, amountWei } = await this.getMatchParams(
+    const { orders, amountWei, sourceDecimals, targetDecimals } =
+      await this.getMatchParams(
+        sourceToken,
+        targetToken,
+        amount,
+        isTradeByTarget
+      );
+    const feePPM = await this._cache.getTradingFeePPMByPair(
       sourceToken,
-      targetToken,
+      targetToken
+    );
+
+    if (feePPM === undefined)
+      throw new Error(
+        `tradingFeePPM is undefined for this pair: ${sourceToken}-${targetToken}`
+      );
+
+    const res = Toolkit.getTradeDataStatic({
       amount,
-      tradeByTargetAmount
-    );
-
-    const actionsWei: MatchActionBNStr[] = Toolkit.getMatchActions(
-      amountWei,
-      tradeByTargetAmount,
+      isTradeByTarget,
       orders,
+      sourceDecimals,
+      targetDecimals,
+      tradingFeePPM: feePPM,
       matchType,
-      filter
-    );
-
-    const res = await this.getTradeDataFromActions(
-      sourceToken,
-      targetToken,
-      tradeByTargetAmount,
-      actionsWei
-    );
+      filter,
+    });
 
     logger.debug('getTradeData info:', {
       orders,
@@ -598,16 +991,9 @@ export class Toolkit {
   public async getTradeDataFromActions(
     sourceToken: string,
     targetToken: string,
-    tradeByTargetAmount: boolean,
+    isTradeByTarget: boolean,
     actionsWei: MatchActionBNStr[]
-  ): Promise<{
-    tradeActions: TradeActionBNStr[];
-    actionsTokenRes: Action[];
-    totalSourceAmount: string;
-    totalTargetAmount: string;
-    effectiveRate: string;
-    actionsWei: MatchActionBNStr[];
-  }> {
+  ): Promise<TradeData> {
     logger.debug('getTradeDataFromActions called', arguments);
 
     const feePPM = await this._cache.getTradingFeePPMByPair(
@@ -623,86 +1009,22 @@ export class Toolkit {
     const decimals = this._decimals;
     const sourceDecimals = await decimals.fetchDecimals(sourceToken);
     const targetDecimals = await decimals.fetchDecimals(targetToken);
-    const tradeActions: TradeActionBNStr[] = [];
-    const actionsTokenRes: Action[] = [];
-    let totalOutput = 0n;
-    let totalInput = 0n;
 
-    actionsWei.forEach((action) => {
-      tradeActions.push({
-        strategyId: action.id,
-        amount: action.input,
-      });
-      if (tradeByTargetAmount) {
-        actionsTokenRes.push({
-          id: action.id,
-          sourceAmount: formatUnits(
-            addFee(action.output, feePPM).floor().toFixed(0),
-            sourceDecimals
-          ),
-          targetAmount: formatUnits(action.input, targetDecimals),
-        });
-      } else {
-        actionsTokenRes.push({
-          id: action.id,
-          sourceAmount: formatUnits(action.input, sourceDecimals),
-          targetAmount: formatUnits(
-            subtractFee(action.output, feePPM).floor().toFixed(0),
-            targetDecimals
-          ),
-        });
-      }
-
-      totalInput = totalInput + BigInt(action.input);
-      totalOutput = totalOutput + BigInt(action.output);
-    });
-
-    let totalSourceAmount: string, totalTargetAmount: string;
-
-    if (tradeByTargetAmount) {
-      totalSourceAmount = addFee(totalOutput, feePPM).floor().toFixed(0);
-      totalTargetAmount = totalInput.toString();
-    } else {
-      totalSourceAmount = totalInput.toString();
-      totalTargetAmount = subtractFee(totalOutput, feePPM).floor().toFixed(0);
-    }
-
-    let res;
-
-    if (
-      new Decimal(totalSourceAmount).isZero() ||
-      new Decimal(totalTargetAmount).isZero()
-    ) {
-      res = {
-        tradeActions,
-        actionsTokenRes,
-        totalSourceAmount: '0',
-        totalTargetAmount: '0',
-        effectiveRate: '0',
-        actionsWei,
-      };
-    } else {
-      const effectiveRate = new Decimal(totalTargetAmount)
-        .div(totalSourceAmount)
-        .times(tenPow(sourceDecimals, targetDecimals))
-        .toString();
-
-      res = {
-        tradeActions,
-        actionsTokenRes,
-        totalSourceAmount: formatUnits(totalSourceAmount, sourceDecimals),
-        totalTargetAmount: formatUnits(totalTargetAmount, targetDecimals),
-        effectiveRate,
-        actionsWei,
-      };
-    }
-
-    logger.debug('getTradeDataFromActions info:', {
+    const res = Toolkit.getTradeDataFromActionsStatic({
+      isTradeByTarget,
+      actionsWei,
       sourceDecimals,
       targetDecimals,
+      tradingFeePPM: feePPM,
+    });
+
+    logger.debug('getTradeDataFromActions info:', {
+      sourceToken,
+      targetToken,
+      isTradeByTarget,
       actionsWei,
-      totalInput,
-      totalOutput,
+      sourceDecimals,
+      targetDecimals,
       tradingFeePPM: feePPM,
       res,
     });
@@ -1293,30 +1615,20 @@ export class Toolkit {
   ): Promise<string[]> {
     logger.debug('getRateLiquidityDepthByPair called', arguments);
 
-    const orders: DecodedOrder[] = Object.values(
-      await this._cache.getOrdersByPair(sourceToken, targetToken)
-    ).map(decodeOrder);
-
-    // convert the rate to the decimal difference between the source and target tokens
+    const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
     const decimals = this._decimals;
     const sourceDecimals = await decimals.fetchDecimals(sourceToken);
     const targetDecimals = await decimals.fetchDecimals(targetToken);
-    const parsedRates = rates.map(
-      (rate) => new Decimal(normalizeRate(rate, targetDecimals, sourceDecimals))
-    );
-
-    const depthsWei: string[] = getDepths(orders, parsedRates).map((rate) =>
-      rate.floor().toFixed(0)
-    );
-
-    // convert the depth to the target token decimals
-    const depthsInTargetDecimals = depthsWei.map((depthWei) =>
-      formatUnits(depthWei, targetDecimals)
-    );
+    const depthsInTargetDecimals = Toolkit.getRateLiquidityDepthsByPairStatic({
+      rates,
+      orders: ordersMapBNToStr(orders),
+      sourceDecimals,
+      targetDecimals,
+    });
 
     logger.debug('getRateLiquidityDepthByPair info:', {
       orders,
-      depthsWei,
+      sourceDecimals,
       targetDecimals,
       depthsInTargetDecimals,
     });
@@ -1330,25 +1642,18 @@ export class Toolkit {
   ): Promise<string> {
     logger.debug('getMinRateByPair called', arguments);
 
-    const orders = Object.values(
-      await this._cache.getOrdersByPair(sourceToken, targetToken)
-    ).map(decodeOrder);
-
-    const minRate = getMinRate(orders).toString();
-
-    // get the decimals of the source and target tokens and convert the rate to factor out the decimals
+    const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
     const decimals = this._decimals;
     const sourceDecimals = await decimals.fetchDecimals(sourceToken);
     const targetDecimals = await decimals.fetchDecimals(targetToken);
-    const normalizedRate = normalizeRate(
-      minRate,
+    const normalizedRate = Toolkit.getMinRateByPairStatic({
+      orders: ordersMapBNToStr(orders),
       sourceDecimals,
-      targetDecimals
-    );
+      targetDecimals,
+    });
 
     logger.debug('getMinRateByPair info:', {
       orders,
-      minRate,
       sourceDecimals,
       targetDecimals,
       normalizedRate,
@@ -1363,25 +1668,18 @@ export class Toolkit {
   ): Promise<string> {
     logger.debug('getMaxRateByPair called', arguments);
 
-    const orders = Object.values(
-      await this._cache.getOrdersByPair(sourceToken, targetToken)
-    ).map(decodeOrder);
-
-    const maxRate = getMaxRate(orders).toString();
-
-    // get the decimals of the source and target tokens and convert the rate to factor out the decimals
+    const orders = await this._cache.getOrdersByPair(sourceToken, targetToken);
     const decimals = this._decimals;
     const sourceDecimals = await decimals.fetchDecimals(sourceToken);
     const targetDecimals = await decimals.fetchDecimals(targetToken);
-    const normalizedRate = normalizeRate(
-      maxRate,
+    const normalizedRate = Toolkit.getMaxRateByPairStatic({
+      orders: ordersMapBNToStr(orders),
       sourceDecimals,
-      targetDecimals
-    );
+      targetDecimals,
+    });
 
     logger.debug('getMaxRateByPair info:', {
       orders,
-      maxRate,
       sourceDecimals,
       targetDecimals,
       normalizedRate,
