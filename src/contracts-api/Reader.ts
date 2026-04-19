@@ -37,6 +37,7 @@ function toStrategy(res: StrategyStructOutput): EncodedStrategy {
     id,
     token0,
     token1,
+    owner: undefined,
     order0: {
       y: y0,
       z: z0,
@@ -425,6 +426,7 @@ export default class Reader implements Fetcher {
               id: parsedLog.args.id,
               token0: parsedLog.args.token0,
               token1: parsedLog.args.token1,
+              owner: undefined,
               order0: {
                 A: parsedLog.args.order0.A,
                 B: parsedLog.args.order0.B,

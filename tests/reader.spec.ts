@@ -37,6 +37,7 @@ describe('Reader', () => {
     id: 1n,
     token0: '0x123',
     token1: '0x456',
+    owner: undefined,
     order0: {
       y: 100n,
       z: 200n,
@@ -323,6 +324,7 @@ describe('Reader', () => {
           id: strategy[0],
           token0: strategy[2][0],
           token1: strategy[2][1],
+          owner: undefined,
           order0: {
             y: strategy[3][0][0],
             z: strategy[3][0][1],
@@ -388,6 +390,7 @@ describe('Reader', () => {
           id: strategy[0],
           token0: strategy[2][0],
           token1: strategy[2][1],
+          owner: undefined,
           order0: {
             y: strategy[3][0][0],
             z: strategy[3][0][1],

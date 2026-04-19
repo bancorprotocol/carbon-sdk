@@ -53,6 +53,7 @@ export const encodeStrategy = (
   return {
     token0: strategy.token0,
     token1: strategy.token1,
+    owner: strategy.owner,
     order0,
     order1,
   };
@@ -65,6 +66,7 @@ export const decodeStrategy = (
     id: strategy.id,
     token0: strategy.token0,
     token1: strategy.token1,
+    owner: strategy.owner,
     order0: decodeOrder(strategy.order0),
     order1: decodeOrder(strategy.order1),
     encoded: strategy,
@@ -83,7 +85,7 @@ export async function parseStrategy(
   decimals: Decimals
 ): Promise<Strategy> {
   logger.debug('parseStrategy called', arguments);
-  const { id, token0, token1, order0, order1, encoded } = strategy;
+  const { id, token0, token1, owner, order0, order1, encoded } = strategy;
   const decimals0 = await decimals.fetchDecimals(token0);
   const decimals1 = await decimals.fetchDecimals(token1);
   const buyPriceLow = normalizeRate(order1.lowestRate, decimals0, decimals1);
@@ -123,6 +125,7 @@ export async function parseStrategy(
     decimals1,
     baseToken: token0,
     quoteToken: token1,
+    owner,
     buyPriceLow,
     buyPriceMarginal,
     buyPriceHigh,
@@ -138,6 +141,7 @@ export async function parseStrategy(
     id: strId,
     baseToken: token0,
     quoteToken: token1,
+    owner,
     buyPriceLow,
     buyPriceMarginal,
     buyPriceHigh,

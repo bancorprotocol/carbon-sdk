@@ -1,13 +1,14 @@
 import { ChainCache } from './ChainCache';
 import { Logger } from '../common/logger';
 import { BlockMetadata, Fetcher, TokenPair } from '../common/types';
+import { CacheSyncApi, ChainSyncConfig } from './types';
 
 const logger = new Logger('ChainSync.ts');
 
 const BLOCKS_TO_KEEP = 3;
 
 export class ChainSync {
-  private _fetcher: Fetcher;
+  private _fetcher?: Fetcher;
   private _chainCache: ChainCache;
   private _syncCalled: boolean = false;
   private _slowPollPairs: boolean = false;
@@ -17,6 +18,8 @@ export class ChainSync {
   private _numOfPairsToBatch: number;
   private _msToWaitBetweenSyncs: number;
   private _chunkSize: number;
+  private _cacheSyncApi?: CacheSyncApi;
+  private _pollingIntervalMs: number;
   // Track all active timers for cleanup
   private _activeTimers: Set<number> = new Set();
   private _isStopped: boolean = false;
@@ -43,18 +46,26 @@ export class ChainSync {
   }
 
   constructor(
-    fetcher: Fetcher,
     chainCache: ChainCache,
-    numOfPairsToBatch: number = 100,
-    msToWaitBetweenSyncs: number = 1000,
-    chunkSize: number = 1000
+    config: ChainSyncConfig
   ) {
     this._reinitializeSelf();
-    this._fetcher = fetcher;
     this._chainCache = chainCache;
-    this._numOfPairsToBatch = numOfPairsToBatch;
-    this._msToWaitBetweenSyncs = msToWaitBetweenSyncs;
-    this._chunkSize = chunkSize;
+    if (config.mode === 'chain') {
+      this._fetcher = config.fetcher;
+      this._numOfPairsToBatch = config.numOfPairsToBatch ?? 100;
+      this._msToWaitBetweenSyncs = config.msToWaitBetweenSyncs ?? 1000;
+      this._chunkSize = config.chunkSize ?? 1000;
+      this._cacheSyncApi = undefined;
+      this._pollingIntervalMs = this._msToWaitBetweenSyncs;
+    } else {
+      this._fetcher = undefined;
+      this._numOfPairsToBatch = 100;
+      this._msToWaitBetweenSyncs = 1000;
+      this._chunkSize = 1000;
+      this._cacheSyncApi = config.cacheSyncApi;
+      this._pollingIntervalMs = config.pollingIntervalMs ?? 1000;
+    }
   }
 
   /**
@@ -92,11 +103,18 @@ export class ChainSync {
       throw new Error('ChainSync.startDataSync() can only be called once');
     }
     this._syncCalled = true;
+
+    if (this._cacheSyncApi) {
+      await this._startApiPolling();
+      return;
+    }
+
+    const fetcher = this._requireFetcher();
     const latestBlockInCache = this._chainCache.getLatestBlockNumber();
 
     if (latestBlockInCache === 0) {
       logger.debug('startDataSync - cache is new', arguments);
-      const blockNumber = await this._fetcher.getBlockNumber();
+      const blockNumber = await fetcher.getBlockNumber();
       if (typeof blockNumber !== 'number') {
         logger.error(
           'Fatal! startDataSync - getBlockNumber returned value is not a number. ' +
@@ -123,10 +141,51 @@ export class ChainSync {
     ]);
   }
 
+  private async _startApiPolling(): Promise<void> {
+    const poll = async () => {
+      try {
+        const serializedCache = await this._fetchSerializedCacheFromApi();
+        const updated = this._chainCache.replaceFromSerialized(serializedCache);
+        if (!updated) {
+          logger.error(
+            'API polling returned invalid cache data - keeping existing cache'
+          );
+        }
+      } catch (error) {
+        logger.error('Failed to sync cache from API', error);
+      }
+
+      this._setTimeout(poll, this._pollingIntervalMs);
+    };
+
+    await poll();
+  }
+
+  private async _fetchSerializedCacheFromApi(): Promise<string> {
+    if (!this._cacheSyncApi) {
+      throw new Error('Cache sync API is not configured');
+    }
+
+    if (typeof this._cacheSyncApi === 'string') {
+      const response = await fetch(this._cacheSyncApi);
+      if (!response.ok) {
+        throw new Error(
+          `Cache sync API request failed with status ${response.status}`
+        );
+      }
+
+      return await response.text();
+    }
+
+    const payload = await this._cacheSyncApi();
+    return typeof payload === 'string' ? payload : JSON.stringify(payload);
+  }
+
   // reads all pairs from chain and sets to private field
   private async _updateUncachedPairsFromChain() {
+    const fetcher = this._requireFetcher();
     logger.debug('_updateUncachedPairsFromChain fetches pairs');
-    const pairs = await this._fetcher.pairs();
+    const pairs = await fetcher.pairs();
     logger.debug('_updateUncachedPairsFromChain fetched pairs', pairs);
     this._lastFetch = Date.now();
     if (pairs.length === 0) {
@@ -142,6 +201,7 @@ export class ChainSync {
   }
 
   private async _populateFeesData(pairs: TokenPair[]): Promise<void> {
+    const fetcher = this._requireFetcher();
     logger.debug('populateFeesData called');
     if (pairs.length === 0) {
       logger.log('populateFeesData called with no pairs - skipping');
@@ -149,7 +209,7 @@ export class ChainSync {
     }
 
     const feeUpdates: [string, string, number][] =
-      await this._fetcher.pairsTradingFeePPM(pairs);
+      await fetcher.pairsTradingFeePPM(pairs);
 
     logger.debug('populateFeesData fetched fee updates', feeUpdates);
 
@@ -207,6 +267,7 @@ export class ChainSync {
   }
 
   private async _syncPairDataBatch(): Promise<void> {
+    const fetcher = this._requireFetcher();
     // Split all uncached pairs into batches
     const batches: TokenPair[][] = [];
     for (
@@ -220,7 +281,7 @@ export class ChainSync {
 
     try {
       const strategiesBatches = await Promise.all(
-        batches.map((batch) => this._fetcher.strategiesByPairs(batch))
+        batches.map((batch) => fetcher.strategiesByPairs(batch))
       );
       logger.debug('_syncPairDataBatch strategiesBatches', strategiesBatches);
       this._chainCache.bulkAddPairs(strategiesBatches.flat());
@@ -232,13 +293,22 @@ export class ChainSync {
   }
 
   public async syncPairData(token0: string, token1: string): Promise<void> {
+    if (this._cacheSyncApi) {
+      logger.debug(
+        'syncPairData called while API polling is enabled - skipping chain fetch'
+      );
+      return;
+    }
+
+    const fetcher = this._requireFetcher();
+
     if (!this._syncCalled) {
       throw new Error(
         'ChainSync.startDataSync() must be called before syncPairData()'
       );
     }
     try {
-      const strategies = await this._fetcher.strategiesByPair(token0, token1);
+      const strategies = await fetcher.strategiesByPair(token0, token1);
       if (this._chainCache.hasCachedPair(token0, token1)) return;
       this._chainCache.addPair(token0, token1, strategies);
     } catch (error) {
@@ -252,11 +322,12 @@ export class ChainSync {
   }
 
   private async _syncEvents(): Promise<void> {
+    const fetcher = this._requireFetcher();
     logger.debug('_syncEvents called');
     const processEvents = async () => {
       logger.debug('_syncEvents processEvents - new cycle started');
       try {
-        const currentBlock = await this._fetcher.getBlockNumber();
+        const currentBlock = await fetcher.getBlockNumber();
         // if the current block number isn't a number, throw an error and hope that the next iteration of processEvents will get a valid number
         if (typeof currentBlock !== 'number') {
           logger.error(
@@ -291,7 +362,7 @@ export class ChainSync {
           );
 
           // Fetch all events using the new unified method
-          const events = await this._fetcher.getEvents(
+          const events = await fetcher.getEvents(
             latestBlock + 1,
             currentBlock,
             this._chunkSize
@@ -328,7 +399,7 @@ export class ChainSync {
             logger.debug(
               '_syncEvents noticed at least one default fee update - refetching pair fees for all pairs'
             );
-            await this._populateFeesData([...(await this._fetcher.pairs())]);
+            await this._populateFeesData([...(await fetcher.pairs())]);
           }
           if (newlyCreatedPairs.length > 0) {
             logger.debug(
@@ -354,6 +425,7 @@ export class ChainSync {
    * @returns True if a reorganization is detected, false otherwise
    */
   private async _detectReorg(currentBlock: number): Promise<boolean> {
+    const fetcher = this._requireFetcher();
     logger.debug('_detectReorg called');
     const blocksMetadata: BlockMetadata[] = this._chainCache.blocksMetadata;
     const numberToBlockMetadata: { [key: number]: BlockMetadata } = {};
@@ -376,7 +448,7 @@ export class ChainSync {
 
       try {
         // Fetch current block data and handle potential null response
-        const currentBlockData = await this._fetcher.getBlock(number);
+        const currentBlockData = await fetcher.getBlock(number);
 
         if (
           !currentBlockData ||
@@ -436,7 +508,7 @@ export class ChainSync {
         latestBlocksMetadata.push(numberToBlockMetadata[blockNumber]);
       } else {
         try {
-          const blockData = await this._fetcher.getBlock(blockNumber);
+          const blockData = await fetcher.getBlock(blockNumber);
 
           if (!blockData || !blockData.number || !blockData.hash) {
             logger.error(
@@ -469,5 +541,13 @@ export class ChainSync {
     logger.debug('_detectReorg updated blocks metadata');
 
     return false;
+  }
+
+  private _requireFetcher(): Fetcher {
+    if (!this._fetcher) {
+      throw new Error('ChainSync fetcher is only available in chain sync mode');
+    }
+
+    return this._fetcher;
   }
 }

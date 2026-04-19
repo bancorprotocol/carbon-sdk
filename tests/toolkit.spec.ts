@@ -10,6 +10,7 @@ const encodedStrategies: EncodedStrategy[] = [
     id: 0n,
     token0: 'abc',
     token1: 'xyz',
+    owner: undefined,
     order0: {
       y: 0n,
       z: 0n,
@@ -27,6 +28,7 @@ const encodedStrategies: EncodedStrategy[] = [
     id: 1n,
     token0: 'xyz',
     token1: 'abc',
+    owner: undefined,
     order0: {
       y: 1n,
       z: 1n,
@@ -47,6 +49,7 @@ const expectedStrategies: Strategy[] = [
     id: '0',
     baseToken: 'abc',
     quoteToken: 'xyz',
+    owner: undefined,
     buyPriceLow: '0',
     buyPriceMarginal: '0',
     buyPriceHigh: '0',
@@ -61,6 +64,7 @@ const expectedStrategies: Strategy[] = [
     id: '1',
     baseToken: 'xyz',
     quoteToken: 'abc',
+    owner: undefined,
     buyPriceLow:
       '0.000000000000000000000000000012621774483536188886587657044524579674771302961744368076324462890625',
     buyPriceMarginal:

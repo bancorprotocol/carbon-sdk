@@ -58,6 +58,7 @@ export const encodedStrategyStrToBN = (
     id: BigInt(strategy.id),
     token0: strategy.token0,
     token1: strategy.token1,
+    owner: strategy.owner,
     order0: encodedOrderStrToBN(strategy.order0),
     order1: encodedOrderStrToBN(strategy.order1),
   };
