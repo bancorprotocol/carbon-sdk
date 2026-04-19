@@ -3,6 +3,10 @@ import {
   EncodedOrderBNStr,
   EncodedStrategy,
   EncodedStrategyBNStr,
+  GradientEncodedOrder,
+  GradientEncodedOrderBNStr,
+  GradientEncodedStrategy,
+  GradientEncodedStrategyBNStr,
   MatchAction,
   MatchActionBNStr,
   OrdersMap,
@@ -45,6 +49,19 @@ export const encodedOrderStrToBN = (order: EncodedOrderBNStr): EncodedOrder => {
   };
 };
 
+export const encodedGradientOrderStrToBN = (
+  order: GradientEncodedOrderBNStr
+): GradientEncodedOrder => {
+  return {
+    liquidity: BigInt(order.liquidity),
+    initialPrice: BigInt(order.initialPrice),
+    tradingStartTime: BigInt(order.tradingStartTime),
+    expiry: BigInt(order.expiry),
+    multiFactor: BigInt(order.multiFactor),
+    gradientType: BigInt(order.gradientType),
+  };
+};
+
 export const encodedStrategyBigIntToStr = (
   strategy: EncodedStrategy
 ): EncodedStrategyBNStr => {
@@ -60,6 +77,24 @@ export const encodedStrategyStrToBN = (
     token1: strategy.token1,
     order0: encodedOrderStrToBN(strategy.order0),
     order1: encodedOrderStrToBN(strategy.order1),
+  };
+};
+
+export const encodedGradientStrategyBigIntToStr = (
+  strategy: GradientEncodedStrategy
+): GradientEncodedStrategyBNStr => {
+  return replaceBigIntsWithStrings(strategy);
+};
+
+export const encodedGradientStrategyStrToBN = (
+  strategy: GradientEncodedStrategyBNStr
+): GradientEncodedStrategy => {
+  return {
+    id: BigInt(strategy.id),
+    token0: strategy.token0,
+    token1: strategy.token1,
+    order0: encodedGradientOrderStrToBN(strategy.order0),
+    order1: encodedGradientOrderStrToBN(strategy.order1),
   };
 };
 

@@ -186,7 +186,8 @@ function exp(x: bigint): bigint {
     return _exp(x); // slightly more accurate
   }
   if (x < EXP_MAX) {
-    return _exp(x % EXP_LN2 << (x / EXP_LN2));
+    // e^x = e^(x mod ln2) * 2^floor(x / ln2)
+    return _exp(x % EXP_LN2) << (x / EXP_LN2);
   }
   throw new Error('ExpOverflow');
 }

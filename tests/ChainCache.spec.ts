@@ -3,6 +3,7 @@ import { ChainCache } from '../src/chain-cache/ChainCache';
 import {
   EncodedOrder,
   EncodedStrategy,
+  GradientEncodedStrategy,
   TokenPair,
   TradingFeeUpdate,
 } from '../src/common/types';
@@ -36,6 +37,28 @@ const encodedStrategy2: EncodedStrategy = {
   order1: encodedOrder1,
 };
 
+const gradientEncodedStrategy1: GradientEncodedStrategy = {
+  id: 2n ** 255n,
+  token0: 'abc',
+  token1: 'xyz',
+  order0: {
+    liquidity: 10n,
+    initialPrice: 20n,
+    tradingStartTime: 30n,
+    expiry: 40n,
+    multiFactor: 50n,
+    gradientType: 1n,
+  },
+  order1: {
+    liquidity: 60n,
+    initialPrice: 70n,
+    tradingStartTime: 80n,
+    expiry: 90n,
+    multiFactor: 100n,
+    gradientType: 4n,
+  },
+};
+
 describe('ChainCache', () => {
   describe('serialize and deserialize', () => {
     let cache: ChainCache;
@@ -43,7 +66,9 @@ describe('ChainCache', () => {
     let deserialized: ChainCache;
     beforeEach(() => {
       cache = new ChainCache();
-      cache.addPair('abc', 'xyz', [encodedStrategy1, encodedStrategy2]);
+      cache.addPair('abc', 'xyz', [encodedStrategy1, encodedStrategy2], [
+        gradientEncodedStrategy1,
+      ]);
       cache.addPair('foo', 'bar', []);
       cache.applyEvents(
         [
@@ -76,6 +101,11 @@ describe('ChainCache', () => {
     });
     it('strategy by id should match', async () => {
       expect(deserialized.getStrategyById('1')).to.deep.equal(encodedStrategy1);
+    });
+    it('gradient strategy by id should match', async () => {
+      expect(
+        deserialized.getGradientStrategyById(gradientEncodedStrategy1.id)
+      ).to.deep.equal(gradientEncodedStrategy1);
     });
     it('last block number should match', async () => {
       expect(deserialized.getLatestBlockNumber()).to.equal(7);
@@ -191,6 +221,49 @@ describe('ChainCache', () => {
       // this shouldn't fire the event - so affectedPairs should remain the same
       cache.applyEvents([], 5);
       expect(affectedPairs).to.deep.equal([['abc', 'xyz']]);
+    });
+    it('should process gradient strategy events', async () => {
+      const cache = new ChainCache();
+      cache.addPair('abc', 'xyz', [], [gradientEncodedStrategy1]);
+
+      const updatedGradientStrategy = {
+        ...gradientEncodedStrategy1,
+        order0: {
+          ...gradientEncodedStrategy1.order0,
+          liquidity: 11n,
+        },
+      };
+
+      cache.applyEvents(
+        [
+          {
+            type: 'GradientStrategyUpdated',
+            blockNumber: 1,
+            logIndex: 0,
+            data: updatedGradientStrategy,
+          },
+        ],
+        1
+      );
+
+      let strategies = await cache.getGradientStrategiesByPair('abc', 'xyz');
+      expect(strategies).to.have.length(1);
+      expect(strategies?.[0]).to.deep.equal(updatedGradientStrategy);
+
+      cache.applyEvents(
+        [
+          {
+            type: 'GradientStrategyDeleted',
+            blockNumber: 2,
+            logIndex: 0,
+            data: updatedGradientStrategy,
+          },
+        ],
+        2
+      );
+
+      strategies = await cache.getGradientStrategiesByPair('abc', 'xyz');
+      expect(strategies).to.have.length(0);
     });
     it('should contain a single copy of a strategy that was updated', async () => {
       const cache = new ChainCache();
@@ -309,6 +382,14 @@ describe('ChainCache', () => {
       });
       const strategies = await cache.getStrategiesByPair('abc', 'xyz');
       expect(strategies).to.deep.equal([encodedStrategy1]);
+    });
+    it('getGradientStrategiesByPair calls miss handler, which adds the missing pair, allowing the call to return gradient strategies', async () => {
+      const cache = new ChainCache();
+      cache.setCacheMissHandler(async (token0, token1) => {
+        cache.addPair(token0, token1, [], [gradientEncodedStrategy1]);
+      });
+      const strategies = await cache.getGradientStrategiesByPair('abc', 'xyz');
+      expect(strategies).to.deep.equal([gradientEncodedStrategy1]);
     });
   });
 });

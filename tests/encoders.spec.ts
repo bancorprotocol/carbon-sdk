@@ -23,7 +23,7 @@ import {
 } from '../src/strategy-management/';
 import { DecodedStrategy, EncodedStrategy } from '../src/common/types';
 import sinon, { SinonStubbedInstance } from 'sinon';
-import { Decimal } from '../src/utils/numerics';
+import { BnToDec, Decimal } from '../src/utils/numerics';
 import { Decimals } from '../src/utils/decimals';
 import { isAlmostEqual } from './test-utils';
 

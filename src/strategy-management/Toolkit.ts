@@ -18,6 +18,12 @@ import {
   OrdersMap,
   Filter,
   Action,
+  GradientDecodedStrategy,
+  GradientEncodedStrategy,
+  GradientEncodedStrategyBNStr,
+  GradientStrategy,
+  GradientStrategyUpdate,
+  GradientType,
   Strategy,
   StrategyUpdate,
   OrdersMapBNStr,
@@ -49,17 +55,22 @@ const logger = new Logger('Toolkit.ts');
 import {
   addFee,
   buildStrategyObject,
+  buildGradientStrategyObject,
   calculateOverlappingBuyBudget,
   calculateOverlappingSellBudget,
+  decodeGradientStrategy,
   decodeStrategy,
+  encodeGradientStrategy,
   encodeStrategy,
   getMinMaxPricesByDecimals,
   normalizeRate,
+  parseGradientStrategy,
   parseStrategy,
   subtractFee,
 } from './utils';
 
 import {
+  encodedGradientStrategyStrToBN,
   decodeOrder,
   encodedStrategyStrToBN,
   matchActionBNToStr,
@@ -681,6 +692,35 @@ export class Toolkit {
     return strategy;
   }
 
+  public async getGradientStrategyById(id: string): Promise<GradientStrategy> {
+    logger.debug('getGradientStrategyById called', arguments);
+
+    let encodedStrategy: GradientEncodedStrategy | undefined;
+
+    if (this._cache.isCacheInitialized()) {
+      encodedStrategy = this._cache.getGradientStrategyById(id);
+    }
+
+    if (encodedStrategy) {
+      logger.debug('getGradientStrategyById fetched from cache');
+    } else {
+      logger.debug('getGradientStrategyById fetching from chain');
+      encodedStrategy = await this._api.reader.gradientStrategy(BigInt(id));
+    }
+
+    const decodedStrategy = decodeGradientStrategy(encodedStrategy);
+    const strategy = await parseGradientStrategy(decodedStrategy, this._decimals);
+
+    logger.debug('getGradientStrategyById info:', {
+      id,
+      encodedStrategy,
+      decodedStrategy,
+      strategy,
+    });
+
+    return strategy;
+  }
+
   /**
    * Gets all the strategies that belong to the given pair
    *
@@ -721,6 +761,48 @@ export class Toolkit {
     );
 
     logger.debug('getStrategiesByPair info:', {
+      token0,
+      token1,
+      encodedStrategies,
+      decodedStrategies,
+      strategies,
+    });
+
+    return strategies;
+  }
+
+  public async getGradientStrategiesByPair(
+    token0: string,
+    token1: string
+  ): Promise<GradientStrategy[]> {
+    logger.debug('getGradientStrategiesByPair called', arguments);
+
+    let encodedStrategies: GradientEncodedStrategy[] | undefined;
+
+    if (this._cache.isCacheInitialized()) {
+      encodedStrategies = await this._cache.getGradientStrategiesByPair(
+        token0,
+        token1
+      );
+    }
+
+    if (encodedStrategies) {
+      logger.debug('getGradientStrategiesByPair fetched from cache');
+    } else {
+      logger.debug('getGradientStrategiesByPair fetching from chain');
+      encodedStrategies = await this._api.reader.gradientStrategiesByPair(
+        token0,
+        token1
+      );
+    }
+    const decodedStrategies = encodedStrategies.map(decodeGradientStrategy);
+    const strategies = await Promise.all(
+      decodedStrategies.map(async (strategy) => {
+        return await parseGradientStrategy(strategy, this._decimals);
+      })
+    );
+
+    logger.debug('getGradientStrategiesByPair info:', {
       token0,
       token1,
       encodedStrategies,
@@ -826,8 +908,7 @@ export class Toolkit {
     logger.debug('getUserStrategies called', arguments);
 
     const tokens = await this._api.reader.tokensByOwner(user);
-    // Combine both arrays into a single array of IDs
-    const ids = [...tokens.gradientVoucherTokens, ...tokens.voucherTokens];
+    const ids = tokens.voucherTokens;
 
     let encodedStrategies: EncodedStrategy[] = [];
     let uncachedIds: bigint[] = ids;
@@ -861,6 +942,53 @@ export class Toolkit {
       decodedStrategies,
       strategies,
     });
+    return strategies;
+  }
+
+  public async getUserGradientStrategies(
+    user: string
+  ): Promise<GradientStrategy[]> {
+    logger.debug('getUserGradientStrategies called', arguments);
+
+    const tokens = await this._api.reader.tokensByOwner(user);
+    const ids = tokens.gradientVoucherTokens;
+    let encodedStrategies: GradientEncodedStrategy[] = [];
+
+    if (this._cache.isCacheInitialized()) {
+      const uncachedIds: bigint[] = [];
+      ids.forEach((id) => {
+        const strategy = this._cache.getGradientStrategyById(id);
+        if (strategy) {
+          encodedStrategies.push(strategy);
+        } else {
+          uncachedIds.push(id);
+        }
+      });
+
+      if (uncachedIds.length > 0) {
+        const uncachedStrategies =
+          await this._api.reader.gradientStrategies(uncachedIds);
+        encodedStrategies = [...encodedStrategies, ...uncachedStrategies];
+      }
+    } else {
+      encodedStrategies =
+        ids.length > 0 ? await this._api.reader.gradientStrategies(ids) : [];
+    }
+
+    const decodedStrategies = encodedStrategies.map(decodeGradientStrategy);
+    const strategies = await Promise.all(
+      decodedStrategies.map(async (strategy) => {
+        return await parseGradientStrategy(strategy, this._decimals);
+      })
+    );
+
+    logger.debug('getUserGradientStrategies info:', {
+      ids,
+      encodedStrategies,
+      decodedStrategies,
+      strategies,
+    });
+
     return strategies;
   }
 
@@ -1337,6 +1465,61 @@ export class Toolkit {
     );
   }
 
+  public async createBuySellGradientStrategy(
+    baseToken: string,
+    quoteToken: string,
+    buyPriceStart: string,
+    buyPriceEnd: string,
+    buyBudget: string,
+    buyGradientType: GradientType,
+    buyStartTime: number,
+    buyEndTime: number,
+    sellPriceStart: string,
+    sellPriceEnd: string,
+    sellBudget: string,
+    sellGradientType: GradientType,
+    sellStartTime: number,
+    sellEndTime: number,
+    overrides?: PayableOverrides
+  ): Promise<PopulatedTransaction> {
+    logger.debug('createBuySellGradientStrategy called', arguments);
+    const decimals = this._decimals;
+    const baseDecimals = await decimals.fetchDecimals(baseToken);
+    const quoteDecimals = await decimals.fetchDecimals(quoteToken);
+    const strategy: GradientDecodedStrategy = buildGradientStrategyObject(
+      baseToken,
+      quoteToken,
+      baseDecimals,
+      quoteDecimals,
+      buyPriceStart,
+      buyPriceEnd,
+      buyBudget,
+      buyGradientType,
+      buyStartTime,
+      buyEndTime,
+      sellPriceStart,
+      sellPriceEnd,
+      sellBudget,
+      sellGradientType,
+      sellStartTime,
+      sellEndTime
+    );
+    const encStrategy = encodeGradientStrategy(strategy);
+
+    logger.debug('createBuySellGradientStrategy info:', {
+      strategy,
+      encStrategy,
+    });
+
+    return this._api.composer.createGradientStrategy(
+      encStrategy.token0,
+      encStrategy.token1,
+      encStrategy.order0,
+      encStrategy.order1,
+      overrides
+    );
+  }
+
   /**
    * Creates an unsigned transaction to create multiple strategies - similarly to `createBuySellStrategy`.
    *
@@ -1590,11 +1773,146 @@ export class Toolkit {
     );
   }
 
+  public async updateGradientStrategy(
+    strategyId: string,
+    encoded: GradientEncodedStrategyBNStr,
+    {
+      buyPriceStart,
+      buyPriceEnd,
+      buyBudget,
+      buyGradientType,
+      buyStartTime,
+      buyEndTime,
+      sellPriceStart,
+      sellPriceEnd,
+      sellBudget,
+      sellGradientType,
+      sellStartTime,
+      sellEndTime,
+    }: GradientStrategyUpdate,
+    overrides?: PayableOverrides
+  ): Promise<PopulatedTransaction> {
+    logger.debug('updateGradientStrategy called', arguments);
+
+    const decodedOriginal = decodeGradientStrategy(
+      encodedGradientStrategyStrToBN(encoded)
+    );
+    const originalStrategy = await parseGradientStrategy(
+      decodedOriginal,
+      this._decimals
+    );
+
+    const decimals = this._decimals;
+    const baseDecimals = await decimals.fetchDecimals(
+      originalStrategy.baseToken
+    );
+    const quoteDecimals = await decimals.fetchDecimals(
+      originalStrategy.quoteToken
+    );
+
+    const newStrategy: GradientDecodedStrategy = buildGradientStrategyObject(
+      originalStrategy.baseToken,
+      originalStrategy.quoteToken,
+      baseDecimals,
+      quoteDecimals,
+      buyPriceStart ?? originalStrategy.buyPriceStart,
+      buyPriceEnd ?? originalStrategy.buyPriceEnd,
+      buyBudget ?? originalStrategy.buyBudget,
+      buyGradientType ?? originalStrategy.buyGradientType,
+      buyStartTime ?? originalStrategy.buyStartTime,
+      buyEndTime ?? originalStrategy.buyEndTime,
+      sellPriceStart ?? originalStrategy.sellPriceStart,
+      sellPriceEnd ?? originalStrategy.sellPriceEnd,
+      sellBudget ?? originalStrategy.sellBudget,
+      sellGradientType ?? originalStrategy.sellGradientType,
+      sellStartTime ?? originalStrategy.sellStartTime,
+      sellEndTime ?? originalStrategy.sellEndTime
+    );
+    const newEncodedStrategy = encodeGradientStrategy(newStrategy);
+    const encodedBN = encodedGradientStrategyStrToBN(encoded);
+
+    const isBuyOrderUnchanged =
+      buyPriceStart === undefined &&
+      buyPriceEnd === undefined &&
+      buyBudget === undefined &&
+      buyGradientType === undefined &&
+      buyStartTime === undefined &&
+      buyEndTime === undefined;
+    const isSellOrderUnchanged =
+      sellPriceStart === undefined &&
+      sellPriceEnd === undefined &&
+      sellBudget === undefined &&
+      sellGradientType === undefined &&
+      sellStartTime === undefined &&
+      sellEndTime === undefined;
+
+    if (isBuyOrderUnchanged) {
+      newEncodedStrategy.order1 = encodedBN.order1;
+    } else if (
+      buyBudget !== undefined &&
+      buyPriceStart === undefined &&
+      buyPriceEnd === undefined &&
+      buyGradientType === undefined &&
+      buyStartTime === undefined &&
+      buyEndTime === undefined
+    ) {
+      newEncodedStrategy.order1.initialPrice = encodedBN.order1.initialPrice;
+      newEncodedStrategy.order1.tradingStartTime =
+        encodedBN.order1.tradingStartTime;
+      newEncodedStrategy.order1.expiry = encodedBN.order1.expiry;
+      newEncodedStrategy.order1.multiFactor = encodedBN.order1.multiFactor;
+      newEncodedStrategy.order1.gradientType = encodedBN.order1.gradientType;
+    }
+
+    if (isSellOrderUnchanged) {
+      newEncodedStrategy.order0 = encodedBN.order0;
+    } else if (
+      sellBudget !== undefined &&
+      sellPriceStart === undefined &&
+      sellPriceEnd === undefined &&
+      sellGradientType === undefined &&
+      sellStartTime === undefined &&
+      sellEndTime === undefined
+    ) {
+      newEncodedStrategy.order0.initialPrice = encodedBN.order0.initialPrice;
+      newEncodedStrategy.order0.tradingStartTime =
+        encodedBN.order0.tradingStartTime;
+      newEncodedStrategy.order0.expiry = encodedBN.order0.expiry;
+      newEncodedStrategy.order0.multiFactor = encodedBN.order0.multiFactor;
+      newEncodedStrategy.order0.gradientType = encodedBN.order0.gradientType;
+    }
+
+    logger.debug('updateGradientStrategy info:', {
+      baseDecimals,
+      quoteDecimals,
+      decodedOriginal,
+      originalStrategy,
+      newStrategy,
+      newEncodedStrategy,
+    });
+
+    return this._api.composer.updateGradientStrategy(
+      BigInt(strategyId),
+      newEncodedStrategy.token0,
+      newEncodedStrategy.token1,
+      [encodedBN.order0, encodedBN.order1],
+      [newEncodedStrategy.order0, newEncodedStrategy.order1],
+      overrides
+    );
+  }
+
   public async deleteStrategy(
     strategyId: string
   ): Promise<PopulatedTransaction> {
     logger.debug('deleteStrategy called', arguments);
     return this._api.composer.deleteStrategy(BigInt(strategyId));
+  }
+
+  public async deleteGradientStrategy(
+    strategyId: string
+  ): Promise<PopulatedTransaction> {
+    logger.debug('deleteGradientStrategy called', arguments);
+    return this._api.composer.deleteGradientStrategy(BigInt(strategyId));
   }
 
   /**

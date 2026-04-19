@@ -1,5 +1,14 @@
 import { Decimal, BnToDec, DecToBn, ONE_48, ONE_24 } from './numerics';
-import { DecodedOrder, EncodedOrder } from '../common/types';
+import {
+  DecodedOrder,
+  EncodedOrder,
+  DecodedStrategy,
+  EncodedStrategy,
+  GradientDecodedOrder,
+  GradientEncodedOrder,
+  GradientDecodedStrategy,
+  GradientEncodedStrategy,
+} from '../common/types';
 
 function bitLength(value: bigint): number {
   return value > 0n
@@ -166,6 +175,92 @@ export const decodeOrder = (order: EncodedOrder): DecodedOrder => {
     marginalRate: decodeScaleInitialRate(
       y.eq(z) ? B.add(A) : B.add(A.mul(y).div(z))
     ).toString(),
+  };
+};
+
+export const encodeStrategy = (
+  strategy: DecodedStrategy
+): Omit<EncodedStrategy, 'id'> => {
+  const [order0, order1] = encodeOrders([strategy.order0, strategy.order1]);
+  return {
+    token0: strategy.token0,
+    token1: strategy.token1,
+    order0,
+    order1,
+  };
+};
+
+export const decodeStrategy = (
+  strategy: EncodedStrategy
+): DecodedStrategy & { id: bigint; encoded: EncodedStrategy } => {
+  return {
+    id: strategy.id,
+    token0: strategy.token0,
+    token1: strategy.token1,
+    order0: decodeOrder(strategy.order0),
+    order1: decodeOrder(strategy.order1),
+    encoded: strategy,
+  };
+};
+
+export const encodeGradientOrder = (
+  order: GradientDecodedOrder
+): GradientEncodedOrder => {
+  return {
+    liquidity: BigInt(order.liquidity),
+    initialPrice: encodeFloatInitialRate(
+      encodeScaleInitialRate(new Decimal(order.initialPrice))
+    ),
+    tradingStartTime: BigInt(order.tradingStartTime),
+    expiry: BigInt(order.expiry),
+    multiFactor: encodeFloatMultiFactor(
+      encodeScaleMultiFactor(new Decimal(order.multiFactor))
+    ),
+    gradientType: BigInt(order.gradientType),
+  };
+};
+
+export const decodeGradientOrder = (
+  order: GradientEncodedOrder
+): GradientDecodedOrder => {
+  return {
+    liquidity: order.liquidity.toString(),
+    initialPrice: decodeScaleInitialRate(
+      BnToDec(decodeFloatInitialRate(order.initialPrice))
+    ).toString(),
+    tradingStartTime: Number(order.tradingStartTime),
+    expiry: Number(order.expiry),
+    multiFactor: decodeScaleMultiFactor(
+      BnToDec(decodeFloatMultiFactor(order.multiFactor))
+    ).toString(),
+    gradientType: Number(order.gradientType),
+  };
+};
+
+export const encodeGradientStrategy = (
+  strategy: GradientDecodedStrategy
+): Omit<GradientEncodedStrategy, 'id'> => {
+  return {
+    token0: strategy.token0,
+    token1: strategy.token1,
+    order0: encodeGradientOrder(strategy.order0),
+    order1: encodeGradientOrder(strategy.order1),
+  };
+};
+
+export const decodeGradientStrategy = (
+  strategy: GradientEncodedStrategy
+): GradientDecodedStrategy & {
+  id: bigint;
+  encoded: GradientEncodedStrategy;
+} => {
+  return {
+    id: strategy.id,
+    token0: strategy.token0,
+    token1: strategy.token1,
+    order0: decodeGradientOrder(strategy.order0),
+    order1: decodeGradientOrder(strategy.order1),
+    encoded: strategy,
   };
 };
 

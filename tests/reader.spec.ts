@@ -5,6 +5,7 @@ import { MulticallService, MultiCall } from '../src/contracts-api/utils';
 import { Multicall } from '../src/abis/types';
 import {
   EncodedStrategy,
+  GradientEncodedStrategy,
   TradingFeeUpdate,
   TokenPair,
 } from '../src/common/types';
@@ -52,10 +53,33 @@ describe('Reader', () => {
   };
 
   const mockTradingFeeUpdate: TradingFeeUpdate = ['0x123', '0x456', 100];
+  const mockGradientStrategy: GradientEncodedStrategy = {
+    id: 2n ** 255n,
+    token0: '0x123',
+    token1: '0x456',
+    order0: {
+      liquidity: 100n,
+      initialPrice: 200n,
+      tradingStartTime: 300n,
+      expiry: 400n,
+      multiFactor: 500n,
+      gradientType: 1n,
+    },
+    order1: {
+      liquidity: 600n,
+      initialPrice: 700n,
+      tradingStartTime: 800n,
+      expiry: 900n,
+      multiFactor: 1000n,
+      gradientType: 4n,
+    },
+  };
 
   beforeEach(() => {
     // Create mock contracts with necessary methods
     mockContracts = {
+      hasGradientController: true,
+      hasGradientVoucher: true,
       carbonController: {
         target: '0x123',
         interface: {
@@ -88,12 +112,40 @@ describe('Reader', () => {
           },
         },
         strategiesByPair: async () => [] as any,
+        pairs: async () => [
+          ['0x123', '0x456'],
+          ['0xaaa', '0xbbb'],
+        ] as any,
+      } as any,
+      gradientController: {
+        target: '0x999',
+        interface: {
+          parseLog: (log: { topics: string[]; data: string }) => {
+            const eventType = log.topics[0];
+            switch (eventType) {
+              case '0x456':
+                return {
+                  name: 'StrategyCreated',
+                  args: mockGradientStrategy,
+                };
+              default:
+                return null;
+            }
+          },
+        },
+        strategiesByPair: async () => [] as any,
+        pairs: async () => [
+          ['0x123', '0x456'],
+          ['0xccc', '0xddd'],
+        ] as any,
       } as any,
       provider: {
         getLogs: async ({
+          address,
           fromBlock,
           toBlock,
         }: {
+          address: string;
           fromBlock: number;
           toBlock: number;
         }) => {
@@ -101,52 +153,67 @@ describe('Reader', () => {
           const logs: any[] = [];
           for (let block = fromBlock; block <= toBlock; block++) {
             // Add multiple events per block with different log indices
-            logs.push(
-              {
+            if (address === '0x123') {
+              logs.push(
+                {
+                  blockNumber: block,
+                  index: 0,
+                  topics: ['0x123'], // StrategyCreated
+                  data: '0x',
+                  blockHash: '0x123',
+                  transactionIndex: 0,
+                  removed: false,
+                  address: '0x123',
+                  transactionHash: '0x456',
+                },
+                {
+                  blockNumber: block,
+                  index: 1,
+                  topics: ['0x789'], // TradingFeePPMUpdated
+                  data: '0x',
+                  blockHash: '0x123',
+                  transactionIndex: 2,
+                  removed: false,
+                  address: '0x123',
+                  transactionHash: '0x456',
+                },
+                {
+                  blockNumber: block,
+                  index: 2,
+                  topics: ['0x789'], // TradingFeePPMUpdated
+                  data: '0x',
+                  blockHash: '0x123',
+                  transactionIndex: 2,
+                  removed: false,
+                  address: '0x123',
+                  transactionHash: '0x456',
+                },
+                {
+                  blockNumber: block,
+                  index: 3,
+                  topics: ['0xabc'], // PairTradingFeePPMUpdated
+                  data: '0x',
+                  blockHash: '0x123',
+                  transactionIndex: 3,
+                  removed: false,
+                  address: '0x123',
+                  transactionHash: '0x456',
+                }
+              );
+            }
+            if (address === '0x999') {
+              logs.push({
                 blockNumber: block,
-                index: 0,
-                topics: ['0x123'], // StrategyCreated
+                index: 4,
+                topics: ['0x456'], // Gradient StrategyCreated
                 data: '0x',
                 blockHash: '0x123',
-                transactionIndex: 0,
+                transactionIndex: 4,
                 removed: false,
-                address: '0x123',
+                address: '0x999',
                 transactionHash: '0x456',
-              },
-              {
-                blockNumber: block,
-                index: 1,
-                topics: ['0x789'], // TradingFeePPMUpdated
-                data: '0x',
-                blockHash: '0x123',
-                transactionIndex: 2,
-                removed: false,
-                address: '0x123',
-                transactionHash: '0x456',
-              },
-              {
-                blockNumber: block,
-                index: 2,
-                topics: ['0x789'], // TradingFeePPMUpdated
-                data: '0x',
-                blockHash: '0x123',
-                transactionIndex: 2,
-                removed: false,
-                address: '0x123',
-                transactionHash: '0x456',
-              },
-              {
-                blockNumber: block,
-                index: 3,
-                topics: ['0xabc'], // PairTradingFeePPMUpdated
-                data: '0x',
-                blockHash: '0x123',
-                transactionIndex: 3,
-                removed: false,
-                address: '0x123',
-                transactionHash: '0x456',
-              }
-            );
+              });
+            }
           }
           return logs;
         },
@@ -154,6 +221,12 @@ describe('Reader', () => {
       multicall: {
         tryAggregate: async () => [],
       } as unknown as Multicall,
+      voucher: {
+        tokensByOwner: async () => [1n, 2n],
+      } as any,
+      gradientVoucher: {
+        tokensByOwner: async () => [mockGradientStrategy.id],
+      } as any,
     } as unknown as Contracts;
 
     mockMulticallService = new MockMulticallService();
@@ -163,21 +236,21 @@ describe('Reader', () => {
   describe('getEvents', () => {
     it('should process events from a single chunk', async () => {
       const events = await reader.getEvents(1, 5, 10);
-      expect(events).to.have.length(20); // 5 blocks * 4 events per block
+      expect(events).to.have.length(25); // 5 blocks * (4 standard + 1 gradient) events per block
       expect(events[0].blockNumber).to.equal(1);
       expect(events[events.length - 1].blockNumber).to.equal(5);
     });
 
     it('should process events from multiple chunks', async () => {
       const events = await reader.getEvents(1, 15, 5); // 3 chunks of 5 blocks each
-      expect(events).to.have.length(60); // 15 blocks * 4 events per block
+      expect(events).to.have.length(75); // 15 blocks * (4 standard + 1 gradient) events per block
       expect(events[0].blockNumber).to.equal(1);
       expect(events[events.length - 1].blockNumber).to.equal(15);
     });
 
     it('should sort events by block number and log index', async () => {
       const events = await reader.getEvents(1, 3, 1); // 3 blocks, 1 block per chunk
-      expect(events).to.have.length(12); // 3 blocks * 4 events per block
+      expect(events).to.have.length(15); // 3 blocks * (4 standard + 1 gradient) events per block
 
       // Verify sorting
       for (let i = 1; i < events.length; i++) {
@@ -193,7 +266,7 @@ describe('Reader', () => {
 
     it('should handle different event types correctly', async () => {
       const events = await reader.getEvents(1, 1, 1);
-      expect(events).to.have.length(4); // 1 block * 4 events per block
+      expect(events).to.have.length(5); // 1 block * (4 standard + 1 gradient) events per block
 
       // Verify event types and data
       expect(events[0].type).to.equal('StrategyCreated');
@@ -204,6 +277,9 @@ describe('Reader', () => {
 
       expect(events[3].type).to.equal('PairTradingFeePPMUpdated');
       expect(events[3].data).to.deep.equal(mockTradingFeeUpdate);
+
+      expect(events[4].type).to.equal('GradientStrategyCreated');
+      expect(events[4].data).to.deep.equal(mockGradientStrategy);
     });
 
     it('should handle empty block ranges', async () => {
@@ -213,7 +289,8 @@ describe('Reader', () => {
 
     it('should handle invalid events gracefully', async () => {
       // Override the mock contracts to include invalid events
-      mockContracts.provider.getLogs = async (_filter) => {
+      mockContracts.provider.getLogs = async (filter) => {
+        if (filter.address === '0x999') return [] as any;
         return [
           {
             blockNumber: 1,
@@ -258,6 +335,53 @@ describe('Reader', () => {
         // @ts-expect-error - Error is of unknown type but we need to access message property
         expect(error.message).to.equal('Provider error');
       }
+    });
+  });
+
+  describe('pairs', () => {
+    it('should return the union of standard and gradient pairs', async () => {
+      const pairs = await reader.pairs();
+      expect(pairs).to.deep.equal([
+        ['0x123', '0x456'],
+        ['0xaaa', '0xbbb'],
+        ['0xccc', '0xddd'],
+      ]);
+    });
+
+    it('should skip gradient pairs when gradient contracts are not configured', async () => {
+      (mockContracts as any).hasGradientController = false;
+      const pairs = await reader.pairs();
+      expect(pairs).to.deep.equal([
+        ['0x123', '0x456'],
+        ['0xaaa', '0xbbb'],
+      ]);
+    });
+  });
+
+  describe('optional gradient contracts', () => {
+    it('should not query gradient strategies when the gradient controller is not configured', async () => {
+      (mockContracts as any).hasGradientController = false;
+      expect(await reader.gradientStrategiesByPair('0x123', '0x456')).to.deep.equal(
+        []
+      );
+      expect(
+        await reader.gradientStrategiesByPairs([['0x123', '0x456']])
+      ).to.deep.equal([{ pair: ['0x123', '0x456'], strategies: [] }]);
+      expect(await reader.gradientStrategies([1n])).to.deep.equal([]);
+    });
+
+    it('should not query gradient voucher ownership when the gradient voucher is not configured', async () => {
+      (mockContracts as any).hasGradientVoucher = false;
+      const tokens = await reader.tokensByOwner('0xowner');
+      expect(tokens.gradientVoucherTokens).to.deep.equal([]);
+      expect(tokens.voucherTokens).to.deep.equal([1n, 2n]);
+    });
+
+    it('should not query gradient logs when the gradient controller is not configured', async () => {
+      (mockContracts as any).hasGradientController = false;
+      const events = await reader.getEvents(1, 1, 1);
+      expect(events).to.have.length(4);
+      expect(events.some((event) => event.type === 'GradientStrategyCreated')).to.equal(false);
     });
   });
 

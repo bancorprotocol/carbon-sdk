@@ -67,11 +67,41 @@ export type EncodedOrder = {
 
 export type EncodedOrderBNStr = RetypeBigIntToString<EncodedOrder>;
 
+export enum GradientType {
+  LinearIncrease = 0,
+  LinearDecrease = 1,
+  LinearInverseIncrease = 2,
+  LinearInverseDecrease = 3,
+  ExponentialIncrease = 4,
+  ExponentialDecrease = 5,
+}
+
+export type GradientEncodedOrder = {
+  liquidity: bigint;
+  initialPrice: bigint;
+  tradingStartTime: bigint;
+  expiry: bigint;
+  multiFactor: bigint;
+  gradientType: bigint;
+};
+
+export type GradientEncodedOrderBNStr =
+  RetypeBigIntToString<GradientEncodedOrder>;
+
 export type DecodedOrder = {
   liquidity: string;
   lowestRate: string;
   highestRate: string;
   marginalRate: string;
+};
+
+export type GradientDecodedOrder = {
+  liquidity: string;
+  initialPrice: string;
+  tradingStartTime: number;
+  expiry: number;
+  multiFactor: string;
+  gradientType: GradientType;
 };
 
 export type OrdersMap = {
@@ -90,11 +120,29 @@ export type EncodedStrategy = {
 
 export type EncodedStrategyBNStr = RetypeBigIntToString<EncodedStrategy>;
 
+export type GradientEncodedStrategy = {
+  id: bigint;
+  token0: string;
+  token1: string;
+  order0: GradientEncodedOrder;
+  order1: GradientEncodedOrder;
+};
+
+export type GradientEncodedStrategyBNStr =
+  RetypeBigIntToString<GradientEncodedStrategy>;
+
 export type DecodedStrategy = {
   token0: string;
   token1: string;
   order0: DecodedOrder;
   order1: DecodedOrder;
+};
+
+export type GradientDecodedStrategy = {
+  token0: string;
+  token1: string;
+  order0: GradientDecodedOrder;
+  order1: GradientDecodedOrder;
 };
 
 export type TradingFeeUpdate = [string, string, number];
@@ -123,6 +171,26 @@ export type Strategy = {
   encoded: EncodedStrategyBNStr; // the encoded strategy
 };
 
+export type GradientStrategy = {
+  type: 'gradient';
+  id: string;
+  baseToken: string;
+  quoteToken: string;
+  buyPriceStart: string; // in quote tkn per 1 base tkn
+  buyPriceEnd: string; // in quote tkn per 1 base tkn
+  buyBudget: string; // in quote tkn
+  buyGradientType: GradientType;
+  buyStartTime: number; // unix timestamp in seconds
+  buyEndTime: number; // unix timestamp in seconds
+  sellPriceStart: string; // in quote tkn per 1 base tkn
+  sellPriceEnd: string; // in quote tkn per 1 base tkn
+  sellBudget: string; // in base tkn
+  sellGradientType: GradientType;
+  sellStartTime: number; // unix timestamp in seconds
+  sellEndTime: number; // unix timestamp in seconds
+  encoded: GradientEncodedStrategyBNStr;
+};
+
 export type AtLeastOneOf<T> = {
   [K in keyof T]: { [key in K]: T[K] } & {
     [key in Exclude<keyof T, K>]?: T[key];
@@ -141,6 +209,13 @@ export type StrategyUpdate = AtLeastOneOf<
   >
 >;
 
+export type GradientStrategyUpdate = AtLeastOneOf<
+  Omit<
+    GradientStrategy,
+    'type' | 'id' | 'encoded' | 'baseToken' | 'quoteToken'
+  >
+>;
+
 export type BlockMetadata = {
   number: number;
   hash: string;
@@ -152,6 +227,15 @@ export type SyncedEvent =
       blockNumber: number;
       logIndex: number;
       data: EncodedStrategy;
+    }
+  | {
+      type:
+        | 'GradientStrategyCreated'
+        | 'GradientStrategyUpdated'
+        | 'GradientStrategyDeleted';
+      blockNumber: number;
+      logIndex: number;
+      data: GradientEncodedStrategy;
     }
   | {
       type: 'TradingFeePPMUpdated';
@@ -171,10 +255,20 @@ export type SyncedEvents = SyncedEvent[];
 export interface Fetcher {
   pairs(): Promise<TokenPair[]>;
   strategiesByPair(token0: string, token1: string): Promise<EncodedStrategy[]>;
+  gradientStrategiesByPair(
+    token0: string,
+    token1: string
+  ): Promise<GradientEncodedStrategy[]>;
   strategiesByPairs(pairs: TokenPair[]): Promise<
     {
       pair: TokenPair;
       strategies: EncodedStrategy[];
+    }[]
+  >;
+  gradientStrategiesByPairs(pairs: TokenPair[]): Promise<
+    {
+      pair: TokenPair;
+      strategies: GradientEncodedStrategy[];
     }[]
   >;
   pairTradingFeePPM(token0: string, token1: string): Promise<number>;

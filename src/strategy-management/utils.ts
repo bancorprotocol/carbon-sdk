@@ -9,17 +9,24 @@ import {
   DecodedOrder,
   DecodedStrategy,
   EncodedStrategy,
+  GradientDecodedOrder,
+  GradientDecodedStrategy,
+  GradientEncodedStrategy,
+  GradientStrategy,
+  GradientType,
   Strategy,
 } from '../common/types';
 import { Logger } from '../common/logger';
 import {
   calculateRequiredLiquidity,
-  decodeOrder,
-  encodeOrders,
   lowestPossibleRate,
 } from '../utils/encoders';
 import { Decimals } from '../utils/decimals';
-import { encodedStrategyBigIntToStr } from '../utils';
+import {
+  encodedGradientStrategyBigIntToStr,
+  encodedStrategyBigIntToStr,
+} from '../utils';
+import { getMultiFactor, getRateAtExpiry } from '../utils/gradients';
 
 const logger = new Logger('utils.ts');
 
@@ -46,30 +53,8 @@ export function normalizeInvertedRate(
     .toFixed();
 }
 
-export const encodeStrategy = (
-  strategy: DecodedStrategy
-): Omit<EncodedStrategy, 'id'> => {
-  const [order0, order1] = encodeOrders([strategy.order0, strategy.order1]);
-  return {
-    token0: strategy.token0,
-    token1: strategy.token1,
-    order0,
-    order1,
-  };
-};
-
-export const decodeStrategy = (
-  strategy: EncodedStrategy
-): DecodedStrategy & { id: bigint; encoded: EncodedStrategy } => {
-  return {
-    id: strategy.id,
-    token0: strategy.token0,
-    token1: strategy.token1,
-    order0: decodeOrder(strategy.order0),
-    order1: decodeOrder(strategy.order1),
-    encoded: strategy,
-  };
-};
+export { encodeStrategy, decodeStrategy } from '../utils/encoders';
+export { encodeGradientStrategy, decodeGradientStrategy } from '../utils/encoders';
 
 /**
  * Converts a DecodedStrategy object to a Strategy object.
@@ -339,6 +324,255 @@ export function createOrders(
   );
   logger.debug('createOrders info:', { order0, order1 });
   return { order0, order1 };
+}
+
+function validateGradientOrderInputs(
+  startPrice: string,
+  endPrice: string,
+  budget: string,
+  startTime: number,
+  endTime: number
+) {
+  if (new Decimal(startPrice).isNegative() || new Decimal(endPrice).isNegative()) {
+    throw new Error('prices cannot be negative');
+  }
+  if (new Decimal(budget).isNegative()) {
+    throw new Error('budgets cannot be negative');
+  }
+  if (endTime <= startTime) {
+    throw new Error('end time must be greater than start time');
+  }
+}
+
+export function createFromGradientBuyOrder(
+  baseTokenDecimals: number,
+  quoteTokenDecimals: number,
+  buyPriceStart: string,
+  buyPriceEnd: string,
+  buyBudget: string,
+  buyGradientType: GradientType,
+  buyStartTime: number,
+  buyEndTime: number
+): GradientDecodedOrder {
+  validateGradientOrderInputs(
+    buyPriceStart,
+    buyPriceEnd,
+    buyBudget,
+    buyStartTime,
+    buyEndTime
+  );
+
+  const liquidity = parseUnits(buyBudget, quoteTokenDecimals);
+  const initialPrice = normalizeRate(
+    buyPriceStart,
+    quoteTokenDecimals,
+    baseTokenDecimals
+  );
+  const endPrice = normalizeRate(
+    buyPriceEnd,
+    quoteTokenDecimals,
+    baseTokenDecimals
+  );
+  const multiFactor = getMultiFactor(
+    buyGradientType,
+    new Decimal(initialPrice),
+    new Decimal(endPrice),
+    new Decimal(buyStartTime),
+    new Decimal(buyEndTime)
+  );
+
+  return {
+    liquidity: liquidity.toString(),
+    initialPrice,
+    tradingStartTime: buyStartTime,
+    expiry: buyEndTime,
+    multiFactor: multiFactor.toString(),
+    gradientType: buyGradientType,
+  };
+}
+
+export function createFromGradientSellOrder(
+  baseTokenDecimals: number,
+  quoteTokenDecimals: number,
+  sellPriceStart: string,
+  sellPriceEnd: string,
+  sellBudget: string,
+  sellGradientType: GradientType,
+  sellStartTime: number,
+  sellEndTime: number
+): GradientDecodedOrder {
+  validateGradientOrderInputs(
+    sellPriceStart,
+    sellPriceEnd,
+    sellBudget,
+    sellStartTime,
+    sellEndTime
+  );
+
+  const liquidity = parseUnits(sellBudget, baseTokenDecimals);
+  const initialPrice = normalizeInvertedRate(
+    sellPriceStart,
+    quoteTokenDecimals,
+    baseTokenDecimals
+  );
+  const endPrice = normalizeInvertedRate(
+    sellPriceEnd,
+    quoteTokenDecimals,
+    baseTokenDecimals
+  );
+  const multiFactor = getMultiFactor(
+    sellGradientType,
+    new Decimal(initialPrice),
+    new Decimal(endPrice),
+    new Decimal(sellStartTime),
+    new Decimal(sellEndTime)
+  );
+
+  return {
+    liquidity: liquidity.toString(),
+    initialPrice,
+    tradingStartTime: sellStartTime,
+    expiry: sellEndTime,
+    multiFactor: multiFactor.toString(),
+    gradientType: sellGradientType,
+  };
+}
+
+export function createGradientOrders(
+  baseTokenDecimals: number,
+  quoteTokenDecimals: number,
+  buyPriceStart: string,
+  buyPriceEnd: string,
+  buyBudget: string,
+  buyGradientType: GradientType,
+  buyStartTime: number,
+  buyEndTime: number,
+  sellPriceStart: string,
+  sellPriceEnd: string,
+  sellBudget: string,
+  sellGradientType: GradientType,
+  sellStartTime: number,
+  sellEndTime: number
+): { order0: GradientDecodedOrder; order1: GradientDecodedOrder } {
+  const order0 = createFromGradientSellOrder(
+    baseTokenDecimals,
+    quoteTokenDecimals,
+    sellPriceStart,
+    sellPriceEnd,
+    sellBudget,
+    sellGradientType,
+    sellStartTime,
+    sellEndTime
+  );
+  const order1 = createFromGradientBuyOrder(
+    baseTokenDecimals,
+    quoteTokenDecimals,
+    buyPriceStart,
+    buyPriceEnd,
+    buyBudget,
+    buyGradientType,
+    buyStartTime,
+    buyEndTime
+  );
+  return { order0, order1 };
+}
+
+export function buildGradientStrategyObject(
+  baseToken: string,
+  quoteToken: string,
+  baseDecimals: number,
+  quoteDecimals: number,
+  buyPriceStart: string,
+  buyPriceEnd: string,
+  buyBudget: string,
+  buyGradientType: GradientType,
+  buyStartTime: number,
+  buyEndTime: number,
+  sellPriceStart: string,
+  sellPriceEnd: string,
+  sellBudget: string,
+  sellGradientType: GradientType,
+  sellStartTime: number,
+  sellEndTime: number
+): GradientDecodedStrategy {
+  const { order0, order1 } = createGradientOrders(
+    baseDecimals,
+    quoteDecimals,
+    buyPriceStart,
+    buyPriceEnd,
+    buyBudget,
+    buyGradientType,
+    buyStartTime,
+    buyEndTime,
+    sellPriceStart,
+    sellPriceEnd,
+    sellBudget,
+    sellGradientType,
+    sellStartTime,
+    sellEndTime
+  );
+
+  return {
+    token0: baseToken,
+    token1: quoteToken,
+    order0,
+    order1,
+  };
+}
+
+export async function parseGradientStrategy(
+  strategy: GradientDecodedStrategy & {
+    id: bigint;
+    encoded: GradientEncodedStrategy;
+  },
+  decimals: Decimals
+): Promise<GradientStrategy> {
+  const { id, token0, token1, order0, order1, encoded } = strategy;
+  const decimals0 = await decimals.fetchDecimals(token0);
+  const decimals1 = await decimals.fetchDecimals(token1);
+
+  const buyEndRate = getRateAtExpiry(
+    order1.gradientType,
+    new Decimal(order1.initialPrice),
+    new Decimal(order1.multiFactor),
+    new Decimal(order1.tradingStartTime),
+    new Decimal(order1.expiry)
+  );
+  const sellEndRate = getRateAtExpiry(
+    order0.gradientType,
+    new Decimal(order0.initialPrice),
+    new Decimal(order0.multiFactor),
+    new Decimal(order0.tradingStartTime),
+    new Decimal(order0.expiry)
+  );
+
+  return {
+    type: 'gradient',
+    id: id.toString(),
+    baseToken: token0,
+    quoteToken: token1,
+    buyPriceStart: normalizeRate(order1.initialPrice, decimals0, decimals1),
+    buyPriceEnd: normalizeRate(buyEndRate.toString(), decimals0, decimals1),
+    buyBudget: formatUnits(order1.liquidity, decimals1),
+    buyGradientType: order1.gradientType,
+    buyStartTime: order1.tradingStartTime,
+    buyEndTime: order1.expiry,
+    sellPriceStart: normalizeInvertedRate(
+      order0.initialPrice,
+      decimals1,
+      decimals0
+    ),
+    sellPriceEnd: normalizeInvertedRate(
+      sellEndRate.toString(),
+      decimals1,
+      decimals0
+    ),
+    sellBudget: formatUnits(order0.liquidity, decimals0),
+    sellGradientType: order0.gradientType,
+    sellStartTime: order0.tradingStartTime,
+    sellEndTime: order0.expiry,
+    encoded: encodedGradientStrategyBigIntToStr(encoded),
+  };
 }
 
 export const PPM_RESOLUTION = 1_000_000;
