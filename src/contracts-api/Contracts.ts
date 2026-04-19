@@ -9,11 +9,29 @@ import {
   Token__factory,
   CarbonBatcher,
   CarbonBatcher__factory,
+  GradientVoucher,
+  GradientVoucher__factory,
+  GradientController,
+  GradientController__factory,
 } from '../abis/types';
 
 import { Provider } from 'ethers';
 import { config as defaultConfig } from './config';
 import { ContractsConfig } from './types';
+
+type ResolvedContractsConfig = Required<
+  Pick<
+    ContractsConfig,
+    | 'carbonControllerAddress'
+    | 'multiCallAddress'
+    | 'voucherAddress'
+    | 'carbonBatcherAddress'
+  >
+> &
+  Pick<
+    ContractsConfig,
+    'gradientControllerAddress' | 'gradientVoucherAddress'
+  >;
 
 export class Contracts {
   private _provider: Provider;
@@ -21,18 +39,25 @@ export class Contracts {
   private _multiCall: Multicall | undefined;
   private _voucher: Voucher | undefined;
   private _carbonBatcher: CarbonBatcher | undefined;
-  private _config = defaultConfig;
+  private _gradientVoucher: GradientVoucher | undefined;
+  private _gradientController: GradientController | undefined;
+  private _config: ResolvedContractsConfig;
 
   public constructor(provider: Provider, config?: ContractsConfig) {
     this._provider = provider;
-    this._config.carbonControllerAddress =
-      config?.carbonControllerAddress || defaultConfig.carbonControllerAddress;
-    this._config.multiCallAddress =
-      config?.multiCallAddress || defaultConfig.multiCallAddress;
-    this._config.voucherAddress =
-      config?.voucherAddress || defaultConfig.voucherAddress;
-    this._config.carbonBatcherAddress =
-      config?.carbonBatcherAddress || defaultConfig.carbonBatcherAddress;
+    this._config = {
+      carbonControllerAddress:
+        config?.carbonControllerAddress ?? defaultConfig.carbonControllerAddress,
+      multiCallAddress:
+        config?.multiCallAddress ?? defaultConfig.multiCallAddress,
+      voucherAddress: config?.voucherAddress ?? defaultConfig.voucherAddress,
+      carbonBatcherAddress:
+        config?.carbonBatcherAddress ?? defaultConfig.carbonBatcherAddress,
+      // Gradient contracts are opt-in per chain. If omitted, the SDK must not
+      // attempt to call them.
+      gradientControllerAddress: config?.gradientControllerAddress,
+      gradientVoucherAddress: config?.gradientVoucherAddress,
+    };
   }
 
   public get carbonController(): CarbonController {
@@ -43,6 +68,19 @@ export class Contracts {
       );
 
     return this._carbonController;
+  }
+
+  public get gradientController(): GradientController {
+    if (!this.hasGradientController) {
+      throw new Error('GradientController address not configured');
+    }
+    if (!this._gradientController)
+      this._gradientController = GradientController__factory.connect(
+        this._config.gradientControllerAddress!,
+        this._provider
+      );
+
+    return this._gradientController;
   }
 
   public get carbonBatcher(): CarbonBatcher {
@@ -73,6 +111,27 @@ export class Contracts {
       );
 
     return this._voucher;
+  }
+
+  public get gradientVoucher(): GradientVoucher {
+    if (!this.hasGradientVoucher) {
+      throw new Error('GradientVoucher address not configured');
+    }
+    if (!this._gradientVoucher)
+      this._gradientVoucher = GradientVoucher__factory.connect(
+        this._config.gradientVoucherAddress!,
+        this._provider
+      );
+
+    return this._gradientVoucher;
+  }
+
+  public get hasGradientController(): boolean {
+    return !!this._config.gradientControllerAddress;
+  }
+
+  public get hasGradientVoucher(): boolean {
+    return !!this._config.gradientVoucherAddress;
   }
 
   public token(address: string): Token {

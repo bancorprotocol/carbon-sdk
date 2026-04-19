@@ -2,6 +2,7 @@ import {
   StrategyStructOutput,
   CarbonController,
 } from '../abis/types/CarbonController';
+import { StrategyStructOutput as GradientStrategyStructOutput } from '../abis/types/GradientController';
 import { Contracts } from './Contracts';
 import {
   isETHAddress,
@@ -13,6 +14,7 @@ import { Logger } from '../common/logger';
 import {
   EncodedStrategy,
   Fetcher,
+  GradientEncodedStrategy,
   TokenPair,
   BlockMetadata,
   TradingFeeUpdate,
@@ -20,6 +22,12 @@ import {
   SyncedEvent,
 } from '../common/types';
 const logger = new Logger('Reader.ts');
+
+const compareTokens = (token0: string, token1: string): number =>
+  token0.localeCompare(token1);
+
+const toPairKey = (token0: string, token1: string): string =>
+  [token0, token1].sort(compareTokens).join('_');
 
 function toStrategy(res: StrategyStructOutput): EncodedStrategy {
   const id = res[0];
@@ -48,6 +56,47 @@ function toStrategy(res: StrategyStructOutput): EncodedStrategy {
       z: z1,
       A: A1,
       B: B1,
+    },
+  };
+}
+
+function toGradientStrategy(
+  res: GradientStrategyStructOutput
+): GradientEncodedStrategy {
+  const id = res[0];
+  const token0 = res[2][0];
+  const token1 = res[2][1];
+  const liquidity0 = res[3][0][0];
+  const initialPrice0 = res[3][0][1];
+  const tradingStartTime0 = res[3][0][2];
+  const expiry0 = res[3][0][3];
+  const multiFactor0 = res[3][0][4];
+  const gradientType0 = res[3][0][5];
+  const liquidity1 = res[3][1][0];
+  const initialPrice1 = res[3][1][1];
+  const tradingStartTime1 = res[3][1][2];
+  const expiry1 = res[3][1][3];
+  const multiFactor1 = res[3][1][4];
+  const gradientType1 = res[3][1][5];
+  return {
+    id,
+    token0,
+    token1,
+    order0: {
+      liquidity: liquidity0,
+      initialPrice: initialPrice0,
+      tradingStartTime: tradingStartTime0,
+      expiry: expiry0,
+      multiFactor: multiFactor0,
+      gradientType: gradientType0,
+    },
+    order1: {
+      liquidity: liquidity1,
+      initialPrice: initialPrice1,
+      tradingStartTime: tradingStartTime1,
+      expiry: expiry1,
+      multiFactor: multiFactor1,
+      gradientType: gradientType1,
     },
   };
 }
@@ -107,13 +156,72 @@ export default class Reader implements Fetcher {
     }
   }
 
+  public async gradientStrategy(id: bigint): Promise<GradientEncodedStrategy> {
+    logger.debug('gradientStrategy called', id);
+    if (!this._contracts.hasGradientController) {
+      throw new Error('GradientController address not configured');
+    }
+    try {
+      const res = await this._contracts.gradientController.strategy(id);
+      return toGradientStrategy(res);
+    } catch (error) {
+      logger.error('gradientStrategy error', error);
+      throw error;
+    }
+  }
+
+  public async gradientStrategies(
+    ids: bigint[]
+  ): Promise<GradientEncodedStrategy[]> {
+    logger.debug('gradientStrategies called', ids);
+    if (!this._contracts.hasGradientController) {
+      return [];
+    }
+    try {
+      const results = await this._multicall(
+        ids.map((id) => ({
+          contractAddress: this._contracts.gradientController.target as string,
+          interface: this._contracts.gradientController.interface,
+          methodName: 'strategy',
+          methodParameters: [id],
+        }))
+      );
+      logger.debug('gradientStrategies results', results);
+      if (!results || results.length === 0) return [];
+
+      return results.map((strategyRes) => {
+        const strategy = strategyRes[0] as GradientStrategyStructOutput;
+        return toGradientStrategy(strategy);
+      });
+    } catch (error) {
+      logger.error('gradientStrategies error', error);
+      throw error;
+    }
+  }
+
   public async pairs(): Promise<TokenPair[]> {
     logger.debug('pairs called');
     try {
-      const pairs = await this._contracts.carbonController.pairs();
-      return pairs.map(
-        (pair) => [pair[0].toString(), pair[1].toString()] as TokenPair
-      );
+      const [standardPairs, gradientPairs] = await Promise.all([
+        this._contracts.carbonController.pairs(),
+        this._contracts.hasGradientController
+          ? this._contracts.gradientController.pairs()
+          : Promise.resolve([]),
+      ]);
+      const dedupedPairs = new Map<string, TokenPair>();
+
+      [...standardPairs, ...gradientPairs].forEach((pair) => {
+        const normalizedPair = [
+          pair[0].toString(),
+          pair[1].toString(),
+        ] as TokenPair;
+        dedupedPairs.set(
+          toPairKey(normalizedPair[0], normalizedPair[1]),
+          normalizedPair
+        );
+      });
+
+      return Array.from(dedupedPairs.values());
     } catch (error) {
       logger.error('pairs error', error);
       throw error;
@@ -149,6 +257,42 @@ export default class Reader implements Fetcher {
       return allStrategies;
     } catch (error) {
       logger.error('strategiesByPair error', error);
+      throw error;
+    }
+  }
+
+  public async gradientStrategiesByPair(
+    token0: string,
+    token1: string
+  ): Promise<GradientEncodedStrategy[]> {
+    logger.debug('gradientStrategiesByPair called', token0, token1);
+    if (!this._contracts.hasGradientController) {
+      return [];
+    }
+    try {
+      const allStrategies: GradientEncodedStrategy[] = [];
+      let startIndex = 0;
+      const chunkSize = 1000;
+
+      while (true) {
+        const res =
+          (await this._contracts.gradientController.strategiesByPair(
+            token0,
+            token1,
+            startIndex,
+            startIndex + chunkSize
+          )) ?? [];
+
+        allStrategies.push(...res.map((r) => toGradientStrategy(r)));
+
+        if (res.length < chunkSize) break;
+
+        startIndex += chunkSize;
+      }
+
+      return allStrategies;
+    } catch (error) {
+      logger.error('gradientStrategiesByPair error', error);
       throw error;
     }
   }
@@ -238,16 +382,88 @@ export default class Reader implements Fetcher {
     }
   }
 
-  public async tokensByOwner(owner: string) {
-    logger.debug('tokensByOwner called', owner);
-    if (!owner) return [];
+  public async gradientStrategiesByPairs(pairs: TokenPair[]): Promise<
+    {
+      pair: TokenPair;
+      strategies: GradientEncodedStrategy[];
+    }[]
+  > {
+    logger.debug('gradientStrategiesByPairs called', pairs);
+    if (!this._contracts.hasGradientController) {
+      return pairs.map((pair) => ({ pair, strategies: [] }));
+    }
     try {
-      const result = await this._contracts.voucher.tokensByOwner(owner, 0, 0);
-      return result.map((r) => BigInt(r));
+      const chunkSize = 1000;
+      const results: {
+        pair: TokenPair;
+        strategies: GradientEncodedStrategy[];
+      }[] = [];
+      const pairsNeedingMore: { pair: TokenPair; index: number }[] = [];
+
+      const firstChunkResults = await this._multicall(
+        pairs.map((pair) => ({
+          contractAddress: this._contracts.gradientController.target as string,
+          interface: this._contracts.gradientController.interface,
+          methodName: 'strategiesByPair',
+          methodParameters: [pair[0], pair[1], 0, chunkSize],
+        }))
+      );
+
+      if (!firstChunkResults || firstChunkResults.length === 0) return [];
+
+      firstChunkResults.forEach((result, i) => {
+        const strategiesResult = (result[0] ?? []) as GradientStrategyStructOutput[];
+        const currentPair = pairs[i];
+
+        results.push({
+          pair: currentPair,
+          strategies: strategiesResult.map((r) => toGradientStrategy(r)),
+        });
+
+        if (strategiesResult.length === chunkSize) {
+          pairsNeedingMore.push({ pair: currentPair, index: i });
+        }
+      });
+
+      for (const { pair, index } of pairsNeedingMore) {
+        let startIndex = chunkSize;
+
+        while (true) {
+          const res =
+            (await this._contracts.gradientController.strategiesByPair(
+              pair[0],
+              pair[1],
+              startIndex,
+              startIndex + chunkSize
+            )) ?? [];
+
+          results[index].strategies.push(...res.map((r) => toGradientStrategy(r)));
+
+          if (res.length < chunkSize) break;
+          startIndex += chunkSize;
+        }
+      }
+
+      return results;
     } catch (error) {
-      logger.error('tokensByOwner error', error);
+      logger.error('gradientStrategiesByPairs error', error);
       throw error;
     }
+  }
+
+  public async tokensByOwner(owner: string): Promise<{
+    gradientVoucherTokens: bigint[];
+    voucherTokens: bigint[];
+  }> {
+    if (!owner) return { gradientVoucherTokens: [], voucherTokens: [] };
+
+    const [gradientVoucherTokens, voucherTokens] = await Promise.all([
+      this._contracts.hasGradientVoucher
+        ? this._contracts.gradientVoucher.tokensByOwner(owner, 0, 0)
+        : Promise.resolve([]),
+      this._contracts.voucher.tokensByOwner(owner, 0, 0),
+    ]);
+    return { gradientVoucherTokens, voucherTokens };
   }
 
   public async tradingFeePPM(): Promise<number> {
@@ -380,6 +596,8 @@ export default class Reader implements Fetcher {
     toBlock: number,
     maxChunkSize: number = 2000
   ): Promise<SyncedEvents> {
+    if (toBlock < fromBlock) return [];
+
     // Calculate number of chunks needed
     const totalBlocks = toBlock - fromBlock + 1;
     const numChunks = Math.ceil(totalBlocks / maxChunkSize);
@@ -394,12 +612,21 @@ export default class Reader implements Fetcher {
     // Fetch logs for all chunks concurrently
     const chunkResults = await Promise.all(
       chunks.map(async ({ start, end }) => {
-        const logs = await this._contracts.provider.getLogs({
-          address: this._contracts.carbonController.target as string,
-          fromBlock: start,
-          toBlock: end,
-        });
-        return logs;
+        const [standardLogs, gradientLogs] = await Promise.all([
+          this._contracts.provider.getLogs({
+            address: this._contracts.carbonController.target as string,
+            fromBlock: start,
+            toBlock: end,
+          }),
+          this._contracts.hasGradientController
+            ? this._contracts.provider.getLogs({
+                address: this._contracts.gradientController.target as string,
+                fromBlock: start,
+                toBlock: end,
+              })
+            : Promise.resolve([]),
+        ]);
+        return [...standardLogs, ...gradientLogs];
       })
     );
 
@@ -407,15 +634,31 @@ export default class Reader implements Fetcher {
     const allEvents = chunkResults
       .flat()
       .map((log) => {
-        // Get event type from topics
-        const parsedLog = this._contracts.carbonController.interface.parseLog({
-          topics: log.topics,
-          data: log.data,
-        });
+        const isGradientLog =
+          this._contracts.hasGradientController &&
+          log.address?.toLowerCase() ===
+          String(this._contracts.gradientController.target).toLowerCase();
+
+        let parsedLog = null;
+        try {
+          parsedLog = isGradientLog
+            ? this._contracts.gradientController.interface.parseLog({
+                topics: log.topics,
+                data: log.data,
+              })
+            : this._contracts.carbonController.interface.parseLog({
+                topics: log.topics,
+                data: log.data,
+              });
+        } catch {
+          return null;
+        }
 
         if (!parsedLog) return null;
 
-        const eventType = parsedLog.name as SyncedEvent['type'];
+        const eventType = isGradientLog
+          ? (`Gradient${parsedLog.name}` as SyncedEvent['type'])
+          : (parsedLog.name as SyncedEvent['type']);
 
         switch (eventType) {
           case 'StrategyCreated':
@@ -436,6 +679,37 @@ export default class Reader implements Fetcher {
                 B: parsedLog.args.order1.B,
                 y: parsedLog.args.order1.y,
                 z: parsedLog.args.order1.z,
+              },
+            };
+            return {
+              type: eventType,
+              blockNumber: log.blockNumber,
+              logIndex: log.index,
+              data: eventData,
+            } as const;
+          }
+          case 'GradientStrategyCreated':
+          case 'GradientStrategyUpdated':
+          case 'GradientStrategyDeleted': {
+            const eventData: GradientEncodedStrategy = {
+              id: parsedLog.args.id,
+              token0: parsedLog.args.token0,
+              token1: parsedLog.args.token1,
+              order0: {
+                liquidity: parsedLog.args.order0.liquidity,
+                initialPrice: parsedLog.args.order0.initialPrice,
+                tradingStartTime: parsedLog.args.order0.tradingStartTime,
+                expiry: parsedLog.args.order0.expiry,
+                multiFactor: parsedLog.args.order0.multiFactor,
+                gradientType: parsedLog.args.order0.gradientType,
+              },
+              order1: {
+                liquidity: parsedLog.args.order1.liquidity,
+                initialPrice: parsedLog.args.order1.initialPrice,
+                tradingStartTime: parsedLog.args.order1.tradingStartTime,
+                expiry: parsedLog.args.order1.expiry,
+                multiFactor: parsedLog.args.order1.multiFactor,
+                gradientType: parsedLog.args.order1.gradientType,
               },
             };
             return {

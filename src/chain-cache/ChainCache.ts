@@ -10,6 +10,7 @@ import {
   BlockMetadata,
   EncodedOrder,
   EncodedStrategy,
+  GradientEncodedStrategy,
   OrdersMap,
   RetypeBigIntToString,
   TokenPair,
@@ -20,20 +21,25 @@ import { BigIntish } from '../utils/numerics';
 import {
   encodedStrategyBigIntToStr,
   encodedStrategyStrToBN,
+  encodedGradientStrategyBigIntToStr,
+  encodedGradientStrategyStrToBN,
 } from '../utils/serializers';
 import { Logger } from '../common/logger';
 
 const logger = new Logger('ChainCache.ts');
 
-const schemeVersion = 7; // bump this when the serialization format changes
+const schemeVersion = 8; // bump this when the serialization format changes
 
 type PairToStrategiesMap = { [key: string]: EncodedStrategy[] };
+type GradientPairToStrategiesMap = { [key: string]: GradientEncodedStrategy[] };
 type StrategyById = { [key: string]: EncodedStrategy };
+type GradientStrategyById = { [key: string]: GradientEncodedStrategy };
 type PairToDirectedOrdersMap = { [key: string]: OrdersMap };
 
 type SerializableDump = {
   schemeVersion: number;
   strategiesByPair: RetypeBigIntToString<PairToStrategiesMap>;
+  gradientStrategiesByPair: RetypeBigIntToString<GradientPairToStrategiesMap>;
   tradingFeePPMByPair: { [key: string]: number };
   latestBlockNumber: number;
 };
@@ -42,6 +48,8 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
   //#region private members
   private _strategiesByPair: PairToStrategiesMap = {};
   private _strategiesById: StrategyById = {};
+  private _gradientStrategiesByPair: GradientPairToStrategiesMap = {};
+  private _gradientStrategiesById: GradientStrategyById = {};
   private _ordersByDirectedPair: PairToDirectedOrdersMap = {};
   private _latestBlockNumber: number = 0;
   private _blocksMetadata: BlockMetadata[] = [];
@@ -91,7 +99,27 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
       parsedCache.strategiesByPair
     )) {
       const [token0, token1] = fromPairKey(key);
-      this._addPair(token0, token1, strategies.map(encodedStrategyStrToBN));
+      this._addPair(
+        token0,
+        token1,
+        strategies.map(encodedStrategyStrToBN),
+        (parsedCache.gradientStrategiesByPair[key] ?? []).map(
+          encodedGradientStrategyStrToBN
+        )
+      );
+    }
+
+    for (const [key, strategies] of Object.entries(
+      parsedCache.gradientStrategiesByPair ?? {}
+    )) {
+      if (this.hasCachedPair(...fromPairKey(key))) continue;
+      const [token0, token1] = fromPairKey(key);
+      this._addPair(
+        token0,
+        token1,
+        [],
+        strategies.map(encodedGradientStrategyStrToBN)
+      );
     }
 
     this._tradingFeePPMByPair = parsedCache.tradingFeePPMByPair;
@@ -109,6 +137,15 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
           return acc;
         },
         {} as RetypeBigIntToString<PairToStrategiesMap>
+      ),
+      gradientStrategiesByPair: Object.entries(
+        this._gradientStrategiesByPair
+      ).reduce(
+        (acc, [key, strategies]) => {
+          acc[key] = strategies.map(encodedGradientStrategyBigIntToStr);
+          return acc;
+        },
+        {} as RetypeBigIntToString<GradientPairToStrategiesMap>
       ),
       tradingFeePPMByPair: this._tradingFeePPMByPair,
       latestBlockNumber: this._latestBlockNumber,
@@ -147,6 +184,8 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
   public clear(): void {
     this._strategiesByPair = {};
     this._strategiesById = {};
+    this._gradientStrategiesByPair = {};
+    this._gradientStrategiesById = {};
     this._ordersByDirectedPair = {};
     this._latestBlockNumber = 0;
     this._blocksMetadata = [];
@@ -165,6 +204,15 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     await this._checkAndHandleCacheMiss(token0, token1);
     const key = toPairKey(token0, token1);
     return this._strategiesByPair[key];
+  }
+
+  public async getGradientStrategiesByPair(
+    token0: string,
+    token1: string
+  ): Promise<GradientEncodedStrategy[] | undefined> {
+    await this._checkAndHandleCacheMiss(token0, token1);
+    const key = toPairKey(token0, token1);
+    return this._gradientStrategiesByPair[key];
   }
 
   public async getStrategiesByPairs(pairs: TokenPair[]): Promise<
@@ -190,14 +238,32 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     return this._strategiesById[id.toString()];
   }
 
+  public getGradientStrategyById(
+    id: BigIntish
+  ): GradientEncodedStrategy | undefined {
+    return this._gradientStrategiesById[id.toString()];
+  }
+
   public getCachedPairs(onlyWithStrategies: boolean = true): TokenPair[] {
     if (onlyWithStrategies) {
-      return Object.entries(this._strategiesByPair)
-        .filter(([_, strategies]) => strategies.length > 0)
-        .map(([key, _]) => fromPairKey(key));
+      return Array.from(
+        new Set([
+          ...Object.entries(this._strategiesByPair)
+            .filter(([_, strategies]) => strategies.length > 0)
+            .map(([key, _]) => key),
+          ...Object.entries(this._gradientStrategiesByPair)
+            .filter(([_, strategies]) => strategies.length > 0)
+            .map(([key, _]) => key),
+        ])
+      ).map(fromPairKey);
     }
 
-    return Object.keys(this._strategiesByPair).map(fromPairKey);
+    return Array.from(
+      new Set([
+        ...Object.keys(this._strategiesByPair),
+        ...Object.keys(this._gradientStrategiesByPair),
+      ])
+    ).map(fromPairKey);
   }
 
   /**
@@ -221,7 +287,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
 
   public hasCachedPair(token0: string, token1: string): boolean {
     const key = toPairKey(token0, token1);
-    return !!this._strategiesByPair[key];
+    return key in this._strategiesByPair || key in this._gradientStrategiesByPair;
   }
 
   public getLatestBlockNumber(): number {
@@ -250,7 +316,8 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
   private _addPair(
     token0: string,
     token1: string,
-    strategies: EncodedStrategy[]
+    strategies: EncodedStrategy[],
+    gradientStrategies: GradientEncodedStrategy[] = []
   ): void {
     logger.debug(
       'Adding pair with',
@@ -260,13 +327,17 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
       token1
     );
     const key = toPairKey(token0, token1);
-    if (this._strategiesByPair[key]) {
+    if (this.hasCachedPair(token0, token1)) {
       throw new Error(`Pair ${key} already cached`);
     }
     this._strategiesByPair[key] = strategies;
+    this._gradientStrategiesByPair[key] = gradientStrategies;
     strategies.forEach((strategy) => {
       this._strategiesById[strategy.id.toString()] = strategy;
       this._addStrategyOrders(strategy);
+    });
+    gradientStrategies.forEach((strategy) => {
+      this._gradientStrategiesById[strategy.id.toString()] = strategy;
     });
   }
 
@@ -287,9 +358,10 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
   public addPair(
     token0: string,
     token1: string,
-    strategies: EncodedStrategy[]
+    strategies: EncodedStrategy[],
+    gradientStrategies: GradientEncodedStrategy[] = []
   ): void {
-    this._addPair(token0, token1, strategies);
+    this._addPair(token0, token1, strategies, gradientStrategies);
     logger.debug('Emitting onPairAddedToCache', token0, token1);
     this.emit('onPairAddedToCache', fromPairKey(toPairKey(token0, token1)));
   }
@@ -308,11 +380,17 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     pairs: {
       pair: TokenPair;
       strategies: EncodedStrategy[];
+      gradientStrategies?: GradientEncodedStrategy[];
     }[]
   ): void {
     logger.debug('Bulk adding pairs', pairs);
     for (const pair of pairs) {
-      this._addPair(pair.pair[0], pair.pair[1], pair.strategies);
+      this._addPair(
+        pair.pair[0],
+        pair.pair[1],
+        pair.strategies,
+        pair.gradientStrategies ?? []
+      );
     }
     if (pairs.length > 0 && !this._isCacheInitialized) {
       this._isCacheInitialized = true;
@@ -387,6 +465,24 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
           affectedPairs.add(toPairKey(strategy.token0, strategy.token1));
           break;
         }
+        case 'GradientStrategyCreated': {
+          const strategy = event.data as GradientEncodedStrategy;
+          this._addGradientStrategy(strategy);
+          affectedPairs.add(toPairKey(strategy.token0, strategy.token1));
+          break;
+        }
+        case 'GradientStrategyUpdated': {
+          const strategy = event.data as GradientEncodedStrategy;
+          this._updateGradientStrategy(strategy);
+          affectedPairs.add(toPairKey(strategy.token0, strategy.token1));
+          break;
+        }
+        case 'GradientStrategyDeleted': {
+          const strategy = event.data as GradientEncodedStrategy;
+          this._deleteGradientStrategy(strategy);
+          affectedPairs.add(toPairKey(strategy.token0, strategy.token1));
+          break;
+        }
         case 'PairTradingFeePPMUpdated': {
           const feeUpdate = event.data as TradingFeeUpdate;
           this.addPairFees(feeUpdate[0], feeUpdate[1], feeUpdate[2]);
@@ -442,7 +538,7 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
         delete existingOrders[strategy.id.toString()];
         // if there are no orders left for this pair, remove the pair from the map
         if (Object.keys(existingOrders).length === 0) {
-          delete this._ordersByDirectedPair.key;
+          delete this._ordersByDirectedPair[key];
         }
       }
     }
@@ -510,6 +606,66 @@ export class ChainCache extends (EventEmitter as new () => TypedEventEmitter<Cac
     );
     this._strategiesByPair[key] = strategies;
     this._removeStrategyOrders(strategy);
+  }
+
+  private _addGradientStrategy(strategy: GradientEncodedStrategy): void {
+    if (!this.hasCachedPair(strategy.token0, strategy.token1)) {
+      logger.error(
+        `Pair ${toPairKey(
+          strategy.token0,
+          strategy.token1
+        )} is not cached, cannot add gradient strategy`
+      );
+      return;
+    }
+    const key = toPairKey(strategy.token0, strategy.token1);
+    if (this._gradientStrategiesById[strategy.id.toString()]) {
+      logger.debug(
+        `Gradient strategy ${strategy.id} already cached, under the pair ${key} - skipping`
+      );
+      return;
+    }
+    const strategies = this._gradientStrategiesByPair[key] || [];
+    strategies.push(strategy);
+    this._gradientStrategiesByPair[key] = strategies;
+    this._gradientStrategiesById[strategy.id.toString()] = strategy;
+  }
+
+  private _updateGradientStrategy(strategy: GradientEncodedStrategy): void {
+    if (!this.hasCachedPair(strategy.token0, strategy.token1)) {
+      logger.error(
+        `Pair ${toPairKey(
+          strategy.token0,
+          strategy.token1
+        )} is not cached, cannot update gradient strategy`
+      );
+      return;
+    }
+    const key = toPairKey(strategy.token0, strategy.token1);
+    const strategies = (this._gradientStrategiesByPair[key] || []).filter(
+      (s) => s.id !== strategy.id
+    );
+    strategies.push(strategy);
+    this._gradientStrategiesByPair[key] = strategies;
+    this._gradientStrategiesById[strategy.id.toString()] = strategy;
+  }
+
+  private _deleteGradientStrategy(strategy: GradientEncodedStrategy): void {
+    if (!this.hasCachedPair(strategy.token0, strategy.token1)) {
+      logger.error(
+        `Pair ${toPairKey(
+          strategy.token0,
+          strategy.token1
+        )} is not cached, cannot delete gradient strategy`
+      );
+      return;
+    }
+    const key = toPairKey(strategy.token0, strategy.token1);
+    delete this._gradientStrategiesById[strategy.id.toString()];
+    const strategies = (this._gradientStrategiesByPair[key] || []).filter(
+      (s) => s.id !== strategy.id
+    );
+    this._gradientStrategiesByPair[key] = strategies;
   }
 
   //#endregion cache updates

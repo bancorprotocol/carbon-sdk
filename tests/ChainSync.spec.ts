@@ -2,7 +2,12 @@ import { expect } from 'chai';
 import sinon from 'sinon';
 import { ChainSync } from '../src/chain-cache/ChainSync';
 import { ChainCache } from '../src/chain-cache/ChainCache';
-import { EncodedStrategy, Fetcher, TokenPair } from '../src/common/types';
+import {
+  EncodedStrategy,
+  Fetcher,
+  GradientEncodedStrategy,
+  TokenPair,
+} from '../src/common/types';
 
 describe('ChainSync', () => {
   let chainSync: ChainSync;
@@ -24,6 +29,28 @@ describe('ChainSync', () => {
       z: 600n,
       A: 700n,
       B: 800n,
+    },
+  };
+
+  const mockGradientStrategy: GradientEncodedStrategy = {
+    id: 2n ** 255n,
+    token0: '0x123',
+    token1: '0x456',
+    order0: {
+      liquidity: 100n,
+      initialPrice: 200n,
+      tradingStartTime: 300n,
+      expiry: 400n,
+      multiFactor: 500n,
+      gradientType: 1n,
+    },
+    order1: {
+      liquidity: 600n,
+      initialPrice: 700n,
+      tradingStartTime: 800n,
+      expiry: 900n,
+      multiFactor: 1000n,
+      gradientType: 4n,
     },
   };
 
@@ -55,6 +82,15 @@ describe('ChainSync', () => {
             { ...mockEncodedStrategy, id: 2n },
             { ...mockEncodedStrategy, id: 3n },
           ],
+        },
+      ],
+      gradientStrategiesByPair: async (_token0: string, _token1: string) => [
+        { ...mockGradientStrategy },
+      ],
+      gradientStrategiesByPairs: async (_pairs: TokenPair[]) => [
+        {
+          pair: ['0x123', '0x456'],
+          strategies: [{ ...mockGradientStrategy }],
         },
       ],
       pairTradingFeePPM: async (_token0: string, _token1: string) => 0,
@@ -90,6 +126,31 @@ describe('ChainSync', () => {
         )) ?? [];
       expect(strategies).to.have.length(3);
       expect(strategies[2]).to.deep.equal(mockEncodedStrategy);
+    });
+
+    it('should process GradientStrategyCreated events correctly', async () => {
+      mockFetcher.getEvents = async () => [
+        {
+          type: 'GradientStrategyCreated',
+          blockNumber: chainCache.getLatestBlockNumber() + 1,
+          logIndex: 0,
+          data: { ...mockGradientStrategy, id: 2n ** 255n + 1n },
+        },
+      ];
+
+      await chainSync.startDataSync();
+
+      await new Promise((resolve) => {
+        chainCache.on('onPairDataChanged', resolve);
+      });
+
+      const strategies =
+        (await chainCache.getGradientStrategiesByPair(
+          mockGradientStrategy.token0,
+          mockGradientStrategy.token1
+        )) ?? [];
+      expect(strategies).to.have.length(2);
+      expect(strategies[1].id).to.equal(2n ** 255n + 1n);
     });
 
     it('should process StrategyUpdated events correctly', async () => {

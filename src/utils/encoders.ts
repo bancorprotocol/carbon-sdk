@@ -1,5 +1,14 @@
-import { Decimal, BnToDec, DecToBn, ONE } from './numerics';
-import { DecodedOrder, EncodedOrder } from '../common/types';
+import { Decimal, BnToDec, DecToBn, ONE_48, ONE_24 } from './numerics';
+import {
+  DecodedOrder,
+  EncodedOrder,
+  DecodedStrategy,
+  EncodedStrategy,
+  GradientDecodedOrder,
+  GradientEncodedOrder,
+  GradientDecodedStrategy,
+  GradientEncodedStrategy,
+} from '../common/types';
 
 function bitLength(value: bigint): number {
   return value > 0n
@@ -7,30 +16,50 @@ function bitLength(value: bigint): number {
     : 0;
 }
 
-export const encodeRate = (value: Decimal): bigint => {
-  const oneDecimal = new Decimal(ONE.toString());
-  const data = DecToBn(value.sqrt().mul(oneDecimal).floor());
-  const length = bitLength(data / ONE);
+const encodeScale = (value: Decimal, one: bigint) => {
+  const oneDecimal = new Decimal(one.toString());
+  const data = DecToBn(value.mul(oneDecimal).floor());
+  const length = bitLength(data / one);
   return (data >> BigInt(length)) << BigInt(length);
 };
 
-export const decodeRate = (value: Decimal): Decimal => {
-  const oneDecimal = new Decimal(ONE.toString());
-  return value.div(oneDecimal).pow(2);
+const decodeScale = (value: Decimal, one: bigint) => {
+  const oneDecimal = new Decimal(one.toString());
+  return value.div(oneDecimal);
 };
+
+const encodeFloat = (value: bigint, one: bigint) => {
+  const exponent = bitLength(value / one);
+  const mantissa = value >> BigInt(exponent);
+  return (one * BigInt(exponent)) | mantissa;
+};
+
+const decodeFloat = (value: bigint, one: bigint) => {
+  return value % one << BigInt(Number(value / one));
+};
+
+export const encodeScaleInitialRate = (value: Decimal) =>
+  encodeScale(value.sqrt(), ONE_48);
+export const decodeScaleInitialRate = (value: Decimal) =>
+  decodeScale(value, ONE_48).pow(2);
+
+export const encodeScaleMultiFactor = (value: Decimal) =>
+  encodeScale(value.mul(new Decimal(ONE_24.toString())), ONE_24);
+export const decodeScaleMultiFactor = (value: Decimal) =>
+  decodeScale(value, ONE_24).div(new Decimal(ONE_24.toString()));
+
+export const encodeFloatInitialRate = (value: bigint) =>
+  encodeFloat(value, ONE_48);
+export const decodeFloatInitialRate = (value: bigint) =>
+  decodeFloat(value, ONE_48);
+
+export const encodeFloatMultiFactor = (value: bigint) =>
+  encodeFloat(value, ONE_24);
+export const decodeFloatMultiFactor = (value: bigint) =>
+  decodeFloat(value, ONE_24);
 
 // The smallest rate that, once encoded, will not be zero.
-export const lowestPossibleRate = decodeRate(new Decimal(1));
-
-export const encodeFloat = (value: bigint): bigint => {
-  const exponent = bitLength(value / ONE);
-  const mantissa = value >> BigInt(exponent);
-  return (ONE * BigInt(exponent)) | mantissa;
-};
-
-export const decodeFloat = (value: bigint): bigint => {
-  return value % ONE << BigInt(Number(value / ONE));
-};
+export const lowestPossibleRate = decodeScaleInitialRate(new Decimal(1));
 
 export const encodeOrders = ([order0, order1]: [DecodedOrder, DecodedOrder]): [
   EncodedOrder,
@@ -87,8 +116,8 @@ export const isOrderEncodable = (order: DecodedOrder): boolean => {
 export const areScaledRatesEqual = (x: string, y: string): boolean => {
   const xDec = new Decimal(x);
   const yDec = new Decimal(y);
-  const xScaled = encodeRate(xDec);
-  const yScaled = encodeRate(yDec);
+  const xScaled = encodeScaleInitialRate(xDec);
+  const yScaled = encodeScaleInitialRate(yDec);
   return xScaled === yScaled;
 };
 
@@ -99,9 +128,9 @@ export const encodeOrder = (order: DecodedOrder, z?: bigint): EncodedOrder => {
   const marginalRate = new Decimal(order.marginalRate);
 
   const y = DecToBn(liquidity);
-  const L = encodeRate(lowestRate);
-  const H = encodeRate(highestRate);
-  const M = encodeRate(marginalRate);
+  const L = encodeScaleInitialRate(lowestRate);
+  const H = encodeScaleInitialRate(highestRate);
+  const M = encodeScaleInitialRate(marginalRate);
 
   if (L === 0n && !(H === 0n && M === 0n)) {
     throw new Error(
@@ -129,23 +158,109 @@ export const encodeOrder = (order: DecodedOrder, z?: bigint): EncodedOrder => {
   return {
     y,
     z: z !== undefined ? z : H === M || y === 0n ? y : (y * (H - L)) / (M - L),
-    A: encodeFloat(H - L),
-    B: encodeFloat(L),
+    A: encodeFloatInitialRate(H - L),
+    B: encodeFloatInitialRate(L),
   };
 };
 
 export const decodeOrder = (order: EncodedOrder): DecodedOrder => {
   const y = BnToDec(order.y);
   const z = BnToDec(order.z);
-  const A = BnToDec(decodeFloat(order.A));
-  const B = BnToDec(decodeFloat(order.B));
+  const A = BnToDec(decodeFloatInitialRate(order.A));
+  const B = BnToDec(decodeFloatInitialRate(order.B));
   return {
     liquidity: y.toString(),
-    lowestRate: decodeRate(B).toString(),
-    highestRate: decodeRate(B.add(A)).toString(),
-    marginalRate: decodeRate(
+    lowestRate: decodeScaleInitialRate(B).toString(),
+    highestRate: decodeScaleInitialRate(B.add(A)).toString(),
+    marginalRate: decodeScaleInitialRate(
       y.eq(z) ? B.add(A) : B.add(A.mul(y).div(z))
     ).toString(),
+  };
+};
+
+export const encodeStrategy = (
+  strategy: DecodedStrategy
+): Omit<EncodedStrategy, 'id'> => {
+  const [order0, order1] = encodeOrders([strategy.order0, strategy.order1]);
+  return {
+    token0: strategy.token0,
+    token1: strategy.token1,
+    order0,
+    order1,
+  };
+};
+
+export const decodeStrategy = (
+  strategy: EncodedStrategy
+): DecodedStrategy & { id: bigint; encoded: EncodedStrategy } => {
+  return {
+    id: strategy.id,
+    token0: strategy.token0,
+    token1: strategy.token1,
+    order0: decodeOrder(strategy.order0),
+    order1: decodeOrder(strategy.order1),
+    encoded: strategy,
+  };
+};
+
+export const encodeGradientOrder = (
+  order: GradientDecodedOrder
+): GradientEncodedOrder => {
+  return {
+    liquidity: BigInt(order.liquidity),
+    initialPrice: encodeFloatInitialRate(
+      encodeScaleInitialRate(new Decimal(order.initialPrice))
+    ),
+    tradingStartTime: BigInt(order.tradingStartTime),
+    expiry: BigInt(order.expiry),
+    multiFactor: encodeFloatMultiFactor(
+      encodeScaleMultiFactor(new Decimal(order.multiFactor))
+    ),
+    gradientType: BigInt(order.gradientType),
+  };
+};
+
+export const decodeGradientOrder = (
+  order: GradientEncodedOrder
+): GradientDecodedOrder => {
+  return {
+    liquidity: order.liquidity.toString(),
+    initialPrice: decodeScaleInitialRate(
+      BnToDec(decodeFloatInitialRate(order.initialPrice))
+    ).toString(),
+    tradingStartTime: Number(order.tradingStartTime),
+    expiry: Number(order.expiry),
+    multiFactor: decodeScaleMultiFactor(
+      BnToDec(decodeFloatMultiFactor(order.multiFactor))
+    ).toString(),
+    gradientType: Number(order.gradientType),
+  };
+};
+
+export const encodeGradientStrategy = (
+  strategy: GradientDecodedStrategy
+): Omit<GradientEncodedStrategy, 'id'> => {
+  return {
+    token0: strategy.token0,
+    token1: strategy.token1,
+    order0: encodeGradientOrder(strategy.order0),
+    order1: encodeGradientOrder(strategy.order1),
+  };
+};
+
+export const decodeGradientStrategy = (
+  strategy: GradientEncodedStrategy
+): GradientDecodedStrategy & {
+  id: bigint;
+  encoded: GradientEncodedStrategy;
+} => {
+  return {
+    id: strategy.id,
+    token0: strategy.token0,
+    token1: strategy.token1,
+    order0: decodeGradientOrder(strategy.order0),
+    order1: decodeGradientOrder(strategy.order1),
+    encoded: strategy,
   };
 };
 
@@ -160,9 +275,11 @@ export const calculateRequiredLiquidity = (
   vagueOrder: DecodedOrder
 ): string => {
   const z: bigint = calculateCorrelatedZ(knownOrder);
-  const L: bigint = encodeRate(new Decimal(vagueOrder.lowestRate));
-  const H: bigint = encodeRate(new Decimal(vagueOrder.highestRate));
-  const M: bigint = encodeRate(new Decimal(vagueOrder.marginalRate));
+  const L: bigint = encodeScaleInitialRate(new Decimal(vagueOrder.lowestRate));
+  const H: bigint = encodeScaleInitialRate(new Decimal(vagueOrder.highestRate));
+  const M: bigint = encodeScaleInitialRate(
+    new Decimal(vagueOrder.marginalRate)
+  );
 
   return ((z * (M - L)) / (H - L)).toString();
 };

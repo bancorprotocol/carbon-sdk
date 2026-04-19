@@ -1,6 +1,7 @@
 import { ChainCache } from './ChainCache';
 import { Logger } from '../common/logger';
 import { BlockMetadata, Fetcher, TokenPair } from '../common/types';
+import { toPairKey } from './utils';
 
 const logger = new Logger('ChainSync.ts');
 
@@ -222,8 +223,40 @@ export class ChainSync {
       const strategiesBatches = await Promise.all(
         batches.map((batch) => this._fetcher.strategiesByPairs(batch))
       );
+      const gradientStrategiesBatches = await Promise.all(
+        batches.map((batch) => this._fetcher.gradientStrategiesByPairs(batch))
+      );
       logger.debug('_syncPairDataBatch strategiesBatches', strategiesBatches);
-      this._chainCache.bulkAddPairs(strategiesBatches.flat());
+      logger.debug(
+        '_syncPairDataBatch gradientStrategiesBatches',
+        gradientStrategiesBatches
+      );
+      this._chainCache.bulkAddPairs(
+        batches.flatMap((batch, batchIndex) => {
+          const strategiesByPairKey = new Map(
+            strategiesBatches[batchIndex].map((entry) => [
+              toPairKey(entry.pair[0], entry.pair[1]),
+              entry.strategies,
+            ])
+          );
+          const gradientStrategiesByPairKey = new Map(
+            gradientStrategiesBatches[batchIndex].map((entry) => [
+              toPairKey(entry.pair[0], entry.pair[1]),
+              entry.strategies,
+            ])
+          );
+
+          return batch.map((pair) => {
+            const pairKey = toPairKey(pair[0], pair[1]);
+            return {
+              pair,
+              strategies: strategiesByPairKey.get(pairKey) ?? [],
+              gradientStrategies:
+                gradientStrategiesByPairKey.get(pairKey) ?? [],
+            };
+          });
+        })
+      );
       this._uncachedPairs = [];
     } catch (error) {
       logger.error('Failed to fetch strategies for pairs batch:', error);
@@ -238,9 +271,12 @@ export class ChainSync {
       );
     }
     try {
-      const strategies = await this._fetcher.strategiesByPair(token0, token1);
+      const [strategies, gradientStrategies] = await Promise.all([
+        this._fetcher.strategiesByPair(token0, token1),
+        this._fetcher.gradientStrategiesByPair(token0, token1),
+      ]);
       if (this._chainCache.hasCachedPair(token0, token1)) return;
-      this._chainCache.addPair(token0, token1, strategies);
+      this._chainCache.addPair(token0, token1, strategies, gradientStrategies);
     } catch (error) {
       logger.error(
         'Failed to fetch strategies for pair:',
@@ -302,7 +338,10 @@ export class ChainSync {
           // Process events and collect newly created pairs
           const newlyCreatedPairs: TokenPair[] = [];
           for (const event of events) {
-            if (event.type === 'StrategyCreated') {
+            if (
+              event.type === 'StrategyCreated' ||
+              event.type === 'GradientStrategyCreated'
+            ) {
               const strategy = event.data;
               if (
                 !this._chainCache.hasCachedPair(

@@ -5,4 +5,6 @@ export const config: Required<ContractsConfig> = {
   multiCallAddress: '0x5ba1e12693dc8f9c48aad8770482f4739beed696',
   voucherAddress: '0x3660F04B79751e31128f6378eAC70807e38f554E',
   carbonBatcherAddress: '0x0199f3A6C4B192B9f9C3eBE31FBC535CdD4B7D4e',
+  gradientControllerAddress: '0x5BDdF8EdeEaE66Cc8477c9282b8c0462CD7132aa',
+  gradientVoucherAddress: '0x4973fa43c4c4b0Bbe4071eB3e7c900810Df143E8',
 };

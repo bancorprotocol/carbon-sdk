@@ -26,14 +26,13 @@ export const BigNumberMax = (a: BigIntish, b: BigIntish): bigint => {
   return aBN > bBN ? aBN : bBN;
 };
 
-export const ONE = 2n ** 48n;
+export const ONE_48 = 2n ** 48n;
+export const ONE_24 = 2n ** 24n;
 export const TEN = new Decimal(10);
 export const MAX_UINT256 = 2n ** 256n - 1n;
 
-export const tenPow = (dec0: number, dec1: number) => {
-  const diff = dec0 - dec1;
-  return TEN.pow(diff);
-};
+export const tenPow = (dec0: number, dec1: number) =>
+  new Decimal(10).pow(dec0 - dec1);
 
 export const BnToDec = (x: bigint): Decimal => new Decimal(x.toString());
 export const DecToBn = (x: Decimal): bigint => BigInt(x.toFixed());

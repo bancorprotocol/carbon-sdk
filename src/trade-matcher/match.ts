@@ -8,7 +8,7 @@ import {
   Quote,
   Rate,
 } from '../common/types';
-import { decodeFloat } from '../utils/encoders';
+import { decodeFloatInitialRate } from '../utils/encoders';
 import { BigNumberMin } from '../utils/numerics';
 import {
   getEncodedTradeTargetAmount as tradeTargetAmount,
@@ -43,7 +43,12 @@ const rateByTargetAmount = (
 };
 
 const getParams = (order: EncodedOrder) => {
-  const [y, z, A, B] = [order.y, order.z, decodeFloat(order.A), decodeFloat(order.B)];
+  const [y, z, A, B] = [
+    order.y,
+    order.z,
+    decodeFloatInitialRate(order.A),
+    decodeFloatInitialRate(order.B),
+  ];
   return [y, z, A, B];
 };
 
@@ -54,9 +59,7 @@ const getLimit = (order: EncodedOrder): bigint => {
 
 const equalTargetAmount = (order: EncodedOrder, limit: bigint): bigint => {
   const [y, z, A, B] = getParams(order);
-  return A > 0n
-    ? (y * A + z * (B - limit)) / A
-    : y;
+  return A > 0n ? (y * A + z * (B - limit)) / A : y;
 };
 
 const equalSourceAmount = (order: EncodedOrder, limit: bigint): bigint => {
@@ -107,8 +110,8 @@ const matchFast = (
   for (const quote of quotes) {
     const input: bigint = BigNumberMin(quote.rate.input, remainingAmount);
     const output: bigint = trade(input, ordersMap[quote.id.toString()]).output;
-    if (filter({input, output})) {
-      actions.push({id: quote.id, input, output});
+    if (filter({ input, output })) {
+      actions.push({ id: quote.id, input, output });
       remainingAmount = remainingAmount - input;
       if (remainingAmount === 0n) {
         break;
@@ -170,10 +173,7 @@ const matchBest = (
         rates = orders
           .slice(0, n)
           .map((order) => trade(equalize(order, limit), order));
-        total = rates.reduce(
-          (sum, rate) => sum + rate.input,
-          0n
-        );
+        total = rates.reduce((sum, rate) => sum + rate.input, 0n);
         delta = total - amount;
         if (delta > 0n) {
           lo = limit;

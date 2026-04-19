@@ -1,27 +1,19 @@
-import { ONE, Decimal, BigNumberMax } from '../utils/numerics';
+import {
+  MAX_UINT128,
+  MAX_UINT256,
+  uint128,
+  add,
+  sub,
+  mul,
+  mulDivF,
+  mulDivC,
+  minFactor,
+} from './utils';
+import { ONE_48, Decimal, BigNumberMax } from '../utils/numerics';
 import { EncodedOrder, DecodedOrder } from '../common/types';
-import { decodeFloat } from '../utils/encoders';
+import { decodeFloatInitialRate } from '../utils/encoders';
 
-const C = ONE;
-
-const MAX_UINT128 = (2n ** 128n) - 1n;
-const MAX_UINT256 = (2n ** 256n) - 1n;
-
-function check(val: bigint, max: bigint): bigint {
-  if (val >= 0n && val <= max) {
-    return val;
-  }
-  throw null;
-}
-
-const uint128 = (n: bigint): bigint => check(n, MAX_UINT128);
-const add = (a: bigint, b: bigint): bigint => check(a + b, MAX_UINT256);
-const sub = (a: bigint, b: bigint): bigint => check(a - b, MAX_UINT256);
-const mul = (a: bigint, b: bigint): bigint => check(a * b, MAX_UINT256);
-const mulDivF = (a: bigint, b: bigint, c: bigint): bigint =>
-  check((a * b) / c, MAX_UINT256);
-const mulDivC = (a: bigint, b: bigint, c: bigint): bigint =>
-  check((a * b + c - 1n) / c, MAX_UINT256);
+const C = ONE_48;
 
 //
 //       x * (A * y + B * z) ^ 2
@@ -43,8 +35,8 @@ const getEncodedTradeBySourceAmount = (
   const temp2 = add(mul(y, A), mul(z, B));
   const temp3 = mul(temp2, x);
 
-  const factor1 = mulDivC(temp1, temp1, MAX_UINT256);
-  const factor2 = mulDivC(temp3, A, MAX_UINT256);
+  const factor1 = minFactor(temp1, temp1);
+  const factor2 = minFactor(temp3, A);
   const factor = BigNumberMax(factor1, factor2);
 
   const temp4 = mulDivC(temp1, temp1, factor);
@@ -78,8 +70,8 @@ const getEncodedTradeByTargetAmount = (
   const temp2 = add(mul(y, A), mul(z, B));
   const temp3 = sub(temp2, mul(x, A));
 
-  const factor1 = mulDivC(temp1, temp1, MAX_UINT256);
-  const factor2 = mulDivC(temp2, temp3, MAX_UINT256);
+  const factor1 = minFactor(temp1, temp1);
+  const factor2 = minFactor(temp2, temp3);
   const factor = BigNumberMax(factor1, factor2);
 
   const temp4 = mulDivC(temp1, temp1, factor);
@@ -126,8 +118,8 @@ export const getEncodedTradeTargetAmount = (
   const x = amount;
   const y = order.y;
   const z = order.z;
-  const A = decodeFloat(order.A);
-  const B = decodeFloat(order.B);
+  const A = decodeFloatInitialRate(order.A);
+  const B = decodeFloatInitialRate(order.B);
   try {
     return uint128(getEncodedTradeBySourceAmount(x, y, z, A, B));
   } catch {
@@ -142,8 +134,8 @@ export const getEncodedTradeSourceAmount = (
   const x = amount;
   const y = order.y;
   const z = order.z;
-  const A = decodeFloat(order.A);
-  const B = decodeFloat(order.B);
+  const A = decodeFloatInitialRate(order.A);
+  const B = decodeFloatInitialRate(order.B);
   try {
     return uint128(getEncodedTradeByTargetAmount(x, y, z, A, B));
   } catch {

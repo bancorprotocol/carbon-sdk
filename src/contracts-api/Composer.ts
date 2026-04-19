@@ -3,7 +3,11 @@ import { Contracts } from './Contracts';
 import { PayableOverrides, PopulatedTransaction } from '../common/types';
 import { buildTradeOverrides, isETHAddress } from './utils';
 import { Logger } from '../common/logger';
-import { EncodedOrder, TradeAction } from '../common/types';
+import {
+  EncodedOrder,
+  GradientEncodedOrder,
+  TradeAction,
+} from '../common/types';
 const logger = new Logger('Composer.ts');
 
 /**
@@ -14,6 +18,12 @@ export default class Composer {
 
   public constructor(contracts: Contracts) {
     this._contracts = contracts;
+  }
+
+  private _requireGradientController(): void {
+    if (!this._contracts.hasGradientController) {
+      throw new Error('GradientController address not configured');
+    }
   }
 
   /**
@@ -164,6 +174,33 @@ export default class Composer {
     );
   }
 
+  public createGradientStrategy(
+    token0: string,
+    token1: string,
+    order0: GradientEncodedOrder,
+    order1: GradientEncodedOrder,
+    overrides?: PayableOverrides
+  ) {
+    logger.debug('createGradientStrategy called', arguments);
+    this._requireGradientController();
+
+    const customOverrides = { ...overrides };
+    if (isETHAddress(token0)) {
+      customOverrides.value = order0.liquidity;
+    } else if (isETHAddress(token1)) {
+      customOverrides.value = order1.liquidity;
+    }
+
+    logger.debug('createGradientStrategy overrides', customOverrides);
+
+    return this._contracts.gradientController.createStrategy.populateTransaction(
+      token0,
+      token1,
+      [order0, order1],
+      customOverrides
+    );
+  }
+
   public updateStrategy(
     strategyId: bigint,
     token0: string,
@@ -188,6 +225,48 @@ export default class Composer {
       currentOrders,
       newOrders,
       customOverrides
+    );
+  }
+
+  public updateGradientStrategy(
+    strategyId: bigint,
+    token0: string,
+    token1: string,
+    currentOrders: [GradientEncodedOrder, GradientEncodedOrder],
+    newOrders: [GradientEncodedOrder, GradientEncodedOrder],
+    overrides?: PayableOverrides
+  ) {
+    this._requireGradientController();
+
+    const customOverrides = { ...overrides };
+    if (
+      isETHAddress(token0) &&
+      newOrders[0].liquidity > currentOrders[0].liquidity
+    ) {
+      const diff = newOrders[0].liquidity - currentOrders[0].liquidity;
+      customOverrides.value = diff;
+    } else if (
+      isETHAddress(token1) &&
+      newOrders[1].liquidity > currentOrders[1].liquidity
+    ) {
+      const diff = newOrders[1].liquidity - currentOrders[1].liquidity;
+      customOverrides.value = diff;
+    }
+
+    logger.debug('updateGradientStrategy overrides', customOverrides);
+
+    return this._contracts.gradientController.updateStrategy.populateTransaction(
+      strategyId,
+      currentOrders,
+      newOrders,
+      customOverrides
+    );
+  }
+
+  public deleteGradientStrategy(id: bigint) {
+    this._requireGradientController();
+    return this._contracts.gradientController.deleteStrategy.populateTransaction(
+      id
     );
   }
 }
