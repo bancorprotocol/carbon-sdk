@@ -84,7 +84,7 @@ const init = async (
 
 - `0` (default) only prints errors and important logs.
 - `1` (debug) prints highly verbose logs.
-- `2` (debug readable) is same as `1` but also converts any BigNumber to an easy to read string (impacting performance).
+- `2` (debug readable) is same as `1` but also converts any bigint to an easy to read string (impacting performance).
 
 To use it in Node, set the environment variable `CARBON_DEFI_SDK_VERBOSITY` to the desired level.
 To use it from a browser app do, before importing the SDK:
